@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+
+# environment secrets
+.env
+.env*.local
+
+# typescript incremental build cache
+tsconfig.tsbuildinfo
+
+# vercel
+.vercel
+
+# logs
+*.log
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
