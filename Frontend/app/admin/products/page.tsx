@@ -13,8 +13,6 @@ import { useAuth } from '@/context/AuthProvider';
 import { Product } from '@/lib/types';
 import { formatDate, formatFileSize, formatPKR } from '@/lib/utils';
 
-const STATUSES: Product['status'][] = ['Active', 'Low Stock', 'Out of Stock'];
-
 export default function AdminProductsPage() {
   const { user, loading: authLoading } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -47,20 +45,6 @@ export default function AdminProductsPage() {
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, [user, statusFilter]);
-
-  const updateStatus = (p: Product, status: Product['status']) => {
-    setBusyId(p.id);
-    setMessage(null);
-    setError(null);
-    api.admin
-      .updateProductStatus(p.id, status)
-      .then(() => {
-        setMessage(`"${p.name}" is now ${status}.`);
-        setProducts(products.map((x) => (x.id === p.id ? { ...x, status } : x)));
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Status update failed.'))
-      .finally(() => setBusyId(null));
-  };
 
   const removeProduct = (p: Product) => {
     if (!window.confirm(`Delete "${p.name}" from the marketplace?`)) return;
@@ -99,7 +83,7 @@ export default function AdminProductsPage() {
     <div className="space-y-6">
       <PortalHeader
         title="Products"
-        subtitle="Moderate all marketplace listings — hide, restore or delete"
+        subtitle="Moderate all marketplace listings — view or delete"
       />
 
       {message && (
@@ -205,15 +189,8 @@ export default function AdminProductsPage() {
                   <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
                     {p.stock} <span className="text-slate-400">({p.moq} MOQ)</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={p.status}
-                      disabled={busyId !== null}
-                      onChange={(e) => updateStatus(p, e.target.value as Product['status'])}
-                      className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none"
-                    >
-                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                  <td className="px-4 py-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    {p.status}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button

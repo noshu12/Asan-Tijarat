@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Download, ExternalLink, FileText, ImageOff, ZoomIn } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Download, FileText, ImageOff, ZoomIn } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
-import { fileUrl } from '@/lib/api';
+import { API_URL } from '@/lib/api';
 import type { KycDocument, KycDocuments } from '@/lib/types';
 import { cn, formatDate, formatFileSize } from '@/lib/utils';
 
@@ -20,6 +20,8 @@ function isPdf(doc: KycDocument) {
 
 export interface KycDocumentViewerProps {
   documents?: KycDocuments | null;
+  /** Id of the account whose documents these are — required for the admin KYC route. */
+  userId?: string;
   /** Whose documents these are — shown in the lightbox so accounts never get mixed up. */
   ownerLabel?: string;
   className?: string;
@@ -30,11 +32,74 @@ export interface KycDocumentViewerProps {
  * supplier uploaded during registration. Shows a thumbnail per document and
  * opens the full-size image (or the PDF) in a lightbox — the real files the
  * trader submitted, never a placeholder.
+ *
+ * Documents are loaded ONLY through the authenticated admin route
+ * GET /api/admin/users/:id/kyc/:field (httpOnly cookie, admin role), never
+ * through the raw /uploads/kyc path — that path is not publicly served, so
+ * the old direct links 404'd. Each file is fetched as a blob and shown via
+ * an object URL, which is revoked when the viewer unmounts or the preview
+ * changes.
  */
-export function KycDocumentViewer({ documents, ownerLabel, className }: KycDocumentViewerProps) {
+export function KycDocumentViewer({ documents, userId, ownerLabel, className }: KycDocumentViewerProps) {
   const [preview, setPreview] = useState<{ key: string; label: string; doc: KycDocument } | null>(null);
+  const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState<Record<string, boolean>>({});
+
+  // Load every uploaded document through the admin KYC route.
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+
+    if (!userId || !documents) {
+      setBlobUrls({});
+      setLoadFailed({});
+      setLoading(false);
+      return;
+    }
+
+    const slots = DOCUMENT_SLOTS.filter((slot) => documents[slot.key]?.url);
+    if (slots.length === 0) {
+      setBlobUrls({});
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setLoadFailed({});
+
+    void Promise.all(
+      slots.map(async (slot) => {
+        try {
+          const response = await fetch(
+            `${API_URL}/api/admin/users/${userId}/kyc/${slot.key}`,
+            { credentials: 'include' }
+          );
+          if (!response.ok) throw new Error('KYC document could not be loaded.');
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          created.push(objectUrl);
+          if (!cancelled) {
+            setBlobUrls((prev) => ({ ...prev, [slot.key]: objectUrl }));
+          }
+        } catch {
+          if (!cancelled) {
+            setLoadFailed((prev) => ({ ...prev, [slot.key]: true }));
+          }
+        }
+      })
+    ).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      created.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+    };
+  }, [userId, documents]);
 
   const uploadedCount = DOCUMENT_SLOTS.filter((slot) => documents?.[slot.key]?.url).length;
+  const previewUrl = preview ? blobUrls[preview.key] : undefined;
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -54,10 +119,17 @@ export function KycDocumentViewer({ documents, ownerLabel, className }: KycDocum
         </span>
       </div>
 
+      {!userId && uploadedCount > 0 && (
+        <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+          User id was not passed to this viewer, so documents cannot be loaded through the admin route.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {DOCUMENT_SLOTS.map((slot) => {
           const doc = documents?.[slot.key];
-          const url = doc?.url ? fileUrl(doc.url) : '';
+          const url = doc?.url ? blobUrls[slot.key] : undefined;
+          const failed = !!loadFailed[slot.key];
 
           return (
             <div
@@ -74,10 +146,19 @@ export function KycDocumentViewer({ documents, ownerLabel, className }: KycDocum
                   url ? 'cursor-zoom-in' : 'cursor-not-allowed'
                 )}
               >
-                {!url ? (
+                {!doc?.url ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
                     <ImageOff className="w-5 h-5" />
                     <span className="text-[10px] font-semibold">Not uploaded</span>
+                  </span>
+                ) : loading && !url && !failed ? (
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
+                    <span className="text-[10px] font-semibold">Loading document…</span>
+                  </span>
+                ) : failed || !url ? (
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
+                    <ImageOff className="w-5 h-5" />
+                    <span className="text-[10px] font-semibold">Could not load document</span>
                   </span>
                 ) : isPdf(doc as KycDocument) ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-500">
@@ -108,20 +189,12 @@ export function KycDocumentViewer({ documents, ownerLabel, className }: KycDocum
                     <div className="flex items-center gap-2 pt-0.5">
                       <button
                         type="button"
-                        onClick={() => setPreview({ key: slot.key, label: slot.label, doc })}
-                        className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                        disabled={!url}
+                        onClick={() => url && setPreview({ key: slot.key, label: slot.label, doc })}
+                        className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-40 disabled:no-underline"
                       >
                         View full size
                       </button>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-asan-dark dark:hover:text-emerald-300"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        Open
-                      </a>
                     </div>
                   </>
                 ) : (
@@ -148,19 +221,25 @@ export function KycDocumentViewer({ documents, ownerLabel, className }: KycDocum
         {preview && (
           <div className="space-y-3">
             {isPdf(preview.doc) ? (
-              <iframe
-                key={preview.key}
-                src={`${fileUrl(preview.doc.url)}#toolbar=1`}
-                title={`${preview.label} preview`}
-                className="w-full h-[65vh] rounded-xl border border-slate-200 dark:border-slate-800 bg-white"
-              />
-            ) : (
+              previewUrl ? (
+                <iframe
+                  key={preview.key}
+                  src={`${previewUrl}#toolbar=1`}
+                  title={`${preview.label} preview`}
+                  className="w-full h-[65vh] rounded-xl border border-slate-200 dark:border-slate-800 bg-white"
+                />
+              ) : (
+                <p className="text-xs text-slate-500">Document could not be loaded.</p>
+              )
+            ) : previewUrl ? (
               <img
                 key={preview.key}
-                src={fileUrl(preview.doc.url)}
+                src={previewUrl}
                 alt={`${preview.label} full size`}
                 className="w-full max-h-[65vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
               />
+            ) : (
+              <p className="text-xs text-slate-500">Document could not be loaded.</p>
             )}
 
             <div className="flex items-center justify-between gap-3">
@@ -168,14 +247,16 @@ export function KycDocumentViewer({ documents, ownerLabel, className }: KycDocum
                 Document on file for <span className="font-semibold">{ownerLabel || 'this account'}</span>,
                 stored by the API and linked to their registration.
               </p>
-              <a
-                href={fileUrl(preview.doc.url)}
-                download={preview.doc.originalName || undefined}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold transition shrink-0"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download
-              </a>
+              {previewUrl && (
+                <a
+                  href={previewUrl}
+                  download={preview.doc.originalName || undefined}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold transition shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </a>
+              )}
             </div>
           </div>
         )}

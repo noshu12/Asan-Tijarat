@@ -71,12 +71,6 @@ export default function AdminUsersPage() {
         : `${u.name} verified — they can now sign in with their registered credentials.`
     );
 
-  const changeRole = (u: AdminUser, role: 'shopkeeper' | 'supplier') =>
-    runAction(
-      () => api.admin.updateUserRole(u.id, role),
-      `${u.name} is now a ${role}.`
-    );
-
   const removeUser = (u: AdminUser) =>
     runAction(
       () => api.admin.deleteUser(u.id),
@@ -117,7 +111,7 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <PortalHeader
         title="Users & KYC"
-        subtitle="Approve shopkeeper/supplier accounts, change roles, or remove accounts"
+        subtitle="Approve shopkeeper/supplier accounts or remove accounts"
       />
       {message && (
         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
@@ -216,17 +210,8 @@ export default function AdminUsersPage() {
                         {u.email}
                         <p className="text-[11px] text-slate-400">{u.phone}</p>
                       </td>
-                      <td className="px-4 py-3">
-                        <select
-                          value={u.role}
-                          disabled={u.role === 'admin' || busyId !== null}
-                          onChange={(e) => void changeRole(u, e.target.value as 'shopkeeper' | 'supplier')}
-                          className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none"
-                        >
-                          <option value="supplier">Supplier</option>
-                          <option value="shopkeeper">Shopkeeper</option>
-                          {u.role === 'admin' && <option value="admin">Admin</option>}
-                        </select>
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        {u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin'}
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={u.verified ? 'verified' : 'pending'}>
@@ -298,6 +283,7 @@ export default function AdminUsersPage() {
                           </div>
                           <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
                             <KycDocumentViewer
+                              userId={u.id}
                               documents={u.documents}
                               ownerLabel={`${u.businessName || u.name} (${
                                 u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin'

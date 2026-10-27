@@ -27,14 +27,17 @@ const CATEGORIES = [
   'Over-the-Counter Healthcare',
 ];
 
+const PACK_TYPES = ['bag', 'carton', 'tin', 'box', 'drum', 'pack'];
+
 export default function SupplierAddProductPage() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Staples, Grains & Flours');
+  const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
-  const [unit, setUnit] = useState('50kg bag');
-  const [moq, setMoq] = useState('10');
-  const [stock, setStock] = useState('500');
+  const [moq, setMoq] = useState('');
+  const [packType, setPackType] = useState('');
+  const [packWeight, setPackWeight] = useState('');
+  const [stock, setStock] = useState('');
   const [description, setDescription] = useState('');
   // Photos picked from the supplier's device. The first one is the cover image
   // and they are uploaded with the listing (no stock/placeholder pictures).
@@ -50,8 +53,12 @@ export default function SupplierAddProductPage() {
 
     const parsedPrice = Number(price);
     const parsedMoq = Number(moq);
+    const parsedWeight = Number(packWeight);
     const parsedStock = Number(stock);
     if (!name.trim()) { setFormError('Product name is required.'); return; }
+    if (!category) { setFormError('Category is required.'); return; }
+    if (!packType) { setFormError('Pack type is required.'); return; }
+    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) { setFormError('Pack weight must be a positive number.'); return; }
     if (!description.trim()) { setFormError('Product description is required.'); return; }
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setFormError('Wholesale price must be a positive number.'); return; }
     if (!Number.isFinite(parsedMoq) || parsedMoq <= 0) { setFormError('MOQ must be a positive whole number.'); return; }
@@ -68,6 +75,12 @@ export default function SupplierAddProductPage() {
       // Down-scale/re-encode each photo and send it as a base64 data URL; the
       // API stores the files and links them to this listing.
       const uploaded = await Promise.all(photos.map((photo) => toProductImagePayload(photo.file)));
+
+      // The backend Product has a single free-text `unit` field (no separate
+      // pack-weight field), so pack type + weight are encoded into it, e.g.
+      // "25kg bag". The ProductCard parses that same string back into
+      // "Rs / bag", "Min: 5 bag" and "1 bag = 25 kg" for buyers.
+      const unit = `${parsedWeight}kg ${packType}`;
 
       await api.createProduct({
         name: name.trim(), category, unit, price: parsedPrice,
@@ -98,23 +111,28 @@ export default function SupplierAddProductPage() {
         </div>
       </div>
       <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
-        <Input label="Product Name" value={name} onChange={e => setName(e.target.value)} placeholder="Premium Basmati Rice - 10kg Bag" />
+        <Input label="Product Name" value={name} onChange={e => setName(e.target.value)} placeholder="Premium Basmati Rice" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Category</span>
             <select value={category} onChange={e => setCategory(e.target.value)} className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20">
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              <option value="" disabled>Select category</option>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-          <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pack Size / Unit</span>
-            <input type="text" value={unit} onChange={e => setUnit(e.target.value)} className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20" placeholder="50kg bag" />
-          </label>
-          <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">MOQ</span>
+          <Input label="Price per pack (PKR)" type="number" min={1} step={0.01} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="450" />
+          <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">MOQ (minimum packs)</span>
             <input type="number" min={1} step={1} inputMode="numeric" value={moq} onChange={e => setMoq(e.target.value)} className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20" placeholder="10" />
           </label>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Wholesale Price (PKR)" type="number" min={1} step={0.01} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="450" />
-          <Input label="Total Available Stock" type="number" min={0} step={1} inputMode="numeric" value={stock} onChange={e => setStock(e.target.value)} placeholder="500" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pack Type</span>
+            <select value={packType} onChange={e => setPackType(e.target.value)} className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20">
+              <option value="" disabled>Select pack type</option>
+              {PACK_TYPES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <Input label="Pack Weight (kg)" type="number" min={0.01} step={0.01} inputMode="decimal" value={packWeight} onChange={e => setPackWeight(e.target.value)} placeholder="25" />
+          <Input label="Stock (available packs)" type="number" min={0} step={1} inputMode="numeric" value={stock} onChange={e => setStock(e.target.value)} placeholder="500" />
         </div>
         <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">Product Description</span>
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={5} placeholder="Describe quality, origin, packaging..." className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 resize-none" />

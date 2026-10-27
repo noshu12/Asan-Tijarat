@@ -82,7 +82,7 @@ async function register(req, res, next) {
       });
     }
     // Self-registration is limited to marketplace accounts; admins are
-    // provisioned by the seed script or an existing admin.
+    // provisioned directly in the database by an existing admin.
     if (!['shopkeeper', 'supplier'].includes(role)) {
       return res.status(400).json({
         error: { code: 'INVALID_ROLE', message: 'role must be "shopkeeper" or "supplier".' },
@@ -267,6 +267,8 @@ async function verifyOtp(req, res, next) {
  * POST /api/auth/login
  * Body: { identifier (email OR phone), password }
  * 5 failed attempts → 15-min lock.
+ * Suspended accounts are blocked here, before any token is issued — a
+ * suspended-but-verified account must never be able to sign in.
  */
 async function login(req, res, next) {
   try {
@@ -296,6 +298,15 @@ async function login(req, res, next) {
       }
       return res.status(401).json({
         error: { code: 'INVALID_CREDENTIALS', message: 'Invalid identifier or password.' },
+      });
+    }
+
+    // Suspended accounts stay locked out even if they were verified before
+    // being suspended — this check runs before the pending check and before
+    // any token is issued, for every role including admin.
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        error: { code: 'ACCOUNT_SUSPENDED', message: 'Your account is suspended. Please contact support.' },
       });
     }
 

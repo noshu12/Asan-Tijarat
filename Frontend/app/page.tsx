@@ -403,7 +403,7 @@ export default function HomePage() {
               </ul>
             </div>
             <Link
-              href="/getstarted"
+              href="/getstarted?role=supplier"
               className="mt-8 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-lg transition"
             >
               <span>Start as Supplier</span>
@@ -440,7 +440,7 @@ export default function HomePage() {
               </ul>
             </div>
             <Link
-              href="/getstarted"
+              href="/getstarted?role=shopkeeper"
               className="mt-8 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-asan-dark hover:bg-asan-mid text-white text-sm font-bold shadow-lg transition"
             >
               <span>Start as Shopkeeper</span>
