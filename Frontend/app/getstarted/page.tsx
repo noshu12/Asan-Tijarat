@@ -10,13 +10,14 @@ import { toKycPayload } from '@/lib/uploads';
 import {
   Store,
   ShieldCheck,
-  Sparkles,
-  CreditCard,
-  Truck,
+  Building2,
+  Lock,
   Check,
   ArrowRight,
   AlertCircle,
-  MapPin
+  MapPin,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api, ApiError, RegisterPayload } from '@/lib/api';
@@ -32,6 +33,24 @@ const PENDING_VERIFICATION_NOTICE =
 /** How long the confirmation stays on screen before the Home-page redirect. */
 const HOME_REDIRECT_DELAY_MS = 6000;
 
+/** The 14 backend master categories — must match Backend/src/constants/categories.js exactly. */
+const CATEGORIES = [
+  'Staples, Grains & Flours',
+  'Pulses, Lentils & Beans',
+  'Cooking Oils, Ghee & Fats',
+  'Spices, Herbs & Baking',
+  'Packaged Foods, Recipe Mixes & Sauces',
+  'Beverages & Cold Corner',
+  'Tea, Coffee & Dairy',
+  'Snacks, Biscuits & Confectionery',
+  'Instant & Ready-to-Cook Foods',
+  'Home Cleaning & Sanitation',
+  'Personal Care & Hygiene',
+  'Mother & Baby Care',
+  'Paper Products, Wraps & Utilities',
+  'Over-the-Counter Healthcare',
+];
+
 export default function GetStartedPage() {
   const router = useRouter();
 
@@ -42,30 +61,42 @@ export default function GetStartedPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [role, setRole] = useState<'shopkeeper' | 'supplier'>('supplier');
 
-  // Step 1: Personal Info
-  const [firstName, setFirstName] = useState('Ahmed');
-  const [lastName, setLastName] = useState('Khan');
-  const [phone, setPhone] = useState('0300 1234567');
-  const [email, setEmail] = useState('ahmed@akenterprises.pk');
-  const [password, setPassword] = useState('password123');
+  // Step 1: Personal Info — intentionally empty, no demo prefill.
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   // Step 1: Residential details — stored on the account and shown in the Admin Dashboard.
-  const [houseAddress, setHouseAddress] = useState('House 123, Street 4, Block B, Model Town, Lahore');
-  const [currentHouseLocation, setCurrentHouseLocation] = useState('Model Town, Lahore, Punjab');
+  const [houseAddress, setHouseAddress] = useState('');
+  const [currentHouseLocation, setCurrentHouseLocation] = useState('');
 
-  // Step 2: Business Info
-  const [businessName, setBusinessName] = useState('Ahmed Khan Enterprises');
-  const [category, setCategory] = useState('Rice & Grains');
-  const [city, setCity] = useState('Lahore');
-  const [ntn, setNtn] = useState('1234567-8');
+  // Step 2: Business Info — intentionally empty, categories are multi-select from the 14.
+  const [businessName, setBusinessName] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [city, setCity] = useState('');
+  const [ntn, setNtn] = useState('');
 
-  // Step 3: Verification — OTP + the real KYC documents (CNIC front/back, NTN).
-  const [otp, setOtp] = useState(['5', '8', '2', '4', '9', '1']);
+  // Step 3: Documents only — the real KYC documents (CNIC front/back, NTN).
+  // No OTP here: OTP is verified AFTER registration, on an existing account.
   const [cnicFrontDraft, setCnicFrontDraft] = useState<KycFileDraft | null>(null);
   const [cnicBackDraft, setCnicBackDraft] = useState<KycFileDraft | null>(null);
   const [ntnDraft, setNtnDraft] = useState<KycFileDraft | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  // Set once the account is created — swaps the wizard for the pending-KYC
+
+  // Post-registration OTP step — shown after register succeeds, before the pending notice.
+  const [otpStep, setOtpStep] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otpSent, setOtpSent] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpMessage, setOtpMessage] = useState('');
+  const [otpError, setOtpError] = useState('');
+
+  // Set once OTP is verified — swaps the wizard for the pending-KYC
   // confirmation and starts the Home-page redirect (no auto sign-in).
   const [submitted, setSubmitted] = useState(false);
   const [notice, setNotice] = useState(PENDING_VERIFICATION_NOTICE);
@@ -96,6 +127,12 @@ export default function GetStartedPage() {
     );
   }, [deviceLocation.coords]);
 
+  const toggleCategory = (category: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
+    );
+  };
+
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
     setStep(2);
@@ -108,14 +145,18 @@ export default function GetStartedPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // POST /api/auth/register → creates a PENDING account (no session) and shows
-  // the "verified within 24 hours" notice instead of opening a portal.
-  // The CNIC front/back + NTN images picked in Step 3 travel with the request
-  // as base64 data URLs and are stored against this exact account, so the
-  // Admin Dashboard can preview the files the trader actually uploaded.
+  // POST /api/auth/register → creates a PENDING account (no session) and moves
+  // to the OTP step. The CNIC front/back + NTN images picked in Step 3 travel
+  // with the request as base64 data URLs and are stored against this exact
+  // account, so the Admin Dashboard can preview the files the trader actually uploaded.
   const handleCompleteRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (selectedCategories.length === 0) {
+      setErrorMessage('Please select at least one business category.');
+      return;
+    }
 
     if (!cnicFrontDraft || !cnicBackDraft || !ntnDraft) {
       const missing = [
@@ -136,14 +177,15 @@ export default function GetStartedPage() {
         toKycPayload(ntnDraft.file),
       ]);
 
-      const payload: RegisterPayload = {
+      const payload: RegisterPayload & { categories: string[] } = {
         name: `${firstName.trim()} ${lastName.trim()}`.trim(),
         email: email.trim(),
         phone: phone.trim(),
         password,
         role,
         businessName: businessName.trim(),
-        category: category.trim(),
+        categories: selectedCategories,
+        category: selectedCategories[0] || '',
         city: city.trim(),
         ntn: ntn.trim(),
         houseAddress: houseAddress.trim(),
@@ -153,12 +195,62 @@ export default function GetStartedPage() {
         documents: { cnicFront, cnicBack, ntn: ntnDocument },
       };
 
-      const res = await api.register(payload);
+      await api.register(payload);
 
       // No session is created here — an unverified account must not be signed in.
+      // Move to the OTP step; the pending notice shows only after OTP is verified.
+      setRegisteredEmail(email.trim());
+      setOtpStep(true);
+      setIsSubmitting(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage('Unexpected error while creating your account. Please try again.');
+      }
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSendOtp = async () => {
+    setOtpMessage('');
+    setOtpError('');
+    setIsSendingOtp(true);
+    try {
+      const res = await api.sendOtp(registeredEmail);
+      setOtpSent(true);
+      setOtpMessage(res.message || 'If an account exists for this email, an OTP has been sent.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setOtpError(err.message);
+      } else {
+        setOtpError('Unexpected error while sending OTP. Please try again.');
+      }
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpMessage('');
+    setOtpError('');
+
+    const otpCode = otp.join('');
+    if (otpCode.length !== 6) {
+      setOtpError('Please enter the complete 6-digit OTP.');
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      const res = await api.verifyOtp(registeredEmail, otpCode);
+      // OTP verification sets emailVerified only — admin approval is still required.
       setNotice(res.message || PENDING_VERIFICATION_NOTICE);
       setSubmitted(true);
-      setIsSubmitting(false);
+      setOtpStep(false);
+      setIsVerifyingOtp(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
       try {
@@ -170,11 +262,11 @@ export default function GetStartedPage() {
       } catch (err) {}
     } catch (err) {
       if (err instanceof ApiError) {
-        setErrorMessage(err.message);
+        setOtpError(err.message);
       } else {
-        setErrorMessage('Unexpected error while creating your account. Please try again.');
+        setOtpError('Unexpected error while verifying OTP. Please try again.');
       }
-      setIsSubmitting(false);
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -204,19 +296,19 @@ export default function GetStartedPage() {
             <div className="mt-10 space-y-4 text-sm sm:text-base text-emerald-100/90">
               <div className="flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Verified supplier badges & NTN verification</span>
+                <span>Accounts verified before trading</span>
               </div>
               <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>AI-powered recommendations & demand predictions</span>
+                <Store className="w-5 h-5 text-asan-accent shrink-0" />
+                <span>Separate shopkeeper and supplier portals</span>
               </div>
               <div className="flex items-center gap-3">
-                <CreditCard className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>JazzCash, EasyPaisa, and Escrow protection</span>
+                <Building2 className="w-5 h-5 text-asan-accent shrink-0" />
+                <span>Bulk orders with minimum order quantity</span>
               </div>
               <div className="flex items-center gap-3">
-                <Truck className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Real-time nationwide logistics tracking</span>
+                <Lock className="w-5 h-5 text-asan-accent shrink-0" />
+                <span>Price per pack, clearly shown</span>
               </div>
             </div>
           </div>
@@ -232,7 +324,7 @@ export default function GetStartedPage() {
         <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
           
           {submitted ? (
-            /* ── Confirmation: account created, awaiting admin verification ── */
+            /* ── Confirmation: account created, OTP verified, awaiting admin verification ── */
             <div className="text-center py-2">
               <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mx-auto mb-4">
                 <ShieldCheck className="w-8 h-8 text-asan-accent" />
@@ -269,6 +361,78 @@ export default function GetStartedPage() {
                 Go to Home Page
                 <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
+            </div>
+          ) : otpStep ? (
+            /* ── Post-registration OTP step: email OTP only, terminal for now, email later ── */
+            <div>
+              <div className="mb-6">
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Verify Your Email</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Your account has been created. Enter the 6-digit OTP sent to {registeredEmail} to verify your email.
+                </p>
+              </div>
+
+              {!otpSent ? (
+                <Button type="button" onClick={handleSendOtp} isLoading={isSendingOtp} className="w-full h-12 text-sm font-bold">
+                  Send OTP
+                </Button>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
+                      OTP Code
+                    </label>
+                    <div className="grid grid-cols-6 gap-2">
+                      {otp.map((digit, i) => (
+                        <input
+                          key={i}
+                          type="text"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => {
+                            const next = [...otp];
+                            next[i] = e.target.value.replace(/[^0-9]/g, '');
+                            setOtp(next);
+                          }}
+                          className="h-11 text-center font-bold text-base rounded-xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button type="submit" isLoading={isVerifyingOtp} className="w-full h-12 text-sm font-bold">
+                    Verify OTP
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={isSendingOtp}
+                    className="w-full text-center text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-60"
+                  >
+                    Resend OTP
+                  </button>
+                </form>
+              )}
+
+              {otpMessage && (
+                <p role="alert" className="text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2.5 mt-4">
+                  {otpMessage}
+                </p>
+              )}
+
+              {otpError && (
+                <p role="alert" className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 mt-4">
+                  {otpError}
+                </p>
+              )}
+
+              <p className="text-center text-xs text-slate-500 mt-6">
+                Already have an account?{' '}
+                <Link href="/signin" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                  Sign In
+                </Link>
+              </p>
             </div>
           ) : (
             <>
@@ -372,14 +536,30 @@ export default function GetStartedPage() {
                   required
                 />
 
-                <Input
-                  label="Password"
-                  type="password"
-                  placeholder="Min. 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                <div className="w-full space-y-1.5">
+                  <label htmlFor="getstarted-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="getstarted-password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Min. 8 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="w-full h-11 px-4 pr-11 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:border-asan-accent focus:outline-none focus:ring-2 focus:ring-asan-accent/20 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-asan-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
 
                 <Input
                   label="House Address"
@@ -458,20 +638,28 @@ export default function GetStartedPage() {
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Business Category
+                    Business Categories (select at least one)
                   </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
-                  >
-                    <option value="Rice & Grains">Rice & Grains</option>
-                    <option value="Textiles & Fabric">Textiles & Fabric</option>
-                    <option value="Spices & Seasoning">Spices & Seasoning</option>
-                    <option value="Dairy & Edible Oils">Dairy & Edible Oils</option>
-                    <option value="Minerals & Salt">Minerals & Salt</option>
-                    <option value="Fresh Produce">Fresh Mandi Produce</option>
-                  </select>
+                  <div className="grid grid-cols-1 gap-2">
+                    {CATEGORIES.map((cat) => (
+                      <label
+                        key={cat}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition ${
+                          selectedCategories.includes(cat)
+                            ? 'bg-emerald-50 border-asan-accent text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
+                            : 'border-slate-200 text-slate-600 dark:border-slate-800 dark:text-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedCategories.includes(cat)}
+                          onChange={() => toggleCategory(cat)}
+                          className="w-4 h-4 accent-emerald-600"
+                        />
+                        {cat}
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -481,8 +669,10 @@ export default function GetStartedPage() {
                   <select
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
+                    required
                     className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
                   >
+                    <option value="" disabled>Select city</option>
                     <option value="Karachi">Karachi (Sindh)</option>
                     <option value="Lahore">Lahore (Punjab)</option>
                     <option value="Faisalabad">Faisalabad (Textile Hub)</option>
@@ -499,7 +689,7 @@ export default function GetStartedPage() {
                   placeholder="1234567-8"
                   value={ntn}
                   onChange={(e) => setNtn(e.target.value)}
-                  helperText="Required for verified trader badge"
+                  helperText="Required for both shopkeeper and supplier accounts"
                   required
                 />
 
@@ -516,7 +706,7 @@ export default function GetStartedPage() {
             </div>
           )}
 
-          {/* STEP 3: VERIFICATION & DOCUMENTS */}
+          {/* STEP 3: DOCUMENTS ONLY */}
           {step === 3 && (
             <div>
               <div className="mb-6">
@@ -526,37 +716,8 @@ export default function GetStartedPage() {
                   compliance team and shown to the admin for approval
                 </p>
               </div>
-
-              {/* OTP alert banner */}
-              <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2 mb-4">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
-                <span>OTP sent to +92 300 ****567. Enter below to verify.</span>
-              </div>
-
+              
               <form onSubmit={handleCompleteRegistration} className="space-y-4">
-                {/* OTP Digits */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
-                    OTP Code
-                  </label>
-                  <div className="grid grid-cols-6 gap-2">
-                    {otp.map((digit, i) => (
-                      <input
-                        key={i}
-                        type="text"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => {
-                          const next = [...otp];
-                          next[i] = e.target.value;
-                          setOtp(next);
-                        }}
-                        className="h-11 text-center font-bold text-base rounded-xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
-                      />
-                    ))}
-                  </div>
-                </div>
-
                 {/* KYC documents — the real files attached to this account */}
                 <div className="space-y-3 pt-1">
                   <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -91,6 +91,8 @@ export function SettingsView({ role }: SettingsViewProps) {
   const [category, setCategory] = useState('');
   const [houseAddress, setHouseAddress] = useState('');
   const [currentHouseLocation, setCurrentHouseLocation] = useState('');
+  const [avatar, setAvatar] = useState('');
+  const avatarFileRef = useRef<HTMLInputElement>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
@@ -121,6 +123,7 @@ export function SettingsView({ role }: SettingsViewProps) {
     setCategory(user.category || '');
     setHouseAddress(user.houseAddress || '');
     setCurrentHouseLocation(user.currentHouseLocation || '');
+    setAvatar((user as { avatar?: string }).avatar || '');
     if (user.currentLocation) {
       setCoords({ lat: user.currentLocation.lat, lng: user.currentLocation.lng });
     }
@@ -145,6 +148,7 @@ export function SettingsView({ role }: SettingsViewProps) {
         setCategory(u.category || '');
         setHouseAddress(u.houseAddress || '');
         setCurrentHouseLocation(u.currentHouseLocation || '');
+        setAvatar((u as { avatar?: string }).avatar || '');
         if (u.currentLocation) {
           setCoords({ lat: u.currentLocation.lat, lng: u.currentLocation.lng });
         } else {
@@ -184,6 +188,29 @@ export function SettingsView({ role }: SettingsViewProps) {
     );
   }, [coords]);
 
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Please choose an image file (JPG, PNG or WEBP).');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileError('Profile picture must be 2 MB or smaller.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatar(String(reader.result));
+      setProfileError('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatar('');
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileError('');
@@ -215,6 +242,7 @@ export function SettingsView({ role }: SettingsViewProps) {
         phone,
         houseAddress,
         currentHouseLocation,
+        avatar,
         // Freshly captured GPS point — omit entirely when none exists so an
         // already-stored point is never accidentally cleared.
         ...(coords ? { currentLocation: coords } : {}),
@@ -283,6 +311,9 @@ export function SettingsView({ role }: SettingsViewProps) {
     return <Loader />;
   }
 
+  const avatarDisplayName = businessName || name;
+  const avatarInitial = avatarDisplayName ? avatarDisplayName.charAt(0).toUpperCase() : '?';
+
   return (
     <div className="space-y-8 max-w-4xl">
       <PortalHeader
@@ -301,6 +332,55 @@ export function SettingsView({ role }: SettingsViewProps) {
               ? 'Verified NTN details for wholesale invoicing'
               : 'Update your contact information'}
           </p>
+        </div>
+
+        {/* Profile picture — shown on Business Profile via profile.avatar.
+            Choosing a photo only changes the preview here; it is saved
+            together with the rest of the profile on Save. */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 border-b border-slate-200 dark:border-slate-800">
+          {avatar ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={avatar}
+              alt={avatarDisplayName}
+              className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-500 shrink-0"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-asan-dark text-white flex items-center justify-center text-2xl font-extrabold border-2 border-emerald-500 shrink-0">
+              {avatarInitial}
+            </div>
+          )}
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-slate-900 dark:text-white">Profile picture</p>
+            <p className="text-xs text-slate-500">
+              JPG, PNG or WEBP, up to 2 MB. Saved when you save your profile.
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                ref={avatarFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
+              <button
+                type="button"
+                onClick={() => avatarFileRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-asan-accent hover:text-asan-accent transition"
+              >
+                Change photo
+              </button>
+              {avatar && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-red-600 dark:text-red-400 hover:border-red-400 transition"
+                >
+                  Remove photo
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSaveProfile} className="space-y-4">

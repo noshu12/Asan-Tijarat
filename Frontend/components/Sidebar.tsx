@@ -33,6 +33,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const displayRole = authLoading
     ? '…'
     : (user?.role || (isAdmin ? 'admin' : isSupplier ? 'supplier' : 'shopkeeper'));
+  const avatar = (user as { avatar?: string } | null)?.avatar || '';
 
   const shopkeeperNav = [
     { name: 'Dashboard', href: '/shopkeeper/dashboard', icon: LayoutDashboard },
@@ -101,9 +102,18 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="pt-4 mt-6 border-t border-white/10 shrink-0">
         <div className="flex items-center px-2 py-2 rounded-xl bg-black/20">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-emerald-700/60 border border-emerald-400 flex items-center justify-center font-bold text-sm text-white shrink-0">
-              {displayName[0]}
-            </div>
+            {avatar ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={avatar}
+                alt={displayName}
+                className="w-9 h-9 rounded-full object-cover border border-emerald-400 shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-emerald-700/60 border border-emerald-400 flex items-center justify-center font-bold text-sm text-white shrink-0">
+                {displayName[0]}
+              </div>
+            )}
             <div className="truncate">
               <p className="text-xs font-bold text-white truncate">{displayName}</p>
               <p className="text-[11px] text-emerald-300/80 truncate capitalize">

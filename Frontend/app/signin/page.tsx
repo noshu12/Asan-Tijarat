@@ -27,7 +27,6 @@ export default function SignInPage() {
   const router = useRouter();
   const { user, loading: authLoading, login: authLogin } = useAuth();
 
-  const [selectedRole, setSelectedRole] = useState<UserRole>('shopkeeper');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -45,19 +44,10 @@ export default function SignInPage() {
     }
   }, [authLoading, user, router]);
 
-  // Deep-link hydration: /signin?role=shopkeeper only preselects the role
-  // tab (read from window so the statically rendered page needs no Suspense).
-  // It does NOT prefill any email or password.
+  // Deep-link hydration: only the ?redirect= param is kept.
+  // There is no role tab any more, so ?role= is ignored on purpose.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const requestedRole = params.get('role');
-    if (
-      requestedRole === 'shopkeeper' ||
-      requestedRole === 'supplier' ||
-      requestedRole === 'admin'
-    ) {
-      setSelectedRole(requestedRole);
-    }
     const redirect = params.get('redirect');
     if (redirect) setRedirectTarget(redirect);
   }, []);
@@ -69,14 +59,9 @@ export default function SignInPage() {
     router.prefetch('/shopkeeper/dashboard');
   }, [router]);
 
-  const handleRoleChange = (role: UserRole) => {
-    setSelectedRole(role);
-    setErrorMessage('');
-    setErrorCode('');
-  };
-
   // Calls POST /api/auth/login via the AuthProvider (sets the asan_token
-  // httpOnly cookie), then redirects by role. No token is stored in
+  // httpOnly cookie), then redirects by the account's ACTUAL role — never
+  // by a tab, because there is no tab any more. No token is stored in
   // localStorage and no Authorization header is sent.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,9 +70,16 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      await authLogin(identifier.trim(), password);
-
-      router.push(redirectTarget || ROLE_HOME[selectedRole] || '/');
+      const result: any = await authLogin(identifier.trim(), password);
+      const actualRole: UserRole | undefined = result?.role || result?.user?.role;
+      if (actualRole && ROLE_HOME[actualRole]) {
+        router.push(redirectTarget || ROLE_HOME[actualRole]);
+      } else if (redirectTarget) {
+        router.push(redirectTarget);
+      }
+      // If authLogin returns no user, the already-signed-in useEffect
+      // above sends the user to their actual-role dashboard once the
+      // AuthProvider user state updates.
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -154,44 +146,7 @@ export default function SignInPage() {
           
           <div className="mb-6">
             <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Sign In</h3>
-            <p className="text-xs text-slate-500 mt-1">Select your account role to continue</p>
-          </div>
-
-          {/* Role Selection Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 mb-6">
-            <button
-              type="button"
-              onClick={() => handleRoleChange('shopkeeper')}
-              className={`py-2 rounded-lg text-xs font-bold transition ${
-                selectedRole === 'shopkeeper'
-                  ? 'bg-white dark:bg-slate-900 text-asan-dark dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Shopkeeper
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRoleChange('supplier')}
-              className={`py-2 rounded-lg text-xs font-bold transition ${
-                selectedRole === 'supplier'
-                  ? 'bg-white dark:bg-slate-900 text-asan-dark dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Supplier
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRoleChange('admin')}
-              className={`py-2 rounded-lg text-xs font-bold transition ${
-                selectedRole === 'admin'
-                  ? 'bg-white dark:bg-slate-900 text-asan-dark dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Admin
-            </button>
+            <p className="text-xs text-slate-500 mt-1">Enter your credentials to continue</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -223,12 +178,12 @@ export default function SignInPage() {
             </div>
 
             <div className="flex justify-end">
-              <button
-                type="button"
+              <Link
+                href="/forgot-password"
                 className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             {errorMessage && (
@@ -245,7 +200,7 @@ export default function SignInPage() {
             )}
 
             <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">
-              Sign In as {selectedRole === 'admin' ? 'Admin' : selectedRole === 'supplier' ? 'Supplier' : 'Shopkeeper'}
+              Sign In
             </Button>
           </form>
 

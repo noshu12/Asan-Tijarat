@@ -62,8 +62,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       0,
       'NETWORK_ERROR',
       'Cannot reach the API server. Start the backend (npm start in Backend/) and refresh. ' +
-        'If it is already running, this page\u2019s origin is probably not allowed by the server\u2019s ' +
-        'CORS config (CLIENT_ORIGIN in Backend/.env) \u2014 open the app on http://localhost:3000.'
+        'If it is already running, this page’s origin is probably not allowed by the server’s ' +
+        'CORS config (CLIENT_ORIGIN in Backend/.env) — open the app on http://localhost:3000.'
     );
   }
 
@@ -235,6 +235,38 @@ export const api = {
       body: { currentPassword, newPassword },
     }),
 
+  /** Sends a password-reset request — token is emailed / dev-logged, never returned here. */
+  forgotPassword: (email: string) =>
+    request<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: { email },
+      auth: false,
+    }),
+
+  /** Resets the password with the token from the forgot-password request. */
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ reset: boolean; message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: { token, newPassword },
+      auth: false,
+    }),
+
+  /** Sends a 6-digit email OTP — dev-logged in terminal for now, emailed once SMTP is set up. */
+  sendOtp: (email: string) =>
+    request<{ message: string }>('/api/auth/send-otp', {
+      method: 'POST',
+      body: { email },
+      auth: false,
+    }),
+
+  /** Verifies the 6-digit email OTP — sets emailVerified only, admin approval still required. */
+  verifyOtp: (email: string, otp: string) =>
+    request<{ emailVerified: boolean; message: string }>('/api/auth/verify-otp', {
+      method: 'POST',
+      body: { email, otp },
+      auth: false,
+    }),
+
   products: (query: ProductQuery = {}) => {
     const params = new URLSearchParams();
     const search = (query.search || '').trim();
@@ -316,7 +348,7 @@ export const api = {
       }),
 
     deleteProduct: (id: string) =>
-      request<{ deleted: boolean; id: string }>(`/api/admin/products/${id}`, { method: 'DELETE' }),
+      request<{ product: Product }>(`/api/admin/products/${id}`, { method: 'DELETE' }),
 
     orders: (query: { status?: string; search?: string } = {}) => {
       const params = new URLSearchParams();

@@ -10,6 +10,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { toClient } = require('../utils/serialize');
 const { UPLOAD_ROOT } = require('../utils/kycStorage');
+const { sendEmail } = require('../utils/sendEmail');
 
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -86,6 +87,10 @@ async function listUsers(req, res, next) {
  * KYC approval / revocation for shopkeepers & suppliers.
  * verified ke saath status bhi sync hota hai, taake login (verified)
  * aur naya status field dono ek hi baat kahen.
+ * Jab account pehli dafa pending se verified hota hai (false -> true),
+ * to user ko approval email jati hai ke ab wo sign in kar sakta hai.
+ * Email fail ho to bhi verification nahi rukti — verify pehle se
+ * save ho chuka hota hai, email sirf notification hai.
  */
 async function verifyUser(req, res, next) {
   try {
@@ -97,9 +102,21 @@ async function verifyUser(req, res, next) {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be verified or unverified.' } });
     }
     const verified = req.body.verified === undefined ? true : Boolean(req.body.verified);
+    const wasVerified = user.verified;
     user.verified = verified;
     user.status = verified ? 'active' : 'pending';
     await user.save();
+    if (verified && !wasVerified) {
+      const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+      const emailSent = await sendEmail({
+        to: user.email,
+        subject: 'Asan Tijarat - Your account has been approved',
+        text: `Hello ${user.name},\n\nYour Asan Tijarat account has been approved.\n\nYou can now sign in using your registered email and password:\n${baseUrl}/signin\n\nThank you for joining Asan Tijarat.`,
+      });
+      if (!emailSent) {
+        console.log(`[admin] Approval email not sent (no SMTP configured or email failed) for ${user.email}`);
+      }
+    }
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);

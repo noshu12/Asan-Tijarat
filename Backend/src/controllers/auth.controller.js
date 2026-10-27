@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { CATEGORIES } = require('../constants/categories');
 const { saveKycDocuments, deleteStoredFiles, KycUploadError } = require('../utils/kycStorage');
 const { sanitizeLocation } = require('../utils/location');
+const { sendEmail } = require('../utils/sendEmail');
 
 /**
  * Shown to a self-registered shopkeeper/supplier while their KYC details are
@@ -178,7 +179,8 @@ async function register(req, res, next) {
  * POST /api/auth/send-otp
  * Body: { email }
  * Sends a 6-digit OTP, hashed, 5-min expiry, 60-sec resend limit.
- * Without SMTP, the OTP is logged server-side (dev only) — same as before.
+ * Sends a real email when SMTP is configured; otherwise the OTP is
+ * logged server-side (dev only) — same fallback as before.
  * Returns a generic message whether or not the account exists.
  */
 async function sendOtp(req, res, next) {
@@ -202,7 +204,14 @@ async function sendOtp(req, res, next) {
       user.otpAttempts = 0;
       user.lastOtpSentAt = new Date();
       await user.save();
-      console.log(`[auth] OTP (dev only, no SMTP configured) for ${user.email}: ${otp}`);
+      const emailSent = await sendEmail({
+        to: user.email,
+        subject: 'Asan Tijarat - Your verification code',
+        text: `Your Asan Tijarat verification code is: ${otp}\n\nThis code expires in 5 minutes. Do not share it with anyone.\n\nIf you did not request this code, ignore this email.`,
+      });
+      if (!emailSent) {
+        console.log(`[auth] OTP (dev only, no SMTP configured or email failed) for ${user.email}: ${otp}`);
+      }
     }
     res.json({ message: 'If an account exists for this email, an OTP has been sent.' });
   } catch (err) {
@@ -350,7 +359,8 @@ async function me(req, res) {
  * Body: { email }
  * Hashed single-use token, 15-min expiry. Same generic message whether
  * or not the email exists, so accounts cannot be enumerated.
- * Without SMTP, the token is logged server-side (dev only).
+ * Sends a real reset-link email when SMTP is configured; otherwise the
+ * token is logged server-side (dev only).
  */
 async function forgotPassword(req, res, next) {
   try {
@@ -366,7 +376,16 @@ async function forgotPassword(req, res, next) {
       user.resetPasswordTokenHash = hashValue(token);
       user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
       await user.save();
-      console.log(`[auth] Password reset token (dev only, no SMTP configured) for ${user.email}: ${token}`);
+      const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+      const resetLink = `${baseUrl}/reset-password?token=${token}`;
+      const emailSent = await sendEmail({
+        to: user.email,
+        subject: 'Asan Tijarat - Reset your password',
+        text: `You requested a password reset for Asan Tijarat.\n\nClick this link to reset your password (valid for 15 minutes):\n${resetLink}\n\nIf you did not request this, ignore this email.`,
+      });
+      if (!emailSent) {
+        console.log(`[auth] Password reset token (dev only, no SMTP configured or email failed) for ${user.email}: ${token}`);
+      }
     }
     res.json({ message: 'If an account exists for this email, reset instructions have been sent.' });
   } catch (err) {
@@ -377,6 +396,9 @@ async function forgotPassword(req, res, next) {
 /**
  * POST /api/auth/reset-password
  * Body: { token, newPassword }
+ * New password must be different from the old password — purana
+ * password dobara set nahi ho sakta. Is rejection par token clear
+ * NAHI hota, taake user usi link se alag password try kar sake.
  */
 async function resetPassword(req, res, next) {
   try {
@@ -398,6 +420,11 @@ async function resetPassword(req, res, next) {
     if (!user) {
       return res.status(400).json({
         error: { code: 'INVALID_TOKEN', message: 'Reset token is invalid or expired.' },
+      });
+    }
+    if (await user.matchPassword(newPassword)) {
+      return res.status(400).json({
+        error: { code: 'SAME_AS_OLD_PASSWORD', message: 'New password must be different from your old password.' },
       });
     }
     user.password = newPassword; // pre('save') hook re-hashes
@@ -520,6 +547,7 @@ async function updateMe(req, res, next) {
  *
  * Verifies the current password before replacing it. `password` is
  * `select: false` on the model, so it has to be re-fetched explicitly.
+ * New password must be different from the current password.
  */
 async function changePassword(req, res, next) {
   try {
@@ -539,6 +567,11 @@ async function changePassword(req, res, next) {
     if (!user || !(await user.matchPassword(currentPassword))) {
       return res.status(401).json({
         error: { code: 'INVALID_PASSWORD', message: 'Your current password is incorrect.' },
+      });
+    }
+    if (await user.matchPassword(newPassword)) {
+      return res.status(400).json({
+        error: { code: 'SAME_AS_OLD_PASSWORD', message: 'New password must be different from your old password.' },
       });
     }
 
