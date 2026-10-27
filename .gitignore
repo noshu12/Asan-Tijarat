@@ -1,0 +1,27 @@
+# ── Node / deps ───────────────────────────────
+node_modules/
+
+# ── Environment secrets (never commit) ────────
+.env
+.env.local
+.env.*.local
+
+# ── Next.js ───────────────────────────────────
+.next/
+out/
+next-env.d.ts
+
+# ── Logs / OS ─────────────────────────────────
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# ── Editor / IDE ──────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# ── Uploads (KYC / product images, never commit) ──
+uploads/
