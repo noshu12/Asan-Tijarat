@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { Footer } from '@/components/Footer';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Mail, Phone, MapPin, Send, MessageSquare, Clock } from 'lucide-react';
+import { API_URL } from '@/lib/api';
+import { MapPin, Send } from 'lucide-react';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -15,8 +16,10 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors: Record<string, string> = {};
     if (!formData.fullName.trim()) nextErrors.fullName = 'Full name is required.';
@@ -24,16 +27,39 @@ export default function ContactPage() {
     if (!formData.email.trim()) nextErrors.email = 'Email address is required.';
     if (!formData.message.trim()) nextErrors.message = 'Message cannot be empty.';
     setErrors(nextErrors);
+    setSubmitError('');
+    setSubmitSuccess('');
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      // POST /api/public/contact validates name/email/message and stores
+      // the message. ContactMessage has no phone field, so the phone number
+      // is kept inside the message text instead of being dropped.
+      const response = await fetch(`${API_URL}/api/public/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.fullName.trim(),
+          email: formData.email.trim(),
+          message: `${formData.message.trim()}\nPhone: ${formData.phone.trim()}`,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message = (payload as { error?: { message?: string } } | null)?.error?.message;
+        throw new Error(message || 'Could not send your message. Please try again.');
+      }
+      setSubmitSuccess('Message sent and saved. Thank you for contacting us.');
       setFormData({ fullName: '', phone: '', email: '', message: '' });
       setErrors({});
-    }, 1000);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Could not send your message. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -45,7 +71,7 @@ export default function ContactPage() {
         </span>
         <h1 className="text-3xl sm:text-4xl font-extrabold mt-1">Contact Us</h1>
         <p className="text-xs sm:text-sm text-emerald-100/80 mt-1 max-w-md mx-auto">
-          Have a question or want to partner with us? We reply within 24 hours.
+          Send us a message using the form below.
         </p>
       </div>
 
@@ -65,43 +91,34 @@ export default function ContactPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 text-xs">
-                <Phone className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">Helpline</p>
-                  <p className="text-slate-500 dark:text-slate-400">+92 300 000 0000</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 text-xs">
-                <Mail className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">Support Email</p>
-                  <p className="text-slate-500 dark:text-slate-400">hello@asantijarat.pk</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 text-xs">
-                <Clock className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">Working Hours</p>
-                  <p className="text-slate-500 dark:text-slate-400">Mon - Sat: 9:00 AM - 7:00 PM</p>
-                </div>
-              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Messages sent from this form are saved for review.
+              </p>
             </div>
           </div>
 
           {/* Contact Form matching Figma 8.png */}
           <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm md:col-span-2">
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">Send Us a Message</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-6">Fill in the details below and our team will get back to you.</p>
+            <p className="text-xs text-slate-500 mt-1 mb-6">Fill in the details below.</p>
+
+            {submitSuccess && (
+              <p role="status" className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-4">
+                {submitSuccess}
+              </p>
+            )}
+            {submitError && (
+              <p role="alert" className="text-xs font-semibold text-red-500 mb-4">
+                {submitError}
+              </p>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Input
                     label="Full Name"
-                    placeholder="Ahmed Khan"
+                    placeholder="Your full name"
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     required
@@ -111,7 +128,7 @@ export default function ContactPage() {
                 <div className="space-y-1">
                   <Input
                     label="Phone Number"
-                    placeholder="+92 300 1234567"
+                    placeholder="Your phone number"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     required
@@ -124,7 +141,7 @@ export default function ContactPage() {
                 <Input
                   label="Business Email"
                   type="email"
-                  placeholder="ahmed@business.pk"
+                  placeholder="Your business email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required

@@ -46,7 +46,7 @@ export default function ShopkeeperDashboardPage() {
         setStats({
           totalOrders: myOrders.length,
           totalSpent: myOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0),
-          pendingOrders: myOrders.filter((o) => o.status === 'Pending' || o.status === 'Confirmed').length,
+          pendingOrders: myOrders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length,
         });
         setRecentOrders(myOrders.slice(0, 3));
       })
@@ -72,7 +72,7 @@ export default function ShopkeeperDashboardPage() {
       <div className="space-y-8">
         <PortalHeader
           title="Dashboard"
-          subtitle="Thursday, 3 July 2026 • Shopkeeper Portal"
+          subtitle="Shopkeeper Portal"
         />
         <div className="flex items-center justify-center py-20">
           <Loader />
@@ -83,7 +83,7 @@ export default function ShopkeeperDashboardPage() {
 
   if (!user) {
     return (
-      <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
+      <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-800 p-8">
         <ShieldCheck className="w-10 h-10 text-red-400 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-slate-900 dark:text-white">Please sign in</h3>
         <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
@@ -125,7 +125,7 @@ export default function ShopkeeperDashboardPage() {
             Welcome back, {user?.businessName || user?.name || 'Shopkeeper'} 👋
           </h2>
           <p className="text-xs sm:text-sm text-emerald-200/80 mt-1">
-            Discover <strong className="text-white">12 new wholesale commodities</strong> matching your inventory preferences.
+            Browse wholesale products listed by suppliers.
           </p>
         </div>
 
@@ -143,22 +143,16 @@ export default function ShopkeeperDashboardPage() {
         <StatsCard
           title="Total Wholesale Orders"
           value={String(stats?.totalOrders ?? 0)}
-          change="+5.2%"
-          isPositive={true}
           icon={ShoppingCart}
         />
         <StatsCard
           title="Pending Orders"
           value={String(stats?.pendingOrders ?? 0)}
-          change="+1.8%"
-          isPositive={true}
           icon={Clock}
         />
         <StatsCard
           title="Total Spent"
           value={formatPKR(stats?.totalSpent ?? 0)}
-          change="+11%"
-          isPositive={true}
           icon={CreditCard}
         />
       </div>
@@ -169,7 +163,7 @@ export default function ShopkeeperDashboardPage() {
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-asan-accent" />
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recommended for You</h3>
-            <span className="text-[11px] text-slate-400">Personalized AI picks • updated daily</span>
+            <span className="text-[11px] text-slate-400">Products from the marketplace</span>
           </div>
           <Link href="/marketplace" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
             <span>Browse all</span>

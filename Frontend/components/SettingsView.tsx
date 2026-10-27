@@ -23,35 +23,24 @@ import { Check, MapPin } from 'lucide-react';
 
 type NotificationKey =
   | 'newOrders'
-  | 'escrowRelease'
-  | 'paymentConfirmed'
-  | 'productReviews'
   | 'lowStock'
-  | 'aiForecasts'
   | 'announcements';
 
 const SHOPKEEPER_NOTIFICATIONS: { key: NotificationKey; label: string }[] = [
-  { key: 'newOrders', label: 'New orders received' },
-  { key: 'paymentConfirmed', label: 'Payment confirmed & escrow releases' },
-  { key: 'productReviews', label: 'Product reviews & ratings' },
+  { key: 'newOrders', label: 'Order status updates' },
   { key: 'lowStock', label: 'Low stock alerts' },
-  { key: 'announcements', label: 'System announcements & mandi policy updates' },
+  { key: 'announcements', label: 'System announcements' },
 ];
 
 const SUPPLIER_NOTIFICATIONS: { key: NotificationKey; label: string }[] = [
-  { key: 'newOrders', label: 'SMS alert on new wholesale purchase order' },
-  { key: 'escrowRelease', label: 'Email notification on Escrow funds release to bank' },
-  { key: 'lowStock', label: 'Low inventory lot warning threshold' },
-  { key: 'aiForecasts', label: 'Weekly AI demand spike alerts' },
+  { key: 'newOrders', label: 'New wholesale purchase orders' },
+  { key: 'lowStock', label: 'Low stock alerts' },
+  { key: 'announcements', label: 'System announcements' },
 ];
 
 const DEFAULT_NOTIFICATIONS: Record<NotificationKey, boolean> = {
   newOrders: true,
-  escrowRelease: true,
-  paymentConfirmed: true,
-  productReviews: true,
   lowStock: true,
-  aiForecasts: true,
   announcements: false,
 };
 
@@ -329,7 +318,7 @@ export function SettingsView({ role }: SettingsViewProps) {
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             {isSupplier
-              ? 'Verified NTN details for wholesale invoicing'
+              ? 'Business details for wholesale invoicing'
               : 'Update your contact information'}
           </p>
         </div>
@@ -545,7 +534,7 @@ export function SettingsView({ role }: SettingsViewProps) {
       <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-6">
         <div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Notification Preferences</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Control SMS and Email trade alerts</p>
+          <p className="text-xs text-slate-500 mt-0.5">Control your notification preferences</p>
         </div>
 
         <div className="space-y-3">

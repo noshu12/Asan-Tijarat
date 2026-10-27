@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { Product } from '@/lib/types';
-import { formatPKR, cn } from '@/lib/utils';
-import { Star, ShieldCheck, MapPin, Plus, Check } from 'lucide-react';
+import { formatPKR } from '@/lib/utils';
+import { MapPin, Plus, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ProductImage } from '@/components/ProductImage';
 import { motion } from 'framer-motion';
@@ -44,14 +44,6 @@ export function ProductCard({ product }: { product: Product }) {
             alt={product.name}
             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          {product.supplierVerified && (
-            <div className="absolute top-2.5 left-2.5">
-              <Badge variant="verified" className="shadow-md">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Verified
-              </Badge>
-            </div>
-          )}
           {product.status === 'Low Stock' && (
             <div className="absolute top-2.5 right-2.5">
               <Badge variant="warning">Low Stock</Badge>
@@ -71,22 +63,6 @@ export function ProductCard({ product }: { product: Product }) {
               <MapPin className="w-3 h-3 text-slate-400" />
               {product.supplierCity}
             </span>
-          </div>
-
-          <div className="flex items-center gap-1 text-xs pt-1">
-            <div className="flex text-amber-400">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={cn(
-                    "w-3.5 h-3.5",
-                    i < Math.floor(product.rating) ? "fill-amber-400" : "fill-slate-200 dark:fill-slate-700 text-slate-200 dark:text-slate-700"
-                  )}
-                />
-              ))}
-            </div>
-            <span className="font-semibold text-slate-700 dark:text-slate-300">{product.rating}</span>
-            <span className="text-slate-400 text-[11px]">({product.reviewCount})</span>
           </div>
         </div>
       </div>

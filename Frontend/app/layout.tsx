@@ -4,8 +4,8 @@ import { Navbar } from '@/components/Navbar';
 import { AuthProvider } from '@/context/AuthProvider';
 
 export const metadata: Metadata = {
-  title: 'Asan Tijarat | Pakistan\'s AI-Powered B2B Wholesale Marketplace',
-  description: 'Connect verified suppliers and shopkeepers across Pakistan. AI recommendations, real-time demand forecasting, and secure trade escrow.',
+  title: 'Asan Tijarat | B2B Wholesale Marketplace',
+  description: 'Connect suppliers and shopkeepers across Pakistan. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.',
 };
 
 export default function RootLayout({

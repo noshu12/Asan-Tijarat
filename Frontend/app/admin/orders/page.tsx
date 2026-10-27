@@ -10,8 +10,10 @@ import { useAuth } from '@/context/AuthProvider';
 import { Order, OrderStatus } from '@/lib/types';
 import { formatPKR, formatDate } from '@/lib/utils';
 
-const TABS: ('All' | OrderStatus)[] = ['All', 'Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
-const ORDER_STATUSES: OrderStatus[] = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
+const TABS: ('All' | OrderStatus)[] = ['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+const ORDER_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+
+const statusLabel = (s: string) => (s === 'All' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1));
 
 export default function AdminOrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -51,7 +53,7 @@ export default function AdminOrdersPage() {
     api.admin
       .updateOrderStatus(o.id, status)
       .then((res) => {
-        setMessage(`Order ${res.order.orderNumber} is now ${status}.`);
+        setMessage(`Order ${res.order.orderNumber} is now ${statusLabel(status)}.`);
         setOrders(orders.map((x) => (x.id === o.id ? res.order : x)));
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Status update failed.'))
@@ -60,10 +62,10 @@ export default function AdminOrdersPage() {
 
   const getVariant = (s: OrderStatus) => {
     switch (s) {
-      case 'Delivered': return 'delivered';
-      case 'Shipped': return 'shipped';
-      case 'Confirmed': return 'confirmed';
-      case 'Pending': return 'pending';
+      case 'delivered': return 'delivered';
+      case 'shipped': return 'shipped';
+      case 'confirmed': return 'confirmed';
+      case 'pending': return 'pending';
       default: return 'outline';
     }
   };
@@ -135,7 +137,7 @@ export default function AdminOrdersPage() {
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            {tab}
+            {statusLabel(tab)}
           </button>
         ))}
       </div>
@@ -156,7 +158,6 @@ export default function AdminOrdersPage() {
                 <th className="px-4 py-3">Parties</th>
                 <th className="px-4 py-3">Total</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Payment</th>
                 <th className="px-4 py-3">Date</th>
               </tr>
             </thead>
@@ -177,7 +178,7 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1">
-                      <Badge variant={getVariant(o.status)}>{o.status}</Badge>
+                      <Badge variant={getVariant(o.status)}>{statusLabel(o.status)}</Badge>
                       <select
                         value={o.status}
                         disabled={busyId !== null}
@@ -185,13 +186,9 @@ export default function AdminOrdersPage() {
                         className="h-7 px-1.5 text-[11px] rounded-lg border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none"
                         title="Admin status override"
                       >
-                        {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {ORDER_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                       </select>
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
-                    {o.paymentMethod}
-                    <p className="text-[11px] text-slate-400">{o.paymentStatus}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                     {formatDate(o.createdAt)}

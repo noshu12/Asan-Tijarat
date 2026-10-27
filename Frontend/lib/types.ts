@@ -73,18 +73,12 @@ export interface Product {
   supplierId: string;
   supplierName: string;
   supplierCity: string;
-  supplierVerified: boolean;
-  rating: number;
-  reviewCount: number;
   image: string;
   additionalImages?: string[];
   /** Metadata of the photos the supplier uploaded for this listing (mirrors the backend). */
   imageUploads?: ProductImageUpload[];
   description: string;
-  ordersCount: number;
   status: 'Active' | 'Low Stock' | 'Out of Stock';
-  isTrending?: boolean;
-  aiReason?: string;
 }
 
 export interface CartItem {
@@ -92,7 +86,8 @@ export interface CartItem {
   quantity: number;
 }
 
-export type OrderStatus = 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled';
+/** Backend order status — lowercase, with processing as a real stage. Must match the Backend Order model. */
+export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
 export interface OrderItem {
   productId: string;
@@ -114,7 +109,6 @@ export interface Order {
   supplierName: string;
   items: OrderItem[];
   subtotal: number;
-  platformFee: number;
   totalAmount: number;
   status: OrderStatus;
   createdAt: string;
@@ -127,16 +121,11 @@ export interface Order {
   buyerLocation?: DeviceLocation | null;
   /** Prebuilt Google Maps URL for `buyerLocation` (clickable by suppliers). */
   buyerLocationLink?: string | null;
-  paymentMethod: 'JazzCash' | 'EasyPaisa' | 'Card' | 'Bank Transfer';
-  paymentStatus: 'Paid' | 'Pending' | 'Refunded';
 }
 
 export interface TopSupplier {
   id: string;
   name: string;
   initials: string;
-  rating: number;
-  ordersCount: number;
   tradeVolume: number;
-  verified: boolean;
 }

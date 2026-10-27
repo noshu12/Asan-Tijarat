@@ -11,20 +11,26 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 
 const CATEGORIES = [
-  'Rice & Grains',
-  'Spices & Condiments',
-  'Textiles & Fabrics',
-  'Tea & Beverages',
-  'Packaged Foods',
-  'Raw Materials',
-  'Household',
-  'Other',
+  'Staples, Grains & Flours',
+  'Pulses, Lentils & Beans',
+  'Cooking Oils, Ghee & Fats',
+  'Spices, Herbs & Baking',
+  'Packaged Foods, Recipe Mixes & Sauces',
+  'Beverages & Cold Corner',
+  'Tea, Coffee & Dairy',
+  'Snacks, Biscuits & Confectionery',
+  'Instant & Ready-to-Cook Foods',
+  'Home Cleaning & Sanitation',
+  'Personal Care & Hygiene',
+  'Mother & Baby Care',
+  'Paper Products, Wraps & Utilities',
+  'Over-the-Counter Healthcare',
 ];
 
 export default function SupplierAddProductPage() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Rice & Grains');
+  const [category, setCategory] = useState('Staples, Grains & Flours');
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('50kg bag');
   const [moq, setMoq] = useState('10');

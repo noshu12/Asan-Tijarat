@@ -19,13 +19,20 @@ import { Product } from '@/lib/types';
 // GET /api/products. Unknown categories link to the full marketplace
 // instead of a filter that would return nothing.
 const CATEGORY_SLUG: Record<string, string> = {
-  'Rice & Grains': 'rice-grains',
-  Spices: 'spices',
-  Textiles: 'textiles',
-  Dairy: 'dairy',
-  'Dairy & Oils': 'dairy',
-  Minerals: 'minerals',
-  Vegetables: 'vegetables',
+  'Staples, Grains & Flours': 'staples-grains-flours',
+  'Pulses, Lentils & Beans': 'pulses-lentils-beans',
+  'Cooking Oils, Ghee & Fats': 'cooking-oils-ghee-fats',
+  'Spices, Herbs & Baking': 'spices-herbs-baking',
+  'Packaged Foods, Recipe Mixes & Sauces': 'packaged-foods-recipe-mixes-sauces',
+  'Beverages & Cold Corner': 'beverages-cold-corner',
+  'Tea, Coffee & Dairy': 'tea-coffee-dairy',
+  'Snacks, Biscuits & Confectionery': 'snacks-biscuits-confectionery',
+  'Instant & Ready-to-Cook Foods': 'instant-ready-to-cook-foods',
+  'Home Cleaning & Sanitation': 'home-cleaning-sanitation',
+  'Personal Care & Hygiene': 'personal-care-hygiene',
+  'Mother & Baby Care': 'mother-baby-care',
+  'Paper Products, Wraps & Utilities': 'paper-products-wraps-utilities',
+  'Over-the-Counter Healthcare': 'over-the-counter-healthcare',
 };
 
 export default function HomePage() {
@@ -396,7 +403,7 @@ export default function HomePage() {
               </ul>
             </div>
             <Link
-              href="/signin?role=supplier"
+              href="/getstarted"
               className="mt-8 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-lg transition"
             >
               <span>Start as Supplier</span>
@@ -433,7 +440,7 @@ export default function HomePage() {
               </ul>
             </div>
             <Link
-              href="/signin?role=shopkeeper"
+              href="/getstarted"
               className="mt-8 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-asan-dark hover:bg-asan-mid text-white text-sm font-bold shadow-lg transition"
             >
               <span>Start as Shopkeeper</span>

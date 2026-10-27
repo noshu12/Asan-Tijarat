@@ -70,12 +70,12 @@ export default function SupplierOrdersPage() {
           Received Orders
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Process wholesale orders, dispatch shipments, and release escrow funds
+          Process wholesale orders and dispatch shipments
         </p>
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {(['All', 'Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] as const).map((tab) => (
+        {(['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -85,7 +85,7 @@ export default function SupplierOrdersPage() {
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            {tab}
+            {tab === 'All' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -121,13 +121,13 @@ export default function SupplierOrdersPage() {
       {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} />}
 
       {/* Quick status actions for supplier — only when something is actionable */}
-      {filteredOrders.some((o) => o.status !== 'Delivered' && o.status !== 'Cancelled') && (
+      {filteredOrders.some((o) => o.status !== 'delivered' && o.status !== 'cancelled') && (
         <div className="space-y-3">
           <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
             Quick Status Actions
           </h3>
           {filteredOrders
-            .filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled')
+            .filter((o) => o.status !== 'delivered' && o.status !== 'cancelled')
             .map((order) => (
               <div key={order.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
@@ -149,19 +149,24 @@ export default function SupplierOrdersPage() {
                       Navigate
                     </a>
                   )}
-                  {order.status === 'Pending' && (
-                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'Confirmed')}>
+                  {order.status === 'pending' && (
+                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'confirmed')}>
                       Confirm
                     </Button>
                   )}
-                  {order.status === 'Confirmed' && (
-                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'Shipped')}>
+                  {order.status === 'confirmed' && (
+                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'processing')}>
+                      Process
+                    </Button>
+                  )}
+                  {order.status === 'processing' && (
+                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'shipped')}>
                       <Truck className="w-3.5 h-3.5 mr-1" />
                       Ship
                     </Button>
                   )}
-                  {order.status === 'Shipped' && (
-                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'Delivered')}>
+                  {order.status === 'shipped' && (
+                    <Button size="sm" onClick={() => updateOrderStatus(order.id, 'delivered')}>
                       <CheckCircle className="w-3.5 h-3.5 mr-1" />
                       Deliver
                     </Button>

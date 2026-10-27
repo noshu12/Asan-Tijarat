@@ -2,19 +2,26 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Store, ShieldCheck, Mail, Phone, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
 
-// Same marketplace filter slugs as the Home page categories.
+// Same marketplace filter slugs as the marketplace page categories.
 const CATEGORY_SLUG: Record<string, string> = {
-  'Rice & Grains': 'rice-grains',
-  Spices: 'spices',
-  Textiles: 'textiles',
-  Dairy: 'dairy',
-  'Dairy & Oils': 'dairy',
-  Minerals: 'minerals',
-  Vegetables: 'vegetables',
+  'Staples, Grains & Flours': 'staples-grains-flours',
+  'Pulses, Lentils & Beans': 'pulses-lentils-beans',
+  'Cooking Oils, Ghee & Fats': 'cooking-oils-ghee-fats',
+  'Spices, Herbs & Baking': 'spices-herbs-baking',
+  'Packaged Foods, Recipe Mixes & Sauces': 'packaged-foods-recipe-mixes-sauces',
+  'Beverages & Cold Corner': 'beverages-cold-corner',
+  'Tea, Coffee & Dairy': 'tea-coffee-dairy',
+  'Snacks, Biscuits & Confectionery': 'snacks-biscuits-confectionery',
+  'Instant & Ready-to-Cook Foods': 'instant-ready-to-cook-foods',
+  'Home Cleaning & Sanitation': 'home-cleaning-sanitation',
+  'Personal Care & Hygiene': 'personal-care-hygiene',
+  'Mother & Baby Care': 'mother-baby-care',
+  'Paper Products, Wraps & Utilities': 'paper-products-wraps-utilities',
+  'Over-the-Counter Healthcare': 'over-the-counter-healthcare',
 };
 
 export function Footer() {
@@ -61,12 +68,8 @@ export function Footer() {
               <span className="font-bold text-2xl tracking-tight">Asan Tijarat</span>
             </div>
             <p className="text-xs text-emerald-100/80 leading-relaxed">
-              Pakistan&apos;s Leading AI-Powered B2B Wholesale Marketplace. Direct supplier connections, transparent pricing, and smart trade automation.
+              A B2B wholesale marketplace connecting suppliers and shopkeepers. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.
             </p>
-            <div className="flex items-center gap-2 text-xs text-emerald-300">
-              <ShieldCheck className="w-4 h-4 text-asan-accent" />
-              <span>Verified NTN & CNIC Traders</span>
-            </div>
           </div>
 
           <div className="space-y-3">
@@ -107,13 +110,10 @@ export function Footer() {
                 <MapPin className="w-4 h-4 text-asan-accent shrink-0" />
                 <span>FUUAST Campus, Gulshan-e-Iqbal, Karachi, Pakistan</span>
               </p>
-              <p className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-asan-accent shrink-0" />
-                <span>+92 300 000 0000</span>
-              </p>
-              <p className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-asan-accent shrink-0" />
-                <span>contact@asantijarat.pk</span>
+              <p>
+                <Link href="/contact" className="hover:text-white transition">
+                  Contact & Support →
+                </Link>
               </p>
             </div>
           </div>

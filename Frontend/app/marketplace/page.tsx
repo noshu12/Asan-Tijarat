@@ -2,21 +2,46 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CATEGORIES_LIST, INITIAL_PRODUCTS } from '@/lib/mockData';
 import { ProductCard } from '@/components/ProductCard';
 import { Footer } from '@/components/Footer';
-import { Search, ShieldCheck, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
-type SortOption = 'rating' | 'price-asc' | 'price-desc' | 'orders';
+type SortOption = 'price-asc' | 'price-desc';
+
+const MARKETPLACE_CATEGORIES: { id: string; name: string }[] = [
+  { id: 'all', name: 'All' },
+  { id: 'staples-grains-flours', name: 'Staples, Grains & Flours' },
+  { id: 'pulses-lentils-beans', name: 'Pulses, Lentils & Beans' },
+  { id: 'cooking-oils-ghee-fats', name: 'Cooking Oils, Ghee & Fats' },
+  { id: 'spices-herbs-baking', name: 'Spices, Herbs & Baking' },
+  { id: 'packaged-foods-recipe-mixes-sauces', name: 'Packaged Foods, Recipe Mixes & Sauces' },
+  { id: 'beverages-cold-corner', name: 'Beverages & Cold Corner' },
+  { id: 'tea-coffee-dairy', name: 'Tea, Coffee & Dairy' },
+  { id: 'snacks-biscuits-confectionery', name: 'Snacks, Biscuits & Confectionery' },
+  { id: 'instant-ready-to-cook-foods', name: 'Instant & Ready-to-Cook Foods' },
+  { id: 'home-cleaning-sanitation', name: 'Home Cleaning & Sanitation' },
+  { id: 'personal-care-hygiene', name: 'Personal Care & Hygiene' },
+  { id: 'mother-baby-care', name: 'Mother & Baby Care' },
+  { id: 'paper-products-wraps-utilities', name: 'Paper Products, Wraps & Utilities' },
+  { id: 'over-the-counter-healthcare', name: 'Over-the-Counter Healthcare' },
+];
 
 const CATEGORY_PRODUCT_MATCHES: Record<string, string[]> = {
-  'rice-grains': ['Rice & Grains'],
-  spices: ['Spices'],
-  textiles: ['Textiles'],
-  dairy: ['Dairy', 'Dairy & Oils'],
-  minerals: ['Minerals'],
-  vegetables: ['Vegetables'],
+  'staples-grains-flours': ['Staples, Grains & Flours'],
+  'pulses-lentils-beans': ['Pulses, Lentils & Beans'],
+  'cooking-oils-ghee-fats': ['Cooking Oils, Ghee & Fats'],
+  'spices-herbs-baking': ['Spices, Herbs & Baking'],
+  'packaged-foods-recipe-mixes-sauces': ['Packaged Foods, Recipe Mixes & Sauces'],
+  'beverages-cold-corner': ['Beverages & Cold Corner'],
+  'tea-coffee-dairy': ['Tea, Coffee & Dairy'],
+  'snacks-biscuits-confectionery': ['Snacks, Biscuits & Confectionery'],
+  'instant-ready-to-cook-foods': ['Instant & Ready-to-Cook Foods'],
+  'home-cleaning-sanitation': ['Home Cleaning & Sanitation'],
+  'personal-care-hygiene': ['Personal Care & Hygiene'],
+  'mother-baby-care': ['Mother & Baby Care'],
+  'paper-products-wraps-utilities': ['Paper Products, Wraps & Utilities'],
+  'over-the-counter-healthcare': ['Over-the-Counter Healthcare'],
 };
 
 /**
@@ -42,11 +67,10 @@ function MarketplaceContent() {
   const searchParams = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('rating');
+  const [sortBy, setSortBy] = useState<SortOption>('price-asc');
 
-  // Live catalogue from GET /api/products (falls back to mock data if the
-  // backend is unreachable so the page never hard-fails).
+  // Live catalogue from GET /api/products only — no mock fallback, so a
+  // backend failure shows an empty list instead of fake products.
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,7 +80,7 @@ function MarketplaceContent() {
         const data = await api.products();
         setProducts(data.products);
       } catch {
-        setProducts(INITIAL_PRODUCTS);
+        setProducts([]);
       } finally {
         setIsLoading(false);
       }
@@ -71,17 +95,13 @@ function MarketplaceContent() {
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      // Category filter
+      // Category filter — unknown category slugs (e.g. old links) do not
+      // hide every product, they fall back to showing all.
       if (selectedCategory !== 'all') {
         const matchingCategories = CATEGORY_PRODUCT_MATCHES[selectedCategory];
-        if (!matchingCategories?.includes(product.category)) {
+        if (matchingCategories && !matchingCategories.includes(product.category)) {
           return false;
         }
-      }
-
-      // Verified filter
-      if (verifiedOnly && !product.supplierVerified) {
-        return false;
       }
 
       // Search query
@@ -98,12 +118,10 @@ function MarketplaceContent() {
 
       return true;
     }).sort((a, b) => {
-      if (sortBy === 'price-asc') return a.price - b.price;
       if (sortBy === 'price-desc') return b.price - a.price;
-      if (sortBy === 'orders') return b.ordersCount - a.ordersCount;
-      return b.rating - a.rating;
+      return a.price - b.price;
     });
-  }, [products, selectedCategory, searchQuery, verifiedOnly, sortBy]);
+  }, [products, selectedCategory, searchQuery, sortBy]);
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -164,29 +182,12 @@ function MarketplaceContent() {
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* Verified Filter Toggle */}
-              <button
-                type="button"
-                aria-pressed={verifiedOnly}
-                onClick={() => setVerifiedOnly(!verifiedOnly)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition shrink-0 ${
-                  verifiedOnly
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Verified Only</span>
-              </button>
-
               {/* Sort By Dropdown */}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
                 className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none"
               >
-                <option value="rating">Sort: Top Rated</option>
-                <option value="orders">Sort: Most Orders</option>
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
               </select>
@@ -195,7 +196,7 @@ function MarketplaceContent() {
 
           {/* Category Filter Pills */}
           <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {CATEGORIES_LIST.map((cat) => {
+            {MARKETPLACE_CATEGORIES.map((cat) => {
               const isSelected = selectedCategory === cat.id;
               return (
                 <button
@@ -230,7 +231,7 @@ function MarketplaceContent() {
             </p>
             <button
               type="button"
-              onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setVerifiedOnly(false); }}
+              onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
               className="mt-4 px-4 py-2 rounded-xl bg-asan-accent text-white text-xs font-semibold"
             >
               Reset Filters

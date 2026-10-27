@@ -6,26 +6,12 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { StatsCard } from '@/components/StatsCard';
 import { OrderTable } from '@/components/OrderTable';
 import { ProductImage } from '@/components/ProductImage';
-import { DollarSign, Package, ShoppingCart, Star, PlusCircle, Boxes } from 'lucide-react';
+import { DollarSign, Package, ShoppingCart, Clock, PlusCircle, Boxes } from 'lucide-react';
 import { formatPKR } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, Product, User } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { SUPPLIER_REVENUE_CHART, SALES_BY_CATEGORY } from '@/lib/mockData';
 
 export default function SupplierDashboardPage() {
   // Live rows for this supplier. GET /api/orders + GET /api/products are
@@ -84,13 +70,10 @@ export default function SupplierDashboardPage() {
   // KPI values are derived from the same rows the table below renders, so the
   // numbers can never drift from the order list (no more hardcoded 4.8M/342).
   const totalRevenue = orders
-    .filter((o) => o.status !== 'Cancelled')
+    .filter((o) => o.status !== 'cancelled')
     .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  const pendingOrders = orders.filter((o) => o.status === 'Pending').length;
+  const pendingOrders = orders.filter((o) => o.status === 'pending').length;
   const activeListings = products.filter((p) => p.status === 'Active').length;
-  const averageRating = products.length
-    ? products.reduce((sum, p) => sum + (p.rating || 0), 0) / products.length
-    : 0;
   const recentOrders = orders.slice(0, 3);
 
   if (!user) {
@@ -148,11 +131,7 @@ export default function SupplierDashboardPage() {
         <StatsCard title="Total Revenue" value={formatPKR(totalRevenue)} icon={DollarSign} />
         <StatsCard title="Active Listings" value={String(activeListings)} icon={Package} />
         <StatsCard title="Total Orders" value={String(orders.length)} icon={ShoppingCart} />
-        <StatsCard
-          title="Average Rating"
-          value={averageRating ? `${averageRating.toFixed(1)} ★` : '—'}
-          icon={Star}
-        />
+        <StatsCard title="Pending Orders" value={String(pendingOrders)} icon={Clock} />
       </div>
 
       {/* ── My Listings ────────────────────────────────────────────────────
@@ -213,64 +192,6 @@ export default function SupplierDashboardPage() {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Revenue Growth (PKR)
-            </h3>
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2.5 py-1 rounded-full">
-              +14.2% YoY
-            </span>
-          </div>
-
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={SUPPLIER_REVENUE_CHART}>
-                <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#27AE7A" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#27AE7A" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `Rs${v/1000}k`} />
-                <Tooltip formatter={(value: number | string) => formatPKR(Number(value))} />
-                <Area type="monotone" dataKey="revenue" stroke="#27AE7A" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-col justify-between">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
-            Sales by Category
-          </h3>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={SALES_BY_CATEGORY}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {SALES_BY_CATEGORY.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend iconSize={8} wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
       </div>
 
       <div className="space-y-4">

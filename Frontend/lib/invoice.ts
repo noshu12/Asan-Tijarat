@@ -4,7 +4,7 @@
  * Builds a standalone, brand-styled HTML receipt (Asan Tijarat theme) and
  * opens it in a popup window where the user can print straight away or choose
  * "Save as PDF" from the browser dialog. Purely presentational: every value
- * comes from the Order entity produced by services/orderService.
+ * comes from the Order entity.
  */
 import { Order, OrderItem } from '@/lib/types';
 
@@ -46,14 +46,8 @@ function formatDate(isoDate: string): string {
   return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function paymentPill(paymentStatus: Order['paymentStatus']): string {
-  const palette: Record<Order['paymentStatus'], { bg: string; fg: string }> = {
-    Paid: { bg: '#ECFDF5', fg: BRAND.mid },
-    Pending: { bg: '#FEF6E7', fg: BRAND.warning },
-    Refunded: { bg: '#FDEDEC', fg: BRAND.error },
-  };
-  const tone = palette[paymentStatus];
-  return `<span class="pill" style="background:${tone.bg};color:${tone.fg};border-color:${tone.fg}22">${escapeHtml(paymentStatus)}</span>`;
+function statusLabel(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 /** Renders the itemised line-rows of an order's receipt table. */
@@ -84,7 +78,7 @@ function receiptMarkup(order: Order): string {
         <div class="logo-mark">AT</div>
         <div>
           <h1>Asan Tijarat</h1>
-          <p>Pakistan's AI-Powered B2B Wholesale Marketplace</p>
+          <p>B2B Wholesale Marketplace</p>
         </div>
       </div>
       <div class="meta ta-r">
@@ -106,9 +100,9 @@ function receiptMarkup(order: Order): string {
         <p class="sub">Wholesale Vendor</p>
       </div>
       <div class="info-card">
-        <p class="label">Payment</p>
-        <p class="who">${escapeHtml(order.paymentMethod)}</p>
-        <p class="sub">${paymentPill(order.paymentStatus)}</p>
+        <p class="label">Order Status</p>
+        <p class="who">${escapeHtml(statusLabel(order.status))}</p>
+        <p class="sub">Pending to delivered</p>
       </div>
     </div>
 
@@ -127,7 +121,6 @@ function receiptMarkup(order: Order): string {
 
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>
-      <div class="row"><span>Platform Escrow Fee (1.5%)</span><span>${money(order.platformFee)}</span></div>
       <div class="row grand"><span>Total Amount</span><span>${money(order.totalAmount)}</span></div>
     </div>
 
@@ -137,9 +130,8 @@ function receiptMarkup(order: Order): string {
     </div>
 
     <footer class="foot">
-      Funds are held safely in Asan Tijarat Escrow until delivery confirmation.
       This invoice was generated automatically — no signature required.<br />
-      <strong>Order Status:</strong> ${escapeHtml(order.status)} &nbsp;·&nbsp; <strong>Payment:</strong> ${escapeHtml(order.paymentStatus)}
+      <strong>Order Status:</strong> ${escapeHtml(statusLabel(order.status))}
     </footer>
   </section>`;
 }

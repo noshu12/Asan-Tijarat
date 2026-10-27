@@ -5,55 +5,45 @@ import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import {
   ShieldCheck,
-  Sparkles,
-  TrendingUp,
-  CreditCard,
-  Truck,
   Store,
   Building2,
   CheckCircle2,
   ArrowRight,
-  BarChart3,
   FileCheck,
-  Scale,
-  Zap,
-  Globe2,
-  Lock,
-  Layers
+  Globe2
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function AboutPage() {
   const capabilities = [
     {
       icon: Building2,
       title: 'Direct Factory & Mandi Sourcing',
-      desc: 'Connect directly with certified farmers, flour/rice mills, and textile manufacturers across Pakistan without paying 15-30% middleman agent commissions.'
+      desc: 'Connect directly with farmers, flour/rice mills, and textile manufacturers across Pakistan, and browse their listed products on the marketplace.'
     },
     {
-      icon: Sparkles,
-      title: 'AI Demand Forecasting & Price Trends',
-      desc: 'Machine learning algorithms analyze seasonal trends, mandi harvest cycles, and regional buying patterns to predict upcoming commodity demands and price shifts.'
+      icon: CheckCircle2,
+      title: 'Order Status You Can Follow',
+      desc: 'Every order moves through pending, confirmed, processing, shipped, and delivered, and its current status is visible in the supplier and shopkeeper portals.'
     },
     {
       icon: ShieldCheck,
-      title: 'FBR & Chamber Verified Profiles',
-      desc: 'Every business is vetted using CNIC, NTN, and Chamber of Commerce registrations so you trade with 100% authentic suppliers and verified wholesale buyers.'
+      title: 'Accounts Reviewed Before Trading',
+      desc: 'Businesses register with their business details and NTN, submit CNIC and NTN documents, and an admin reviews the account before it can trade.'
     },
     {
-      icon: Lock,
-      title: 'Digital Escrow Payment Protection',
-      desc: 'Buyer payments via JazzCash, EasyPaisa, or bank transfer are held securely in digital escrow and only released once the buyer inspects and confirms delivery.'
+      icon: Store,
+      title: 'Separate Supplier & Shopkeeper Portals',
+      desc: 'Suppliers list products and manage their orders, while shopkeepers browse the marketplace, place bulk orders, and track them in My Orders.'
     },
     {
-      icon: Truck,
-      title: 'Nationwide Logistics & Real-Time Tracking',
-      desc: 'Integrated freight milestones track shipments from mandi dispatch to doorstep delivery across all major logistics routes in Punjab, Sindh, KPK, and Balochistan.'
+      icon: Globe2,
+      title: 'Public Marketplace to Browse',
+      desc: 'Anyone can browse products listed by suppliers, search by product, supplier, city, or category, and compare price per pack and minimum order quantity.'
     },
     {
       icon: FileCheck,
-      title: 'Automated NTN Invoicing & Ledgers',
-      desc: 'Instant digital invoices, delivery challans, and GST/NTN compliant tax records generated automatically for every bulk wholesale order.'
+      title: 'Downloadable Order Invoice',
+      desc: 'For each order you can download an invoice showing the items, quantities, price per pack, subtotal, and total amount.'
     }
   ];
 
@@ -63,10 +53,10 @@ export default function AboutPage() {
       subtitle: 'Sell Bulk Volume Directly',
       color: 'border-emerald-500/30 bg-emerald-950/20',
       points: [
-        'List commodity lots with photos, lab certificates, and video walkthroughs',
-        'Receive guaranteed upfront orders with funds secured in escrow',
-        'Forecast production needs using AI 30-day demand predictions',
-        'Eliminate payment default risks from traditional unverified credit book (udhaar)'
+        'List products with photos, price per pack, pack size, MOQ, and stock',
+        'Receive bulk orders from shopkeepers and manage them from the supplier portal',
+        'Manage your listings and orders from one place',
+        'Confirm, process, ship, and deliver orders, with the status visible to the shopkeeper'
       ]
     },
     {
@@ -74,10 +64,10 @@ export default function AboutPage() {
       subtitle: 'Procure at Factory-Gate Rates',
       color: 'border-blue-500/30 bg-blue-950/20',
       points: [
-        'Access 89,000+ verified commodity lots across Pakistan at transparent rates',
-        'Filter suppliers by verified NTN badge, star ratings, and mandi location',
-        'Receive personalized AI recommendations tailored to your inventory history',
-        '100% refund guarantee through built-in dispute resolution if goods don\'t match quality'
+        'Browse products listed by suppliers at transparent price per pack',
+        'Search and filter by product, supplier, city, and category',
+        'Compare products and prices before placing a bulk order',
+        'Track order status in My Orders, from pending to delivered'
       ]
     }
   ];
@@ -101,7 +91,7 @@ export default function AboutPage() {
             <span className="text-emerald-400">Asan Tijarat?</span>
           </h1>
           <p className="mt-6 text-sm sm:text-lg text-emerald-100/90 max-w-2xl mx-auto leading-relaxed">
-            Asan Tijarat is Pakistan&apos;s first complete AI-powered B2B wholesale ecosystem — connecting factories, millers, farmers, and wholesale shopkeepers with digital trust, transparent pricing, and secure escrow trading.
+            Asan Tijarat is a B2B wholesale marketplace connecting suppliers and shopkeepers in Pakistan — with separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.
           </p>
         </div>
       </section>
@@ -119,7 +109,7 @@ export default function AboutPage() {
               Powering Modern B2B Commerce in Pakistan
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2">
-              Everything required to source, verify, negotiate, pay, and track bulk commodities nationwide.
+              Everything required to list products, browse the marketplace, place bulk orders, and follow order status.
             </p>
           </div>
 
@@ -195,18 +185,17 @@ export default function AboutPage() {
           </div>
         </div>
 
-        {/* 3. AI & Technical Architecture Overview */}
+        {/* 3. How Trading Works */}
         <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-asan-dark to-emerald-900 text-white shadow-xl relative overflow-hidden">
           <div className="relative max-w-3xl space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Proprietary AI Engine</span>
+              <span>How It Works</span>
             </div>
             <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Smart Market Intelligence & Forecasting
+              From Registration to Delivery
             </h3>
             <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
-              Asan Tijarat deploys statistical time-series forecasting models (ARIMA & Prophet) alongside Collaborative and Content-Based recommendation filters. The platform continuously maps mandi arrivals, historic price indices, and procurement volumes to keep traders ahead of market movements.
+              Register as a supplier or shopkeeper and get your account reviewed. Suppliers list products with photos, price per pack, and MOQ. Shopkeepers browse the marketplace and place bulk orders. Suppliers confirm, process, ship, and deliver, and the order status stays visible in the portals at every step.
             </p>
           </div>
         </div>
@@ -222,20 +211,20 @@ export default function AboutPage() {
 
           {[
             {
-              q: 'How does digital escrow protect my payments?',
-              a: 'When an order is placed, your payment (JazzCash, EasyPaisa, or Bank) is locked securely in escrow. The supplier only receives the funds after you receive the goods and confirm quality inspection.'
+              q: 'How do orders work on Asan Tijarat?',
+              a: 'A shopkeeper places a bulk order from the marketplace. The supplier confirms it, then processes, ships, and delivers it. The order status is visible in My Orders at every step, from pending to delivered.'
             },
             {
               q: 'How is supplier verification conducted?',
-              a: 'All suppliers submit their CNIC, FBR NTN registration, and physical warehouse/mandi details. Our compliance team verifies tax active status before issuing the Verified Trader badge.'
+              a: 'Businesses register with their business name, city, and NTN, and submit CNIC and NTN documents. An admin reviews the account before it can trade.'
             },
             {
               q: 'What commodities are available for wholesale purchase?',
-              a: 'The platform hosts Basmati Rice, Grains, Faisalabad Combed Cotton, Multan Spices, Pure Desi Buffalo Ghee, Khewra Himalayan Salt, and daily mandi farm produce with clearly defined MOQs.'
+              a: 'Whatever suppliers have listed on the marketplace. Browse the marketplace and filter by category, product, supplier, or city to see what is currently available.'
             },
             {
-              q: 'Can suppliers update prices in real-time according to mandi rates?',
-              a: 'Yes. Suppliers have full control through their dedicated portal to adjust bulk unit pricing, modify available lot stock, and apply volume discounts anytime.'
+              q: 'Can suppliers update prices according to mandi rates?',
+              a: 'Yes. Suppliers can manage their listings through their dedicated portal, including bulk unit pricing, pack size, MOQ, and available stock.'
             }
           ].map((faq, idx) => (
             <div key={idx} className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">

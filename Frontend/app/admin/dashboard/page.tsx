@@ -9,7 +9,7 @@ import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ProductImage } from '@/components/ProductImage';
-import { Users, Store, Package, ShieldCheck, UserCheck, Boxes, WalletCards, TrendingUp, Clock } from 'lucide-react';
+import { Users, Store, Package, ShieldCheck, UserCheck, Boxes, WalletCards, Clock } from 'lucide-react';
 import { KycDocumentViewer } from '@/components/KycDocumentViewer';
 import { MapsLink } from '@/components/MapsLink';
 import { api, AdminStats, AdminUser } from '@/lib/api';
@@ -121,7 +121,7 @@ export default function AdminDashboardPage() {
           Please sign in with an admin account to continue.
         </p>
         <Link
-          href="/signin?role=admin"
+          href="/signin"
           className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md transition"
         >
           Admin Sign In
@@ -134,7 +134,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-8">
       <PortalHeader
         title="Admin Dashboard"
-        subtitle="Platform overview • users, listings, orders and escrow revenue"
+        subtitle="Platform overview • users, listings and orders"
       />
 
       {error && (
@@ -162,17 +162,10 @@ export default function AdminDashboardPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <StatsCard title="Products Listed" value={String(stats.products)} icon={Boxes} />
             <StatsCard title="Total Orders" value={String(stats.orders)} icon={Package} />
             <StatsCard title="Trade Volume" value={formatPKR(stats.revenue)} icon={WalletCards} />
-            <StatsCard
-              title="Platform Escrow Fees"
-              value={formatPKR(stats.platformFees)}
-              change="1.5% per order"
-              isPositive
-              icon={TrendingUp}
-            />
           </div>
 
           {/* ── Pending KYC approvals ──────────────────────────────────────

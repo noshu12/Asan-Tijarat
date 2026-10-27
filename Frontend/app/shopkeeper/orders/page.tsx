@@ -79,11 +79,11 @@ export default function ShopkeeperOrdersPage() {
     <div className="space-y-6">
       <PortalHeader
         title="My Orders"
-        subtitle="Thursday, 3 July 2026 • Shopkeeper Portal"
+        subtitle="Shopkeeper Portal"
       />
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {(['All', 'Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] as const).map((tab) => (
+        {(['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -93,7 +93,7 @@ export default function ShopkeeperOrdersPage() {
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            {tab}
+            {tab === 'All' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Product } from '@/lib/types';
 import { formatPKR } from '@/lib/utils';
-import { Sparkles, Plus, Check } from 'lucide-react';
+import { Plus, Check } from 'lucide-react';
 import { ProductImage } from '@/components/ProductImage';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthProvider';
@@ -28,11 +28,6 @@ export function AIRecommendationCard({ product }: { product: Product }) {
 
   return (
     <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-slate-900 p-4 shadow-sm hover:shadow-md transition">
-      <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mb-3 bg-emerald-100/70 dark:bg-emerald-900/40 px-2.5 py-1 rounded-full w-fit">
-        <Sparkles className="w-3.5 h-3.5" />
-        <span>{product.aiReason || 'AI Recommendation'}</span>
-      </div>
-
       <div className="flex gap-3.5">
         <ProductImage
           src={product.image}

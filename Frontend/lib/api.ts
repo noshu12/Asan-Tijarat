@@ -17,8 +17,7 @@ export const API_URL: string =
 
 /**
  * Turns a stored document path (`/uploads/kyc/cnicFront-…jpg`) into the URL an
- * <img>/<iframe> can load. Absolute URLs and data URLs pass through untouched,
- * so mock/seed data keeps working.
+ * <img>/<iframe> can load. Absolute URLs and data URLs pass through untouched.
  */
 export function fileUrl(pathname?: string | null): string {
   if (!pathname) return '';
@@ -136,7 +135,6 @@ export interface ProfileUpdatePayload {
 export interface CreateOrderPayload {
   items: { productId: string; quantity: number }[];
   shippingAddress: string;
-  paymentMethod?: 'JazzCash' | 'EasyPaisa' | 'Card' | 'Bank Transfer';
   /**
    * Shopkeeper's GPS point captured at checkout — stored on the order and
    * rendered for the supplier as a Google Maps link (buyerLocationLink).
@@ -147,7 +145,7 @@ export interface CreateOrderPayload {
 export interface ProductQuery {
   search?: string;
   category?: string;
-  sort?: 'rating' | 'price-asc' | 'price-desc' | 'orders';
+  sort?: 'price-asc' | 'price-desc';
 }
 
 /**
@@ -164,7 +162,6 @@ export interface ProductWritePayload {
   stock?: number;
   status?: Product['status'];
   description?: string;
-  isTrending?: boolean;
   image?: UploadPayload | string;
   images?: Array<UploadPayload | string>;
 }
@@ -184,7 +181,6 @@ export interface AdminStats {
   products: number;
   orders: number;
   revenue: number;
-  platformFees: number;
 }
 
 export interface AdminUser extends User {
@@ -196,7 +192,7 @@ export interface AdminUser extends User {
 
 export const api = {
   login: (identifier: string, password: string) =>
-    request<{ token: string; user: User }>('/api/auth/login', {
+    request<{ user: User }>('/api/auth/login', {
       method: 'POST',
       body: { identifier, password },
       auth: false,
@@ -235,7 +231,7 @@ export const api = {
       body: { currentPassword, newPassword },
     }),
 
-  /** Sends a password-reset request — token is emailed / dev-logged, never returned here. */
+  /** Sends a password-reset request — token is emailed, never returned here. */
   forgotPassword: (email: string) =>
     request<{ message: string }>('/api/auth/forgot-password', {
       method: 'POST',
@@ -251,7 +247,7 @@ export const api = {
       auth: false,
     }),
 
-  /** Sends a 6-digit email OTP — dev-logged in terminal for now, emailed once SMTP is set up. */
+  /** Sends a 6-digit email OTP via SMTP. */
   sendOtp: (email: string) =>
     request<{ message: string }>('/api/auth/send-otp', {
       method: 'POST',
@@ -276,8 +272,6 @@ export const api = {
     const SORT_MAP = {
       'price-asc': 'price_asc',
       'price-desc': 'price_desc',
-      orders: 'popular',
-      rating: 'rating',
     } as const;
     if (query.sort) params.set('sort', SORT_MAP[query.sort]);
     const suffix = params.toString() ? `?${params.toString()}` : '';
@@ -311,7 +305,7 @@ export const api = {
   updateOrderStatus: (id: string, status: OrderStatus) =>
     request<{ order: Order }>(`/api/orders/${id}/status`, { method: 'PATCH', body: { status } }),
 
-  /* ── Admin API (requires an admin JWT) ────────────────────────────── */
+  /* ── Admin API (requires an admin session) ────────────────────────── */
   admin: {
     stats: () => request<{ stats: AdminStats; recentOrders: Order[] }>('/api/admin/stats'),
 

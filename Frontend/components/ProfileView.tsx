@@ -23,7 +23,6 @@ import {
   Phone,
   ShieldCheck,
   ShoppingCart,
-  Star,
 } from 'lucide-react';
 
 /**
@@ -126,13 +125,10 @@ export function ProfileView({ role }: ProfileViewProps) {
   const locationMapsUrl = googleMapsUrl(profile);
   const isSupplier = role === 'supplier';
 
-  const settledOrders = orders.filter((o) => o.status !== 'Cancelled');
+  const settledOrders = orders.filter((o) => o.status !== 'cancelled');
   const totalSpent = settledOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  const pendingOrders = orders.filter((o) => o.status === 'Pending' || o.status === 'Confirmed').length;
+  const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length;
   const activeListings = products.filter((p) => p.status === 'Active').length;
-  const averageRating = products.length
-    ? products.reduce((sum, p) => sum + (p.rating || 0), 0) / products.length
-    : 0;
 
   return (
     <div className="space-y-8 max-w-5xl">
@@ -142,7 +138,7 @@ export function ProfileView({ role }: ProfileViewProps) {
             Business Profile
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {ROLE_LABEL[role]} account • verified credentials and trade summary
+            {ROLE_LABEL[role]} account • account details and trade summary
           </p>
         </div>
 
@@ -185,7 +181,7 @@ export function ProfileView({ role }: ProfileViewProps) {
                 {profile.verified ? (
                   <Badge variant="verified">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    Verified
+                    KYC Approved
                   </Badge>
                 ) : (
                   <Badge variant="pending">
@@ -288,7 +284,7 @@ export function ProfileView({ role }: ProfileViewProps) {
               {profile.verified ? 'KYC Approved' : 'KYC Pending'}
             </p>
             <p className="text-[11px] text-slate-400 truncate">
-              {profile.createdAt ? `Member since ${formatDate(profile.createdAt)}` : 'Escrow protected'}
+              {profile.createdAt ? `Member since ${formatDate(profile.createdAt)}` : '—'}
             </p>
           </div>
         </div>
@@ -300,11 +296,7 @@ export function ProfileView({ role }: ProfileViewProps) {
             <StatsCard title="Total Revenue" value={formatPKR(totalSpent)} icon={CreditCard} />
             <StatsCard title="Active Listings" value={String(activeListings)} icon={Package} />
             <StatsCard title="Orders Received" value={String(orders.length)} icon={ShoppingCart} />
-            <StatsCard
-              title="Average Rating"
-              value={averageRating ? `${averageRating.toFixed(1)} ★` : '—'}
-              icon={Star}
-            />
+            <StatsCard title="Pending Orders" value={String(pendingOrders)} icon={Clock} />
           </>
         ) : (
           <>
@@ -313,7 +305,7 @@ export function ProfileView({ role }: ProfileViewProps) {
             <StatsCard title="Pending Orders" value={String(pendingOrders)} icon={Clock} />
             <StatsCard
               title="Delivered"
-              value={String(orders.filter((o) => o.status === 'Delivered').length)}
+              value={String(orders.filter((o) => o.status === 'delivered').length)}
               icon={Package}
             />
           </>

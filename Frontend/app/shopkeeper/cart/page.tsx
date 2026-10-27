@@ -16,15 +16,12 @@ import { Modal } from '@/components/ui/modal';
 import { Loader } from '@/components/ui/loader';
 import { ProductImage } from '@/components/ProductImage';
 
-const PAYMENT_METHODS = ['JazzCash', 'EasyPaisa', 'Card', 'Bank Transfer'] as const;
-
 export default function ShopkeeperCartPage() {
   const { user, loading: authLoading } = useAuth();
   const [items, setItems] = useState(() => getCart());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [shippingAddress, setShippingAddress] = useState('Shop 12, Azam Cloth Market, Lahore');
-  const [paymentMethod, setPaymentMethod] = useState<'JazzCash' | 'EasyPaisa' | 'Card' | 'Bank Transfer'>('JazzCash');
+  const [shippingAddress, setShippingAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [createdOrders, setCreatedOrders] = useState<Order[] | null>(null);
   const {
@@ -43,8 +40,7 @@ export default function ShopkeeperCartPage() {
   const refresh = () => setItems(getCart());
 
   const subtotal = items.reduce((sum, entry) => sum + entry.product.price * entry.quantity, 0);
-  const escrowFee = Math.round(subtotal * 0.015);
-  const grandTotal = subtotal + escrowFee;
+  const total = subtotal;
 
   const handleCheckout = async () => {
     if (!user || items.length === 0) return;
@@ -56,7 +52,6 @@ export default function ShopkeeperCartPage() {
       const res = await api.createOrder({
         items: items.map((entry) => ({ productId: entry.product.id, quantity: entry.quantity })),
         shippingAddress: shippingAddress.trim(),
-        paymentMethod,
         currentLocation: location ? { lat: location.lat, lng: location.lng } : undefined,
       });
       clearCart();
@@ -124,7 +119,7 @@ export default function ShopkeeperCartPage() {
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
                 {createdOrders.length} order{createdOrders.length > 1 ? 's' : ''} saved to MongoDB —{' '}
-                {createdOrders.map((o) => o.orderNumber).join(', ')} · total {formatPKR(grandTotal)}.
+                {createdOrders.map((o) => o.orderNumber).join(', ')} · total {formatPKR(createdOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0))}.
                 The supplier will confirm, ship and deliver your lot
                 {createdOrders.some((o) => o.buyerLocationLink)
                   ? ' using the shop location link shared with your order.'
@@ -156,7 +151,7 @@ export default function ShopkeeperCartPage() {
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Your wholesale cart is empty</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            Browse the marketplace to find verified commodities, then add them at wholesale quantities.
+            Browse the marketplace to find wholesale commodities, then add them at wholesale quantities.
           </p>
           <Link
             href="/marketplace"
@@ -223,19 +218,14 @@ export default function ShopkeeperCartPage() {
                 <span>Subtotal</span>
                 <span>{formatPKR(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Platform Escrow Fee (1.5%)</span>
-                <span>{formatPKR(escrowFee)}</span>
-              </div>
               <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white pt-2 border-t">
-                <span>Grand Total</span>
-                <span className="text-emerald-600 dark:text-emerald-400">{formatPKR(grandTotal)}</span>
+                <span>Total</span>
+                <span className="text-emerald-600 dark:text-emerald-400">{formatPKR(total)}</span>
               </div>
             </div>
             <Button type="button" className="w-full mt-5" onClick={openCheckout}>
               Proceed to Checkout
             </Button>
-            <p className="text-[11px] text-slate-400 mt-2">Escrow protects your payment until the order is delivered.</p>
           </div>
         </div>
       )}
@@ -307,24 +297,11 @@ export default function ShopkeeperCartPage() {
               </p>
             )}
           </div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-            Payment Method
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as 'JazzCash' | 'EasyPaisa' | 'Card' | 'Bank Transfer')}
-              className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 bg-white dark:bg-slate-900 text-sm dark:text-white focus:border-asan-accent focus:outline-none focus:ring-2 focus:ring-asan-accent/20"
-            >
-              {PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}
-            </select>
-          </label>
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 text-xs space-y-1">
             <div className="flex justify-between text-slate-500">
               <span>{items.length} item(s)</span>
-              <span className="font-bold text-slate-900 dark:text-white">{formatPKR(grandTotal)}</span>
+              <span className="font-bold text-slate-900 dark:text-white">{formatPKR(total)}</span>
             </div>
-            <p className="text-[11px] text-slate-400">
-              Includes 1.5% escrow fee · payment status will be marked Paid on confirmation.
-            </p>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <Button type="button" variant="outline" onClick={() => setCheckoutOpen(false)}>Cancel</Button>

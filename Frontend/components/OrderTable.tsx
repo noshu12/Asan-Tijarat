@@ -10,15 +10,17 @@ import { Button } from '@/components/ui/button';
 import { ProductImage } from '@/components/ProductImage';
 import { Eye, Truck, Download, MapPin, Navigation } from 'lucide-react';
 
+const statusLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 export function OrderTable({ orders }: { orders: Order[] }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const getStatusVariant = (status: OrderStatus) => {
     switch (status) {
-      case 'Delivered': return 'delivered';
-      case 'Shipped': return 'shipped';
-      case 'Confirmed': return 'confirmed';
-      case 'Pending': return 'pending';
+      case 'delivered': return 'delivered';
+      case 'shipped': return 'shipped';
+      case 'confirmed': return 'confirmed';
+      case 'pending': return 'pending';
       default: return 'outline';
     }
   };
@@ -56,7 +58,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
                 </td>
                 <td className="px-5 py-4">
                   <Badge variant={getStatusVariant(order.status)}>
-                    {order.status}
+                    {statusLabel(order.status)}
                   </Badge>
                 </td>
                 <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">
@@ -90,14 +92,8 @@ export function OrderTable({ orders }: { orders: Order[] }) {
               <div>
                 <p className="text-xs text-slate-400">Status</p>
                 <Badge variant={getStatusVariant(selectedOrder.status)} className="mt-1">
-                  {selectedOrder.status}
+                  {statusLabel(selectedOrder.status)}
                 </Badge>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-400">Payment</p>
-                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  {selectedOrder.paymentMethod} ({selectedOrder.paymentStatus})
-                </p>
               </div>
             </div>
 
@@ -123,10 +119,6 @@ export function OrderTable({ orders }: { orders: Order[] }) {
               <div className="flex justify-between text-slate-500">
                 <span>Subtotal</span>
                 <span>{formatPKR(selectedOrder.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Platform Escrow Fee (1.5%)</span>
-                <span>{formatPKR(selectedOrder.platformFee)}</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white pt-1 border-t">
                 <span>Total Amount</span>
@@ -173,14 +165,8 @@ export function OrderTable({ orders }: { orders: Order[] }) {
               })()}
             </div>
 
-            {/* Receipt actions — printable/savable invoice + payment status */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                Payment Status:{' '}
-                <Badge variant={selectedOrder.paymentStatus === 'Paid' ? 'active' : selectedOrder.paymentStatus === 'Pending' ? 'pending' : 'outline'}>
-                  {selectedOrder.paymentStatus}
-                </Badge>
-              </div>
+            {/* Receipt actions — printable/savable invoice */}
+            <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
               <Button
                 variant="outline"
                 size="sm"
