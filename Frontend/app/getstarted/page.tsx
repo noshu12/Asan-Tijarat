@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/modal';
+import TermsContent from '@/components/TermsContent';
 import { KycDocumentUpload, KycFileDraft } from '@/components/KycDocumentUpload';
 import { toKycPayload } from '@/lib/uploads';
 import {
@@ -86,6 +88,10 @@ export default function GetStartedPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Terms & Conditions — must be accepted before registration completes.
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+
   // Post-registration OTP step — shown after register succeeds, before the pending notice.
   const [otpStep, setOtpStep] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
@@ -95,6 +101,38 @@ export default function GetStartedPage() {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpMessage, setOtpMessage] = useState('');
   const [otpError, setOtpError] = useState('');
+
+  // OTP box refs — aik digit likhte hi agle box par focus, Backspace par
+  // peeche wale box par focus, aur paste par 6 boxes aik saath bharne ke liye.
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const handleOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/[^0-9]/g, '').slice(-1);
+    const next = [...otp];
+    next[index] = digit;
+    setOtp(next);
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+    if (!text) return;
+    e.preventDefault();
+    const next = [...otp];
+    for (let i = 0; i < text.length; i++) {
+      next[i] = text[i];
+    }
+    setOtp(next);
+    otpRefs.current[Math.min(text.length, 5)]?.focus();
+  };
 
   // Set once OTP is verified — swaps the wizard for the pending-KYC
   // confirmation and starts the Home-page redirect (no auto sign-in).
@@ -165,6 +203,11 @@ export default function GetStartedPage() {
         !ntnDraft && 'NTN certificate',
       ].filter(Boolean).join(', ');
       setErrorMessage(`Please upload the following document(s) before completing registration: ${missing}.`);
+      return;
+    }
+
+    if (!termsAccepted) {
+      setErrorMessage('Please read and accept the Terms & Conditions to complete registration.');
       return;
     }
 
@@ -382,18 +425,18 @@ export default function GetStartedPage() {
                     <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                       OTP Code
                     </label>
-                    <div className="grid grid-cols-6 gap-2">
+                    <div className="grid grid-cols-6 gap-2" onPaste={handleOtpPaste}>
                       {otp.map((digit, i) => (
                         <input
                           key={i}
+                          ref={(el) => {
+                            otpRefs.current[i] = el;
+                          }}
                           type="text"
                           maxLength={1}
                           value={digit}
-                          onChange={(e) => {
-                            const next = [...otp];
-                            next[i] = e.target.value.replace(/[^0-9]/g, '');
-                            setOtp(next);
-                          }}
+                          onChange={(e) => handleOtpChange(i, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(i, e)}
                           className="h-11 text-center font-bold text-base rounded-xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
                         />
                       ))}
@@ -751,6 +794,27 @@ export default function GetStartedPage() {
                   />
                 </div>
 
+                {/* Terms & Conditions — must be accepted before registration completes */}
+                <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2.5">
+                  <input
+                    id="terms-checkbox"
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 shrink-0 accent-emerald-600"
+                  />
+                  <p className="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowTerms(true)}
+                      className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                    >
+                      Terms &amp; Conditions
+                    </button>
+                  </p>
+                </div>
+
                 <div className="flex gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-1/3">
                     Back
@@ -766,6 +830,18 @@ export default function GetStartedPage() {
                   </p>
                 )}
               </form>
+
+              <Modal
+                isOpen={showTerms}
+                onClose={() => setShowTerms(false)}
+                maxWidth="max-w-3xl"
+                title="Terms & Conditions"
+                description="Please read these terms before completing your registration."
+              >
+                <div className="max-h-[70vh] overflow-y-auto pr-1">
+                  <TermsContent />
+                </div>
+              </Modal>
             </div>
           )}
 

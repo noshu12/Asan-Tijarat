@@ -11,6 +11,12 @@ const Order = require('../models/Order');
 const { toClient } = require('../utils/serialize');
 const { UPLOAD_ROOT } = require('../utils/kycStorage');
 const { sendEmail } = require('../utils/sendEmail');
+const {
+  accountVerifiedEmail,
+  accountSuspendedEmail,
+  accountRejectedEmail,
+  accountReactivatedEmail,
+} = require('../utils/emailTemplates');
 
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,6 +97,13 @@ async function listUsers(req, res, next) {
  * to user ko approval email jati hai ke ab wo sign in kar sakta hai.
  * Email fail ho to bhi verification nahi rukti — verify pehle se
  * save ho chuka hota hai, email sirf notification hai.
+ * OTP guard: verified=true sirf tab allowed hai jab user.emailVerified
+ * true ho. OTP verify kiye baghair account ko approve nahi kiya ja
+ * sakta — is se OTP step bypass nahi hoga. Unverify (verified=false)
+ * is guard se block nahi hota.
+ * Suspend/reject guard: suspended ya rejected account par Verify/Unverify
+ * nahi chalega, warna Verify daba kar suspend bypass ho jata. Aise
+ * account ke liye Activate ka rasta hai, Verify ka nahi.
  */
 async function verifyUser(req, res, next) {
   try {
@@ -101,18 +114,20 @@ async function verifyUser(req, res, next) {
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be verified or unverified.' } });
     }
+    if (user.status === 'suspended' || user.status === 'rejected') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'Suspended or rejected accounts cannot be verified or unverified. Use Activate for a suspended account.' } });
+    }
     const verified = req.body.verified === undefined ? true : Boolean(req.body.verified);
+    if (verified && !user.emailVerified) {
+      return res.status(403).json({ error: { code: 'OTP_NOT_VERIFIED', message: 'This account has not verified its email OTP yet. Approve only after OTP verification.' } });
+    }
     const wasVerified = user.verified;
     user.verified = verified;
     user.status = verified ? 'active' : 'pending';
     await user.save();
     if (verified && !wasVerified) {
-      const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-      const emailSent = await sendEmail({
-        to: user.email,
-        subject: 'Asan Tijarat - Your account has been approved',
-        text: `Hello ${user.name},\n\nYour Asan Tijarat account has been approved.\n\nYou can now sign in using your registered email and password:\n${baseUrl}/signin\n\nThank you for joining Asan Tijarat.`,
-      });
+      const emailContent = accountVerifiedEmail({ name: user.name, businessName: user.businessName });
+      const emailSent = await sendEmail({ to: user.email, ...emailContent });
       if (!emailSent) {
         console.log(`[admin] Approval email not sent (no SMTP configured or email failed) for ${user.email}`);
       }
@@ -124,25 +139,121 @@ async function verifyUser(req, res, next) {
 }
 
 /**
- * PATCH /api/admin/users/:id/role  { role: 'shopkeeper' | 'supplier' }
+ * PATCH /api/admin/users/:id/suspend  { reason: string }
+ * Temporarily blocks sign-in. verified flag nahi badalta, taake
+ * Activate par account wapas active ho sake. Reason lazmi hai aur
+ * wahi reason branded suspend email me user ko jata hai.
+ * Email fail ho to bhi suspension nahi rukti.
  */
-async function updateUserRole(req, res, next) {
+async function suspendUser(req, res, next) {
   try {
-    const role = req.body.role;
-    if (!['shopkeeper', 'supplier'].includes(role)) {
-      return res.status(400).json({
-        error: { code: 'INVALID_ROLE', message: 'role must be "shopkeeper" or "supplier".' },
-      });
-    }
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'No user matches that id.' } });
     }
     if (user.role === 'admin') {
-      return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be reassigned.' } });
+      return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be suspended.' } });
     }
-    user.role = role;
+    if (user.status === 'suspended') {
+      return res.status(400).json({ error: { code: 'ALREADY_SUSPENDED', message: 'This account is already suspended.' } });
+    }
+    if (user.status === 'rejected') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'A rejected account cannot be suspended.' } });
+    }
+    const reason = req.body.reason ? String(req.body.reason).trim() : '';
+    if (!reason) {
+      return res.status(400).json({ error: { code: 'MISSING_REASON', message: 'A reason is required to suspend an account.' } });
+    }
+    if (reason.length > 500) {
+      return res.status(400).json({ error: { code: 'INVALID_REASON', message: 'Reason must be 500 characters or less.' } });
+    }
+    user.status = 'suspended';
+    user.suspensionReason = reason;
+    user.rejectionReason = '';
     await user.save();
+    const emailContent = accountSuspendedEmail({ name: user.name, businessName: user.businessName, reason });
+    const emailSent = await sendEmail({ to: user.email, ...emailContent });
+    if (!emailSent) {
+      console.log(`[admin] Suspension email not sent (no SMTP configured or email failed) for ${user.email}`);
+    }
+    res.json({ user: user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/admin/users/:id/activate
+ * Suspended account ko wapas chalu karta hai. verified=true ho to
+ * status active hota hai aur reactivated email jati hai, warna
+ * status pending hota hai aur koi reactivated email nahi jati —
+ * wo account pehle Verify hoga, phir verified email jayegi.
+ * Email fail ho to bhi activation nahi rukti.
+ */
+async function activateUser(req, res, next) {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'No user matches that id.' } });
+    }
+    if (user.role === 'admin') {
+      return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be activated.' } });
+    }
+    if (user.status !== 'suspended') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'Only suspended accounts can be activated.' } });
+    }
+    user.status = user.verified ? 'active' : 'pending';
+    user.suspensionReason = '';
+    await user.save();
+    if (user.status === 'active') {
+      const emailContent = accountReactivatedEmail({ name: user.name, businessName: user.businessName });
+      const emailSent = await sendEmail({ to: user.email, ...emailContent });
+      if (!emailSent) {
+        console.log(`[admin] Reactivation email not sent (no SMTP configured or email failed) for ${user.email}`);
+      }
+    }
+    res.json({ user: user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/admin/users/:id/reject  { reason: string }
+ * Sirf pending registration ko reject karta hai. verified=false ho
+ * jata hai aur status rejected, taake login kabhi na khule.
+ * Reason lazmi hai aur wahi reason branded reject email me jata hai.
+ * Email fail ho to bhi rejection nahi rukti.
+ */
+async function rejectUser(req, res, next) {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'No user matches that id.' } });
+    }
+    if (user.role === 'admin') {
+      return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be rejected.' } });
+    }
+    if (user.status !== 'pending') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'Only pending accounts can be rejected. Suspend an active account instead.' } });
+    }
+    const reason = req.body.reason ? String(req.body.reason).trim() : '';
+    if (!reason) {
+      return res.status(400).json({ error: { code: 'MISSING_REASON', message: 'A reason is required to reject an account.' } });
+    }
+    if (reason.length > 500) {
+      return res.status(400).json({ error: { code: 'INVALID_REASON', message: 'Reason must be 500 characters or less.' } });
+    }
+    user.verified = false;
+    user.status = 'rejected';
+    user.rejectionReason = reason;
+    user.suspensionReason = '';
+    await user.save();
+    const emailContent = accountRejectedEmail({ name: user.name, businessName: user.businessName, reason });
+    const emailSent = await sendEmail({ to: user.email, ...emailContent });
+    if (!emailSent) {
+      console.log(`[admin] Rejection email not sent (no SMTP configured or email failed) for ${user.email}`);
+    }
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -197,16 +308,12 @@ async function getKycDocument(req, res, next) {
 
     const doc = user.documents && user.documents[field];
     if (!doc || !doc.url) {
-      return res.status(404).json({
-        error: { code: 'KYC_NOT_FOUND', message: 'No document uploaded for this field.' },
-      });
+      return res.status(404).json({ error: { code: 'KYC_NOT_FOUND', message: 'No document uploaded for this field.' } });
     }
 
     const filePath = path.join(UPLOAD_ROOT, 'kyc', path.basename(doc.url));
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        error: { code: 'KYC_NOT_FOUND', message: 'Document file not found on disk.' },
-      });
+      return res.status(404).json({ error: { code: 'KYC_NOT_FOUND', message: 'Document file not found on disk.' } });
     }
 
     res.sendFile(filePath);
@@ -238,41 +345,13 @@ async function listProducts(req, res, next) {
 }
 
 /**
- * PATCH /api/admin/products/:id/status  { status }
- * Lets moderators hide/restore a listing.
- */
-async function updateProductStatus(req, res, next) {
-  try {
-    const status = req.body.status;
-    if (!['Active', 'Low Stock', 'Out of Stock'].includes(status)) {
-      return res.status(400).json({
-        error: { code: 'INVALID_STATUS', message: 'status must be Active, Low Stock or Out of Stock.' },
-      });
-    }
-    const product = await Product.findById(req.params.id);
-    if (!product) {
-      return res.status(404).json({
-        error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' },
-      });
-    }
-    product.status = status;
-    await product.save();
-    res.json({ product });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
  * DELETE /api/admin/products/:id
  */
 async function deleteProduct(req, res, next) {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
-      return res.status(404).json({
-        error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' },
-      });
+      return res.status(404).json({ error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' } });
     }
     await Product.deleteOne({ _id: product._id });
     res.json({ deleted: true, id: req.params.id });
@@ -322,9 +401,7 @@ async function updateOrderStatus(req, res, next) {
     }
     const order = await Order.findById(req.params.id);
     if (!order) {
-      return res.status(404).json({
-        error: { code: 'ORDER_NOT_FOUND', message: 'No order matches that id.' },
-      });
+      return res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'No order matches that id.' } });
     }
     order.status = status;
     if (status === 'confirmed') {
@@ -341,11 +418,12 @@ module.exports = {
   getStats,
   listUsers,
   verifyUser,
-  updateUserRole,
+  suspendUser,
+  activateUser,
+  rejectUser,
   deleteUser,
   getKycDocument,
   listProducts,
-  updateProductStatus,
   deleteProduct,
   listOrders,
   updateOrderStatus,

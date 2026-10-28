@@ -21,6 +21,15 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
   const titleId = useId();
   const descriptionId = useId();
 
+  // onClose ko ref mein rakha hai taake effect ki dependencies mein
+  // onClose shamil kiye baghair bhi Escape hamesha taaza onClose chalaye.
+  // Warna har render par nayi onClose function effect ko dobara chalati
+  // hai aur close button par focus le jati hai — yehi wajah thi ke
+  // Modal ke andar input mein aik letter type karte hi focus X par
+  // chala jata tha.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -30,7 +39,7 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -56,7 +65,7 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocusedElement.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>

@@ -1,4 +1,5 @@
 const Product = require('../models/Product');
+const Order = require('../models/Order');
 const { CATEGORIES } = require('../constants/categories');
 const { toClient } = require('../utils/serialize');
 const { saveProductImages, deleteStoredFiles, ProductImageError } = require('../utils/productImageStorage');
@@ -97,6 +98,56 @@ async function getProduct(req, res, next) {
       });
     }
     res.json({ product: toClient(product) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/products/:id/market-sale  (public — guests can see it too)
+ *
+ * Market-sale box data for the product popup: real delivered sales in
+ * the last 30 days. Only `delivered` orders count as sold — a pending,
+ * confirmed, processing, or shipped order is NOT a sale yet, and a
+ * cancelled order never counts.
+ *
+ * Window uses order createdAt, because the Order model has no
+ * deliveredAt/statusHistory field (deliveryDate is only the +3-day
+ * estimate set on 'confirmed', not the actual delivery date).
+ *
+ * Only counts are returned — no buyer names, emails, or order details —
+ * so guest viewers learn nothing private about any shopkeeper.
+ * Response: { productId, days: 30, bagsSold, shopkeepers }
+ */
+async function getProductMarketSale(req, res, next) {
+  try {
+    const product = await Product.findById(req.params.id).lean();
+    if (!product) {
+      return res.status(404).json({
+        error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' },
+      });
+    }
+
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const result = await Order.aggregate([
+      { $match: { status: 'delivered', createdAt: { $gte: cutoff } } },
+      { $unwind: '$items' },
+      { $match: { 'items.productId': req.params.id } },
+      {
+        $group: {
+          _id: null,
+          bagsSold: { $sum: '$items.quantity' },
+          buyers: { $addToSet: '$buyerId' },
+        },
+      },
+    ]);
+
+    res.json({
+      productId: req.params.id,
+      days: 30,
+      bagsSold: result[0] ? result[0].bagsSold : 0,
+      shopkeepers: result[0] ? result[0].buyers.length : 0,
+    });
   } catch (err) {
     next(err);
   }
@@ -239,5 +290,5 @@ async function deleteProduct(req, res, next) {
   }
 }
 
-module.exports = { getProducts, getProduct, createProduct, updateProduct, deleteProduct };
+module.exports = { getProducts, getProduct, getProductMarketSale, createProduct, updateProduct, deleteProduct };
 module.exports.deriveStatus = deriveStatus;

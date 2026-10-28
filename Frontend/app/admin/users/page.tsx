@@ -5,12 +5,30 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, Search, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
+import { Ban, ChevronDown, Search, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
 import { KycDocumentViewer } from '@/components/KycDocumentViewer';
 import { MapsLink } from '@/components/MapsLink';
 import { api, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { cn, formatDate } from '@/lib/utils';
+
+// Admin list se aane wale user me emailVerified ho sakta hai, lekin
+// AdminUser type me ye field lazmi nahi hai, isliye safe tareeqe se parha hai.
+function isOtpVerified(u: AdminUser): boolean {
+  return Boolean((u as unknown as { emailVerified?: boolean }).emailVerified);
+}
+
+// Backend status na aaye (purana response) to verified se andaza lagao.
+function getStatus(u: AdminUser): string {
+  return u.status || (u.verified ? 'active' : 'pending');
+}
+
+function statusLabel(status: string): string {
+  if (status === 'active') return 'Active';
+  if (status === 'suspended') return 'Suspended';
+  if (status === 'rejected') return 'Rejected';
+  return 'Pending';
+}
 
 export default function AdminUsersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -71,6 +89,38 @@ export default function AdminUsersPage() {
         : `${u.name} verified — they can now sign in with their registered credentials.`
     );
 
+  const suspendAccount = (u: AdminUser) => {
+    const reason = window.prompt(`Suspend ${u.name}? Enter the reason that will be emailed to them:`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setError('A reason is required to suspend an account.');
+      return;
+    }
+    void runAction(
+      () => api.admin.suspendUser(u.id, reason.trim()),
+      `${u.name} suspended — a suspension email with the reason was sent.`
+    );
+  };
+
+  const activateAccount = (u: AdminUser) =>
+    runAction(
+      () => api.admin.activateUser(u.id),
+      `${u.name} activated — they can sign in again.`
+    );
+
+  const rejectAccount = (u: AdminUser) => {
+    const reason = window.prompt(`Reject ${u.name}'s registration? Enter the reason that will be emailed to them:`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setError('A reason is required to reject an account.');
+      return;
+    }
+    void runAction(
+      () => api.admin.rejectUser(u.id, reason.trim()),
+      `${u.name} rejected — a rejection email with the reason was sent.`
+    );
+  };
+
   const removeUser = (u: AdminUser) =>
     runAction(
       () => api.admin.deleteUser(u.id),
@@ -111,7 +161,7 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <PortalHeader
         title="Users & KYC"
-        subtitle="Approve shopkeeper/supplier accounts or remove accounts"
+        subtitle="Approve, suspend, activate or reject shopkeeper/supplier accounts"
       />
       {message && (
         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
@@ -172,7 +222,9 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Contact</th>
                 <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">KYC</th>
+                <th className="px-4 py-3">OTP</th>
                 <th className="px-4 py-3">Joined</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -180,6 +232,7 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredUsers.map((u) => {
                 const isOpen = expandedId === u.id;
+                const status = getStatus(u);
                 return (
                   <React.Fragment key={u.id}>
                     <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -191,7 +244,13 @@ export default function AdminUsersPage() {
                           title="Show the details this trader submitted at registration"
                           className="flex items-center gap-2.5 text-left"
                         >
-                          <img src={u.avatar || ''} alt="" className="w-8 h-8 rounded-full object-cover bg-slate-100" />
+                          {u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover bg-slate-100" />
+                            ) : (
+                              <span className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                                {(u.name || '?').trim().charAt(0).toUpperCase()}
+                              </span>
+                            )}
                           <div>
                             <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
                               {u.businessName || u.name}
@@ -214,9 +273,31 @@ export default function AdminUsersPage() {
                         {u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin'}
                       </td>
                       <td className="px-4 py-3">
+                        {status === 'active' ? (
+                          <Badge variant="verified">Active</Badge>
+                        ) : status === 'pending' ? (
+                          <Badge variant="pending">Pending</Badge>
+                        ) : status === 'suspended' ? (
+                          <Badge variant="warning">Suspended</Badge>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                            Rejected
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <Badge variant={u.verified ? 'verified' : 'pending'}>
                           {u.verified ? 'Verified' : 'Pending KYC'}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.role === 'admin' ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : (
+                          <Badge variant={isOtpVerified(u) ? 'verified' : 'pending'}>
+                            {isOtpVerified(u) ? 'OTP Verified' : 'OTP Pending'}
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                         {u.createdAt ? formatDate(u.createdAt) : '—'}
@@ -227,13 +308,59 @@ export default function AdminUsersPage() {
                             <Button
                               size="sm"
                               variant={u.verified ? 'outline' : 'primary'}
-                              disabled={busyId !== null}
+                              disabled={busyId !== null || (!u.verified && !isOtpVerified(u)) || status === 'suspended' || status === 'rejected'}
                               onClick={() => void toggleVerified(u)}
                               className="flex items-center gap-1.5"
-                              title={u.verified ? 'Revoke verification' : 'Verify this registration'}
+                              title={
+                                status === 'suspended' || status === 'rejected'
+                                  ? 'Suspended or rejected accounts cannot be verified here — use Activate for a suspended account'
+                                  : u.verified
+                                    ? 'Revoke verification'
+                                    : isOtpVerified(u)
+                                      ? 'Verify this registration'
+                                      : 'Email OTP not verified yet — verify OTP first'
+                              }
                             >
                               <UserCheck className="w-3.5 h-3.5" />
                               {u.verified ? 'Unverify' : 'Verify'}
+                            </Button>
+                          )}
+                          {u.role !== 'admin' && status !== 'suspended' && status !== 'rejected' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busyId !== null}
+                              onClick={() => suspendAccount(u)}
+                              className="flex items-center gap-1.5"
+                              title="Suspend this account and email the reason"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                              Suspend
+                            </Button>
+                          )}
+                          {u.role !== 'admin' && status === 'suspended' && (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              disabled={busyId !== null}
+                              onClick={() => void activateAccount(u)}
+                              className="flex items-center gap-1.5"
+                              title="Activate this suspended account again"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              Activate
+                            </Button>
+                          )}
+                          {u.role !== 'admin' && status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busyId !== null}
+                              onClick={() => rejectAccount(u)}
+                              className="flex items-center gap-1.5"
+                              title="Reject this registration and email the reason"
+                            >
+                              Reject
                             </Button>
                           )}
                           {u.role !== 'admin' && (
@@ -254,7 +381,7 @@ export default function AdminUsersPage() {
                     </tr>
                     {isOpen && (
                       <tr className="bg-slate-50/70 dark:bg-slate-800/30">
-                        <td colSpan={6} className="px-4 py-4">
+                        <td colSpan={8} className="px-4 py-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
                             {([
                               ['Business / Enterprise', u.businessName || '—'],
@@ -269,7 +396,11 @@ export default function AdminUsersPage() {
                                 'Account Type',
                                 u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin',
                               ],
+                              ['Status', statusLabel(status)],
+                              ['Suspension Reason', u.suspensionReason || '—'],
+                              ['Rejection Reason', u.rejectionReason || '—'],
                               ['Email', u.email],
+                              ['Email OTP', u.role === 'admin' ? '—' : isOtpVerified(u) ? 'Verified' : 'Pending'],
                               ['Phone', u.phone],
                               ['Registered On', u.createdAt ? formatDate(u.createdAt) : '—'],
                             ] as const).map(([label, value]) => (

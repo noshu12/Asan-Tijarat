@@ -5,12 +5,15 @@ function isEmailConfigured() {
 }
 
 /**
- * Sends one plain-text email.
+ * Sends one email — plain text, HTML, or both, with optional attachments.
+ * - Old callers that pass only { to, subject, text } keep working exactly as before.
+ * - New branded templates pass { html, attachments } too; both are forwarded
+ *   to nodemailer unchanged (attachments carry the logo with cid:asan-logo).
  * Returns true if the email was sent, false if SMTP is not configured
  * or sending failed. Never throws, so callers can fall back to the
  * terminal dev log instead of crashing the request.
  */
-async function sendEmail({ to, subject, text }) {
+async function sendEmail({ to, subject, text, html, attachments }) {
   if (!isEmailConfigured()) {
     return false;
   }
@@ -30,6 +33,8 @@ async function sendEmail({ to, subject, text }) {
       to,
       subject,
       text,
+      ...(html ? { html } : {}),
+      ...(attachments && attachments.length ? { attachments } : {}),
     });
     console.log(`[email] Sent to ${to}: ${subject}`);
     return true;

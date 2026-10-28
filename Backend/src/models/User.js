@@ -93,9 +93,13 @@ const userSchema = new mongoose.Schema(
     verified: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ['pending', 'active', 'suspended'],
+      enum: ['pending', 'active', 'suspended', 'rejected'],
       default: 'pending',
     },
+    // Admin-written reason for suspend / reject. Yehi reason branded
+    // email me user ko jayega. Account suspend/reject na ho to khali rehta hai.
+    suspensionReason: { type: String, trim: true, default: '' },
+    rejectionReason: { type: String, trim: true, default: '' },
     emailVerified: { type: Boolean, default: false },
     // OTP (email) — hashed 6-digit code, 5-min expiry, resend/attempt limits.
     otpHash: { type: String, select: false, default: undefined },

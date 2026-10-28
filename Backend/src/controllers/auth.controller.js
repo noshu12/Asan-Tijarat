@@ -5,6 +5,7 @@ const { CATEGORIES } = require('../constants/categories');
 const { saveKycDocuments, deleteStoredFiles, KycUploadError } = require('../utils/kycStorage');
 const { sanitizeLocation } = require('../utils/location');
 const { sendEmail } = require('../utils/sendEmail');
+const { otpEmail, pendingVerificationEmail } = require('../utils/emailTemplates');
 
 /**
  * Shown to a self-registered shopkeeper/supplier while their KYC details are
@@ -36,7 +37,7 @@ async function checkAvailability(req, res, next) {
     const { email, phone } = req.body || {};
     if (!email && !phone) {
       return res.status(400).json({
-        error: { code: 'MISSING_FIELDS', message: 'email or phone is required.' },
+        error: { code: 'MISSING_FIELDS', message: 'email is required.' },
       });
     }
     const result = {};
@@ -204,10 +205,10 @@ async function sendOtp(req, res, next) {
       user.otpAttempts = 0;
       user.lastOtpSentAt = new Date();
       await user.save();
+      const emailContent = otpEmail({ name: user.name, otp });
       const emailSent = await sendEmail({
         to: user.email,
-        subject: 'Asan Tijarat - Your verification code',
-        text: `Your Asan Tijarat verification code is: ${otp}\n\nThis code expires in 5 minutes. Do not share it with anyone.\n\nIf you did not request this code, ignore this email.`,
+        ...emailContent,
       });
       if (!emailSent) {
         console.log(`[auth] OTP (dev only, no SMTP configured or email failed) for ${user.email}: ${otp}`);
@@ -225,6 +226,8 @@ async function sendOtp(req, res, next) {
  * Verifying OTP sets emailVerified ONLY — it does NOT activate the account.
  * Admin approval (verified) is still required before login succeeds.
  * 5 wrong attempts block further OTP verification until a new OTP is sent.
+ * On success, the pending-verification email is sent (NTN/CNIC review
+ * process) — email failure never blocks verification, it is only logged.
  */
 async function verifyOtp(req, res, next) {
   try {
@@ -257,6 +260,16 @@ async function verifyOtp(req, res, next) {
     user.otpExpiresAt = undefined;
     user.otpAttempts = 0;
     await user.save();
+    // Pending-verification email — sent right after OTP success, never blocks verification.
+    const pendingContent = pendingVerificationEmail({
+      name: user.name,
+      businessName: user.businessName,
+      role: user.role,
+    });
+    const pendingSent = await sendEmail({ to: user.email, ...pendingContent });
+    if (!pendingSent) {
+      console.log(`[auth] Pending-verification email not sent (no SMTP configured or email failed) for ${user.email}`);
+    }
     res.json({ emailVerified: true, message: 'Email verified. Admin approval is still required before sign-in.' });
   } catch (err) {
     next(err);
@@ -269,13 +282,16 @@ async function verifyOtp(req, res, next) {
  * 5 failed attempts → 15-min lock.
  * Suspended accounts are blocked here, before any token is issued — a
  * suspended-but-verified account must never be able to sign in.
+ * Rejected accounts are blocked here too, with their rejection reason —
+ * otherwise a rejected account would fall through to the pending message
+ * and look like it was still under review.
  */
 async function login(req, res, next) {
   try {
     const { identifier, password } = req.body;
     if (!identifier || !password) {
       return res.status(400).json({
-        error: { code: 'MISSING_FIELDS', message: 'identifier (email or phone) and password are required.' },
+        error: { code: 'MISSING_FIELDS', message: 'identifier (email or password) and password are required.' },
       });
     }
 
@@ -306,7 +322,27 @@ async function login(req, res, next) {
     // any token is issued, for every role including admin.
     if (user.status === 'suspended') {
       return res.status(403).json({
-        error: { code: 'ACCOUNT_SUSPENDED', message: 'Your account is suspended. Please contact support.' },
+        error: {
+          code: 'ACCOUNT_SUSPENDED',
+          message: user.suspensionReason
+            ? `Your account is suspended. Reason: ${user.suspensionReason}`
+            : 'Your account is suspended. Please contact support.',
+        },
+      });
+    }
+
+    // Rejected accounts stay locked out too — a rejected registration must
+    // never sign in. The reason is shown here because this is the account
+    // owner signing in with the correct password, so it is their own
+    // reason, not a leak to someone else.
+    if (user.status === 'rejected') {
+      return res.status(403).json({
+        error: {
+          code: 'ACCOUNT_REJECTED',
+          message: user.rejectionReason
+            ? `Your registration was not approved. Reason: ${user.rejectionReason}`
+            : 'Your registration was not approved. Please contact support.',
+        },
       });
     }
 
@@ -416,7 +452,7 @@ async function resetPassword(req, res, next) {
     const { token, newPassword } = req.body || {};
     if (!token || !newPassword) {
       return res.status(400).json({
-        error: { code: 'MISSING_FIELDS', message: 'token and newPassword are required.' },
+        error: { code: 'MISSING_FIELDS', message: 'token, newPassword are required.' },
       });
     }
     if (String(newPassword).length < 8) {
@@ -530,15 +566,11 @@ async function updateMe(req, res, next) {
     if (updates.phone !== undefined) {
       const phone = String(updates.phone).trim();
       if (!phone) {
-        return res.status(400).json({
-          error: { code: 'INVALID_PHONE', message: 'Phone number cannot be empty.' },
-        });
+        return res.status(400).json({ error: { code: 'INVALID_PHONE', message: 'Phone number cannot be empty.' } });
       }
       const clash = await User.findOne({ phone, _id: { $ne: req.user._id } });
       if (clash) {
-        return res.status(409).json({
-          error: { code: 'PHONE_EXISTS', message: 'Another account already uses this phone number.' },
-        });
+        return res.status(409).json({ error: { code: 'PHONE_EXISTS', message: 'Another account already uses this phone number.' } });
       }
       updates.phone = phone;
     }

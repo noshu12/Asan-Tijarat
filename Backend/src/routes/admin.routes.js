@@ -10,11 +10,12 @@ router.get('/stats', admin.getStats);
 router.get('/users', admin.listUsers);
 router.get('/users/:id/kyc/:field', admin.getKycDocument);
 router.patch('/users/:id/verify', admin.verifyUser);
-router.patch('/users/:id/role', admin.updateUserRole);
+router.patch('/users/:id/suspend', admin.suspendUser);
+router.patch('/users/:id/activate', admin.activateUser);
+router.patch('/users/:id/reject', admin.rejectUser);
 router.delete('/users/:id', admin.deleteUser);
 
 router.get('/products', admin.listProducts);
-router.patch('/products/:id/status', admin.updateProductStatus);
 router.delete('/products/:id', admin.deleteProduct);
 
 router.get('/orders', admin.listOrders);

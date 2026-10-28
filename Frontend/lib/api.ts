@@ -186,6 +186,12 @@ export interface AdminStats {
 export interface AdminUser extends User {
   createdAt?: string;
   updatedAt?: string;
+  /** Account lifecycle status from the backend User model. */
+  status?: 'pending' | 'active' | 'suspended' | 'rejected';
+  /** Admin-written reason for the last suspend, if any. */
+  suspensionReason?: string;
+  /** Admin-written reason for the rejection, if any. */
+  rejectionReason?: string;
 }
 
 /* ── API surface ──────────────────────────────────────────────────── */
@@ -321,8 +327,14 @@ export const api = {
     verifyUser: (id: string, verified: boolean) =>
       request<{ user: AdminUser }>(`/api/admin/users/${id}/verify`, { method: 'PATCH', body: { verified } }),
 
-    updateUserRole: (id: string, role: 'shopkeeper' | 'supplier') =>
-      request<{ user: AdminUser }>(`/api/admin/users/${id}/role`, { method: 'PATCH', body: { role } }),
+    suspendUser: (id: string, reason: string) =>
+      request<{ user: AdminUser }>(`/api/admin/users/${id}/suspend`, { method: 'PATCH', body: { reason } }),
+
+    activateUser: (id: string) =>
+      request<{ user: AdminUser }>(`/api/admin/users/${id}/activate`, { method: 'PATCH' }),
+
+    rejectUser: (id: string, reason: string) =>
+      request<{ user: AdminUser }>(`/api/admin/users/${id}/reject`, { method: 'PATCH', body: { reason } }),
 
     deleteUser: (id: string) =>
       request<{ deleted: boolean; id: string }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
@@ -334,12 +346,6 @@ export const api = {
       const suffix = params.toString() ? `?${params.toString()}` : '';
       return request<{ products: Product[]; count: number }>(`/api/admin/products${suffix}`);
     },
-
-    updateProductStatus: (id: string, status: Product['status']) =>
-      request<{ product: Product }>(`/api/admin/products/${id}/status`, {
-        method: 'PATCH',
-        body: { status },
-      }),
 
     deleteProduct: (id: string) =>
       request<{ product: Product }>(`/api/admin/products/${id}`, { method: 'DELETE' }),

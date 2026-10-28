@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product } from '@/lib/types';
 import { formatPKR } from '@/lib/utils';
 import { MapPin, Minus, Plus, Check, X } from 'lucide-react';
@@ -11,6 +11,14 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthProvider';
 import { addToCart } from '@/lib/cart';
+import { API_URL } from '@/lib/api';
+
+type MarketSale = {
+  productId: string;
+  days: number;
+  bagsSold: number;
+  shopkeepers: number;
+};
 
 /**
  * Turns the product's free-text unit into buyer-friendly pack lines.
@@ -43,10 +51,30 @@ export function ProductCard({ product }: { product: Product }) {
   const [showDetail, setShowDetail] = useState(false);
   const [qty, setQty] = useState(Math.max(product.moq, 1));
   const [popupAdded, setPopupAdded] = useState(false);
+  const [marketSale, setMarketSale] = useState<MarketSale | null>(null);
   const canBuy = !authLoading && (!user || user.role === 'shopkeeper');
   const { pack, weight } = parsePack(product.unit);
   const stock = product.stock ?? 0;
   const outOfStock = stock <= 0 || product.status === 'Out of Stock';
+
+  // Market-sale box: fetched only when the popup opens, from real
+  // delivered orders. On any failure the box simply stays hidden —
+  // it must never show a guessed or fake number.
+  useEffect(() => {
+    if (!showDetail) return;
+    let cancelled = false;
+    fetch(`${API_URL}/api/products/${product.id}/market-sale`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setMarketSale(data);
+      })
+      .catch(() => {
+        if (!cancelled) setMarketSale(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showDetail, product.id]);
 
   const handleAdd = (e?: React.MouseEvent) => {
     // Guests are bounced to sign-in; suppliers manage listings from their portal.
@@ -224,6 +252,18 @@ export function ProductCard({ product }: { product: Product }) {
               </p>
             </div>
           </div>
+
+          {marketSale && marketSale.bagsSold > 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Market sale — last 30 days
+              </p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                {marketSale.bagsSold} {pack}{marketSale.bagsSold === 1 ? '' : 's'} sold to{' '}
+                {marketSale.shopkeepers} shopkeeper{marketSale.shopkeepers === 1 ? '' : 's'}
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2">
