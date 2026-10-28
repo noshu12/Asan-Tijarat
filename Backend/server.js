@@ -32,36 +32,53 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // --- Global middleware -------------------------------------------------
-// Browser origins allowed to call this API.
+// CORS: sirf allow-list, koi wildcard / khali fallback nahi.
 //
-// `CLIENT_ORIGIN` may be a comma-separated list (e.g. a LAN IP for testing on
-// a phone), but local development is auto-allowed on ANY port and on both
-// `localhost` and `127.0.0.1`. Without that, a dev server that fell back to
-// :3001 (because :3000 was already in use) fails every request with an opaque
-// "Cannot reach the API server" error in the browser — the request is actually
-// blocked by CORS, not by a missing backend.
+// `CLIENT_ORIGIN` comma-separated list hai, jaise:
+//   CLIENT_ORIGIN=http://localhost:3000
+// Production me yahan deployed frontend ka URL likhna lazmi hai.
+// `*` likhne par bhi allow nahi hoga — wildcard ko ignore kar ke warning
+// di jayegi, kyunki credentials:true ke saath wildcard sab se khatarnak hai.
+//
+// Development me (NODE_ENV=production NA ho) localhost/127.0.0.1 kisi bhi
+// port par allow hai, taake :3000 busy ho to :3001 bhi chal jaye.
+// Production me loopback bhi allow NAHI hai — sirf CLIENT_ORIGIN list chalegi.
+// Origin na bhejne wali calls (curl, Postman, server-to-server) pehle ki
+// tarah allow hain, wo browser CORS ka hissa nahi hain.
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
 const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
-  .filter(Boolean);
-
-// Unset or "*" keeps the original permissive default.
-const ALLOW_ANY_ORIGIN = CLIENT_ORIGINS.length === 0 || CLIENT_ORIGINS.includes('*');
+  .filter(Boolean)
+  .filter((origin) => {
+    if (origin === '*') {
+      console.warn('[server] ⚠️  CLIENT_ORIGIN contains "*", ignoring it. Set explicit origins instead.');
+      return false;
+    }
+    return true;
+  });
 
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
 
 function isAllowedOrigin(origin) {
-  // Same-origin requests, curl and server-to-server calls send no Origin.
+  // Same-origin requests, curl aur server-to-server calls Origin nahi bhejte.
   if (!origin) return true;
-  if (ALLOW_ANY_ORIGIN) return true;
   if (CLIENT_ORIGINS.includes(origin)) return true;
 
-  try {
-    const { protocol, hostname } = new URL(origin);
-    return (protocol === 'http:' || protocol === 'https:') && LOOPBACK_HOSTS.includes(hostname);
-  } catch {
-    return false;
+  // Loopback sirf development me, production me kabhi nahi.
+  if (!IS_PRODUCTION) {
+    try {
+      const { protocol, hostname } = new URL(origin);
+      if ((protocol === 'http:' || protocol === 'https:') && LOOPBACK_HOSTS.includes(hostname)) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
   }
+
+  return false;
 }
 
 app.use(
