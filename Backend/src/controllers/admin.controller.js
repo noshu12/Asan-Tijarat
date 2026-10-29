@@ -8,6 +8,8 @@ const path = require('path');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const AuditLog = require('../models/AuditLog');
+const ContactMessage = require('../models/ContactMessage');
 const { toClient } = require('../utils/serialize');
 const { UPLOAD_ROOT } = require('../utils/kycStorage');
 const { sendEmail } = require('../utils/sendEmail');
@@ -16,13 +18,33 @@ const {
   accountSuspendedEmail,
   accountRejectedEmail,
   accountReactivatedEmail,
+  contactReplyEmail,
 } = require('../utils/emailTemplates');
 
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+/**
+ * Writes one line to the audit log. Never throws — a logging failure must
+ * never block the admin action itself.
+ */
+async function logAdminAction(req, action, entityType, entityId, details) {
+  try {
+    await AuditLog.create({
+      actorId: req.user ? req.user._id : undefined,
+      actorName: req.user ? (req.user.name || req.user.email || '') : '',
+      action,
+      entityType: entityType || '',
+      entityId: entityId ? String(entityId) : '',
+      details: details || {},
+    });
+  } catch (err) {
+    console.log('[audit] failed to write log:', err.message);
+  }
+}
+
+
 const KYC_FIELDS = ['cnicFront', 'cnicBack', 'ntn', 'utilityBill'];
 
 /**
@@ -132,6 +154,10 @@ async function verifyUser(req, res, next) {
         console.log(`[admin] Approval email not sent (no SMTP configured or email failed) for ${user.email}`);
       }
     }
+    await logAdminAction(req, verified ? 'USER_VERIFIED' : 'USER_UNVERIFIED', 'User', user._id, {
+      email: user.email,
+      businessName: user.businessName || '',
+    });
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -176,6 +202,7 @@ async function suspendUser(req, res, next) {
     if (!emailSent) {
       console.log(`[admin] Suspension email not sent (no SMTP configured or email failed) for ${user.email}`);
     }
+    await logAdminAction(req, 'USER_SUSPENDED', 'User', user._id, { email: user.email, reason });
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -212,6 +239,7 @@ async function activateUser(req, res, next) {
         console.log(`[admin] Reactivation email not sent (no SMTP configured or email failed) for ${user.email}`);
       }
     }
+    await logAdminAction(req, 'USER_ACTIVATED', 'User', user._id, { email: user.email });
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -254,6 +282,7 @@ async function rejectUser(req, res, next) {
     if (!emailSent) {
       console.log(`[admin] Rejection email not sent (no SMTP configured or email failed) for ${user.email}`);
     }
+    await logAdminAction(req, 'USER_REJECTED', 'User', user._id, { email: user.email, reason });
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -273,8 +302,10 @@ async function deleteUser(req, res, next) {
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be deleted.' } });
     }
+    const deletedInfo = { email: user.email, businessName: user.businessName || '', role: user.role };
     await Product.deleteMany({ supplierId: user._id });
     await User.deleteOne({ _id: user._id });
+    await logAdminAction(req, 'USER_DELETED', 'User', req.params.id, deletedInfo);
     res.json({ deleted: true, id: req.params.id });
   } catch (err) {
     next(err);
@@ -353,7 +384,9 @@ async function deleteProduct(req, res, next) {
     if (!product) {
       return res.status(404).json({ error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' } });
     }
+    const deletedInfo = { name: product.name, supplierName: product.supplierName || '' };
     await Product.deleteOne({ _id: product._id });
+    await logAdminAction(req, 'PRODUCT_DELETED', 'Product', req.params.id, deletedInfo);
     res.json({ deleted: true, id: req.params.id });
   } catch (err) {
     next(err);
@@ -388,28 +421,105 @@ async function listOrders(req, res, next) {
 }
 
 /**
- * PATCH /api/admin/orders/:id/status  { status }
- * Admin override of the order state machine — lowercase status,
- * bina payment ke, jaisa naye Order model mein hai.
+ * GET /api/admin/audit-log?limit=&page=
+ * Newest first. Lets the admin verify what the audit writes recorded.
  */
-async function updateOrderStatus(req, res, next) {
+async function listAuditLog(req, res, next) {
   try {
-    const status = req.body.status;
-    if (!ORDER_STATUSES.includes(status)) {
-      return res.status(400).json({
-        error: { code: 'INVALID_STATUS', message: `${status} is not a valid order status.` },
-      });
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const logs = await AuditLog.find()
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+    res.json({ logs: toClient(logs), count: logs.length, page, limit });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/admin/contacts?limit=&page=
+ * Newest first. Contact form se aaye messages admin yahan se dekhega.
+ */
+async function listContacts(req, res, next) {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const contacts = await ContactMessage.find()
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+    res.json({ contacts: toClient(contacts), count: contacts.length, page, limit });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/admin/contacts/:id
+ * Spam ya purana message delete karta hai. Delete bhi audit me likha
+ * jata hai, taake pata chale kis ne kya message hataya.
+ */
+async function deleteContact(req, res, next) {
+  try {
+    const contact = await ContactMessage.findById(req.params.id);
+    if (!contact) {
+      return res.status(404).json({ error: { code: 'CONTACT_NOT_FOUND', message: 'No message matches that id.' } });
     }
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'No order matches that id.' } });
+    const deletedInfo = {
+      name: contact.name,
+      email: contact.email,
+      subject: contact.subject || '',
+    };
+    await ContactMessage.deleteOne({ _id: contact._id });
+    await logAdminAction(req, 'CONTACT_DELETED', 'ContactMessage', req.params.id, deletedInfo);
+    res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/admin/contacts/:id/reply  { subject: string, message: string }
+ * Admin replies to a contact-form message from the /admin/messages page.
+ * The subject + message are typed on the site; the branded reply goes out
+ * from the platform email address to the visitor who wrote in.
+ * Email fail ho to 502 milta hai aur kuch log nahi hota — reply dobara
+ * bheja ja sakta hai.
+ */
+async function replyContact(req, res, next) {
+  try {
+    const contact = await ContactMessage.findById(req.params.id);
+    if (!contact) {
+      return res.status(404).json({ error: { code: 'CONTACT_NOT_FOUND', message: 'No message matches that id.' } });
     }
-    order.status = status;
-    if (status === 'confirmed') {
-      order.deliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const subject = req.body.subject ? String(req.body.subject).trim() : '';
+    const message = req.body.message ? String(req.body.message).trim() : '';
+    if (!subject) {
+      return res.status(400).json({ error: { code: 'MISSING_SUBJECT', message: 'A subject is required.' } });
     }
-    await order.save();
-    res.json({ order });
+    if (subject.length > 200) {
+      return res.status(400).json({ error: { code: 'INVALID_SUBJECT', message: 'Subject must be 200 characters or less.' } });
+    }
+    if (!message) {
+      return res.status(400).json({ error: { code: 'MISSING_MESSAGE', message: 'A message is required.' } });
+    }
+    if (message.length > 5000) {
+      return res.status(400).json({ error: { code: 'INVALID_MESSAGE', message: 'Message must be 5000 characters or less.' } });
+    }
+    const emailContent = contactReplyEmail({ name: contact.name, subject, message });
+    const emailSent = await sendEmail({ to: contact.email, ...emailContent });
+    if (!emailSent) {
+      return res.status(502).json({ error: { code: 'EMAIL_FAILED', message: 'The reply could not be sent. Check the email configuration and try again.' } });
+    }
+    await logAdminAction(req, 'CONTACT_REPLIED', 'ContactMessage', req.params.id, {
+      to: contact.email,
+      subject,
+    });
+    res.json({ sent: true, to: contact.email });
   } catch (err) {
     next(err);
   }
@@ -427,5 +537,8 @@ module.exports = {
   listProducts,
   deleteProduct,
   listOrders,
-  updateOrderStatus,
+  listAuditLog,
+  listContacts,
+  deleteContact,
+  replyContact,
 };

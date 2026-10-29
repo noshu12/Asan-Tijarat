@@ -5,12 +5,13 @@ const { sanitizeLocation, googleMapsLink } = require('../utils/location');
 
 /**
  * Legal order-state transitions, lowercase only.
- * Supplier pushes the order forward; buyer may cancel early stages.
- * pending → confirmed → processing → shipped → delivered (or cancelled)
+ * Supplier pushes the order forward; buyer may cancel only while pending.
+ * Once the supplier confirms, the order can no longer be cancelled.
+ * pending → confirmed → processing → shipped → delivered (or cancelled from pending)
  */
 const TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
-  confirmed: ['processing', 'cancelled'],
+  confirmed: ['processing'],
   processing: ['shipped'],
   shipped: ['delivered'],
   delivered: [],
@@ -82,6 +83,11 @@ async function createOrder(req, res, next) {
       if (!item || !item.productId || !item.quantity) {
         return res.status(400).json({
           error: { code: 'MISSING_FIELDS', message: 'Each item needs productId and quantity.' },
+        });
+      }
+      if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+        return res.status(400).json({
+          error: { code: 'INVALID_QUANTITY', message: 'Quantity must be a whole number of at least 1.' },
         });
       }
 
@@ -173,6 +179,13 @@ async function createOrder(req, res, next) {
   }
 }
 /**
+ * Legal statuses for the ?status= filter. Anything else (including a
+ * query-operator object like ?status[$ne]=x) is rejected — req.query.status
+ * is never passed raw into the Mongo query.
+ */
+const FILTERABLE_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+
+/**
  * GET /api/orders?status=  (protected)
  * Suppliers see orders sent to them; shopkeepers see orders they placed.
  */
@@ -183,7 +196,15 @@ async function getOrders(req, res, next) {
         ? { supplierId: req.user._id }
         : { buyerId: req.user._id };
 
-    if (req.query.status) query.status = req.query.status;
+    if (req.query.status !== undefined && req.query.status !== '' && req.query.status !== 'all') {
+      const s = String(req.query.status).trim().toLowerCase();
+      if (!FILTERABLE_STATUSES.includes(s)) {
+        return res.status(400).json({
+          error: { code: 'INVALID_STATUS', message: `"${String(req.query.status).slice(0, 40)}" is not a valid order status.` },
+        });
+      }
+      query.status = s;
+    }
 
     const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
     res.json({ orders: toClient(orders), count: orders.length });
@@ -222,7 +243,7 @@ async function getOrder(req, res, next) {
  * PATCH /api/orders/:id/status  (protected — role + ownership guarded)
  * Body: { status }
  * Supplier: pending→confirmed→processing→shipped→delivered
- * Buyer:    pending→cancelled, confirmed→cancelled
+ * Buyer:    pending→cancelled (only before the supplier confirms)
  */
 async function updateOrderStatus(req, res, next) {
   try {
@@ -264,6 +285,13 @@ async function updateOrderStatus(req, res, next) {
     order.status = toStatus;
     if (toStatus === 'confirmed') {
       order.deliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // +3 days
+    }
+    if (toStatus === 'cancelled') {
+      // Stock was decremented when the order was placed — give it back,
+      // since a cancelled pending order never reaches the supplier.
+      for (const item of order.items) {
+        await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.quantity } });
+      }
     }
 
     await order.save();

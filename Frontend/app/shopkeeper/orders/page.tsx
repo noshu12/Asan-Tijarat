@@ -73,6 +73,21 @@ export default function ShopkeeperOrdersPage() {
     ? orders
     : orders.filter((order) => order.status === activeTab);
 
+  // Buyer cancel: only while the order is still pending (supplier hasn't
+  // confirmed yet). The backend enforces the same rule + gives the stock back.
+  const handleCancelOrder = async (order: Order) => {
+    const ok = window.confirm(
+      `Cancel order ${order.orderNumber}?\n\nThe order will be cancelled and the supplier will not receive it.`
+    );
+    if (!ok) return;
+    try {
+      await api.updateOrderStatus(order.id, 'cancelled');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel order.');
+    }
+  };
+
   const isEmpty = !loading && orders.length === 0 && myId;
 
   return (
@@ -139,7 +154,7 @@ export default function ShopkeeperOrdersPage() {
         </div>
       )}
 
-      {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} />}
+      {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} onCancel={handleCancelOrder} />}
     </div>
   );
 }

@@ -8,11 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { ProductImage } from '@/components/ProductImage';
-import { Eye, Truck, Download, MapPin, Navigation } from 'lucide-react';
+import { Eye, Truck, Download, MapPin, Navigation, X } from 'lucide-react';
 
 const statusLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function OrderTable({ orders }: { orders: Order[] }) {
+export function OrderTable({ orders, onCancel }: { orders: Order[]; onCancel?: (order: Order) => void }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const getStatusVariant = (status: OrderStatus) => {
@@ -65,13 +65,24 @@ export function OrderTable({ orders }: { orders: Order[] }) {
                   {formatDate(order.createdAt)}
                 </td>
                 <td className="px-5 py-4 text-right">
-                  <button
-                    onClick={() => setSelectedOrder(order)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-asan-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                    title="View Order Details"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
+                  <div className="inline-flex items-center gap-1 justify-end">
+                    {onCancel && order.status === 'pending' && (
+                      <button
+                        onClick={() => onCancel(order)}
+                        className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                        title="Cancel this order"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSelectedOrder(order)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-asan-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      title="View Order Details"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

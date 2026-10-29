@@ -7,8 +7,10 @@ function isEmailConfigured() {
 /**
  * Sends one email — plain text, HTML, or both, with optional attachments.
  * - Old callers that pass only { to, subject, text } keep working exactly as before.
- * - New branded templates pass { html, attachments } too; both are forwarded
- *   to nodemailer unchanged (attachments carry the logo with cid:asan-logo).
+ * - New branded templates pass { html } too; it is forwarded to nodemailer
+ *   unchanged. (v5 templates load the logo from LOGO_URL — no attachments.)
+ * - Sender name is ALWAYS the brand: "Asan Tijarat" (overridable with
+ *   EMAIL_FROM_NAME in .env). The address is EMAIL_FROM, else EMAIL_USER.
  * Returns true if the email was sent, false if SMTP is not configured
  * or sending failed. Never throws, so callers can fall back to the
  * terminal dev log instead of crashing the request.
@@ -28,8 +30,10 @@ async function sendEmail({ to, subject, text, html, attachments }) {
         pass: process.env.EMAIL_PASS,
       },
     });
+    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    const fromName = process.env.EMAIL_FROM_NAME || 'Asan Tijarat';
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      from: { name: fromName, address: fromAddress },
       to,
       subject,
       text,

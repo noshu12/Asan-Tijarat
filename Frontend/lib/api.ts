@@ -140,6 +140,8 @@ export interface ProfileUpdatePayload {
   /** Shopkeeper only — must match the account number on the uploaded utility bill. */
   utilityBillAccountNumber?: string;
   category?: string;
+  /** Supplier only — the 14 master categories (multi-select). */
+  categories?: string[];
   avatar?: string;
   houseAddress?: string;
   currentHouseLocation?: string;
@@ -209,11 +211,51 @@ export interface AdminUser extends User {
   rejectionReason?: string;
 }
 
+/** One contact-form message as stored in the `contacts` collection (newest first in the admin inbox). */
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /* ── API surface ──────────────────────────────────────────────────── */
 
+/** Real analytics from the backend — no mock data. Cancelled orders are excluded. */
+export interface AnalyticsDayBucket {
+  date: string; // YYYY-MM-DD
+  revenue: number;
+  orders: number;
+}
+export interface SupplierAnalytics {
+  totalOrders: number;
+  ordersByStatus: Record<string, number>;
+  revenueTotal: number;
+  revenueDelivered: number;
+  topProducts: { productId: string; productName: string; quantity: number; revenue: number }[];
+  dailyRevenue: AnalyticsDayBucket[];
+}
+export interface ShopkeeperAnalytics {
+  totalOrders: number;
+  ordersByStatus: Record<string, number>;
+  spentTotal: number;
+  spentDelivered: number;
+  topSuppliers: { supplierId: string; supplierName: string; orders: number; spent: number }[];
+  dailySpent: AnalyticsDayBucket[];
+}
+
 export const api = {
+  /**
+   * Sign-in step 1. Admins with 2FA enabled get `{ requires2FA: true, tempToken }`
+   * instead of a session — the signin page must then call verifyTwoFactorLogin().
+   * Everyone else gets `{ user }` and the httpOnly session cookie as before.
+   */
   login: (identifier: string, password: string) =>
-    request<{ user: User }>('/api/auth/login', {
+    request<{ user: User } | { requires2FA: true; tempToken: string }>('/api/auth/login', {
       method: 'POST',
       body: { identifier, password },
       auth: false,
@@ -224,6 +266,43 @@ export const api = {
     method: 'POST',
     auth: false,
   }),
+
+  /* ── Admin 2FA (TOTP authenticator app) ─────────────────────────── */
+
+  /**
+   * Step 1 of setup: generates a secret and returns the QR image for the
+   * authenticator app. 2FA stays OFF until verifyTwoFactorSetup() confirms
+   * the first code — a wrongly scanned QR can never lock the admin out.
+   */
+  setupTwoFactor: () =>
+    request<{ otpauthUrl: string; qrDataUrl: string }>('/api/auth/2fa/setup', {
+      method: 'POST',
+    }),
+
+  /** Step 2 of setup: confirm the first 6-digit code to enable 2FA. */
+  verifyTwoFactorSetup: (token: string) =>
+    request<{ enabled: boolean; message: string }>('/api/auth/2fa/verify-setup', {
+      method: 'POST',
+      body: { token },
+    }),
+
+  /** Disable 2FA — requires the current password. */
+  disableTwoFactor: (password: string) =>
+    request<{ disabled: boolean; message: string }>('/api/auth/2fa/disable', {
+      method: 'POST',
+      body: { password },
+    }),
+
+  /**
+   * Step 2 of admin sign-in: exchanges the short-lived tempToken from login()
+   * plus the 6-digit authenticator code for the normal session cookie.
+   */
+  verifyTwoFactorLogin: (tempToken: string, token: string) =>
+    request<{ user: User }>('/api/auth/2fa/login', {
+      method: 'POST',
+      body: { tempToken, token },
+      auth: false,
+    }),
 
   /**
    * Creates a PENDING account (no JWT returned). The shopkeeper/supplier must
@@ -326,6 +405,12 @@ export const api = {
   updateOrderStatus: (id: string, status: OrderStatus) =>
     request<{ order: Order }>(`/api/orders/${id}/status`, { method: 'PATCH', body: { status } }),
 
+  supplierAnalytics: () =>
+    request<SupplierAnalytics>('/api/analytics/supplier'),
+
+  shopkeeperAnalytics: () =>
+    request<ShopkeeperAnalytics>('/api/analytics/shopkeeper'),
+
   /* ── Admin API (requires an admin session) ────────────────────────── */
   admin: {
     stats: () => request<{ stats: AdminStats; recentOrders: Order[] }>('/api/admin/stats'),
@@ -373,10 +458,29 @@ export const api = {
       return request<{ orders: Order[]; count: number }>(`/api/admin/orders${suffix}`);
     },
 
-    updateOrderStatus: (id: string, status: OrderStatus) =>
-      request<{ order: Order }>(`/api/admin/orders/${id}/status`, {
-        method: 'PATCH',
-        body: { status },
+    /** Newest-first contact messages from the public contact form. */
+    contacts: (page = 1, limit = 50) => {
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('limit', String(limit));
+      return request<{ contacts: ContactMessage[]; count: number; page: number; limit: number }>(
+        `/api/admin/contacts?${params.toString()}`
+      );
+    },
+
+    deleteContact: (id: string) =>
+      request<{ deleted: boolean; id: string }>(`/api/admin/contacts/${id}`, { method: 'DELETE' }),
+
+    /**
+     * Reply to a contact message from the /admin/messages page.
+     * The branded email goes out from the platform address — the admin
+     * never leaves the site.
+     */
+    replyContact: (id: string, subject: string, message: string) =>
+      request<{ sent: boolean; to: string }>(`/api/admin/contacts/${id}/reply`, {
+        method: 'POST',
+        body: { subject, message },
       }),
+
   },
 };

@@ -6,6 +6,8 @@ const { saveKycDocuments, deleteStoredFiles, KycUploadError } = require('../util
 const { sanitizeLocation } = require('../utils/location');
 const { sendEmail } = require('../utils/sendEmail');
 const { otpEmail, pendingVerificationEmail } = require('../utils/emailTemplates');
+const { authenticator } = require('otplib');
+const QRCode = require('qrcode');
 
 /**
  * Shown to a self-registered shopkeeper/supplier while their KYC details are
@@ -17,10 +19,28 @@ const PENDING_VERIFICATION_MESSAGE =
 
 function signToken(user) {
   return jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0 },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+}
+
+/**
+ * Sets the asan_token httpOnly cookie — the exact same session login()
+ * creates. Shared by login() and verifyTwoFactorLogin() so both sign-in
+ * paths end with an identical session.
+ */
+function issueAuthCookie(res, user) {
+  const token = signToken(user);
+  const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days, matching JWT_EXPIRES_IN
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('asan_token', token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax',
+    secure: isProduction,
+    maxAge,
+  });
 }
 
 function hashValue(value) {
@@ -408,16 +428,26 @@ async function login(req, res, next) {
     user.lockUntil = undefined;
     await user.save();
 
-    const token = signToken(user);
-    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days, matching JWT_EXPIRES_IN
-    const isProduction = process.env.NODE_ENV === 'production';
-    res.cookie('asan_token', token, {
-      httpOnly: true,
-      path: '/',
-      sameSite: 'lax',
-      secure: isProduction,
-      maxAge,
-    });
+    // Admin 2FA — the password is correct at this point. If this admin
+    // enabled TOTP, do NOT sign them in yet: hand back a short-lived 2FA
+    // token and let POST /api/auth/2fa/login finish the job after the
+    // 6-digit authenticator code is verified.
+    if (user.role === 'admin' && user.twoFactorEnabled) {
+      const tempToken = jwt.sign(
+        { id: user._id, purpose: '2fa' },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requires2FA: true, tempToken });
+    }
+
+    // Single-session: a fresh login kills the previous session on any other
+    // device/browser. The bump sits here (not above) so a password-only
+    // attempt never logs the real user out before the 2FA code is verified.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    issueAuthCookie(res, user);
 
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
@@ -438,6 +468,172 @@ async function logout(req, res, next) {
       secure: process.env.NODE_ENV === 'production',
     });
     res.json({ ok: true, message: 'Logged out.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/setup  (protected, admin only)
+ * Generates a fresh TOTP secret, stores it as the PENDING secret and returns
+ * the otpauth URL + a QR data URL for the authenticator app. 2FA is NOT
+ * enabled until POST /api/auth/2fa/verify-setup confirms the first code —
+ * so a wrongly scanned QR can never lock the admin out.
+ */
+async function setupTwoFactor(req, res, next) {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Two-factor setup is available for admin accounts only.' },
+      });
+    }
+    if (req.user.twoFactorEnabled) {
+      return res.status(400).json({
+        error: { code: 'TWO_FACTOR_ALREADY_ENABLED', message: 'Two-factor authentication is already enabled.' },
+      });
+    }
+    const secret = authenticator.generateSecret();
+    req.user.twoFactorTempSecret = secret;
+    await req.user.save();
+    const otpauthUrl = authenticator.keyuri(req.user.email, 'Asan Tijarat', secret);
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
+    res.json({ otpauthUrl, qrDataUrl });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/verify-setup  (protected, admin only)
+ * Body: { token } — the 6-digit code from the authenticator app.
+ * Confirms the pending secret and enables 2FA for the admin.
+ */
+async function verifyTwoFactorSetup(req, res, next) {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Two-factor setup is available for admin accounts only.' },
+      });
+    }
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'token is required.' },
+      });
+    }
+    const user = await User.findById(req.user._id).select('+twoFactorTempSecret');
+    if (!user || !user.twoFactorTempSecret) {
+      return res.status(400).json({
+        error: { code: 'TWO_FACTOR_SETUP_NOT_STARTED', message: 'Start setup first to get a QR code.' },
+      });
+    }
+    const ok = authenticator.check(String(token).trim(), user.twoFactorTempSecret);
+    if (!ok) {
+      return res.status(400).json({
+        error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
+      });
+    }
+    user.twoFactorSecret = user.twoFactorTempSecret;
+    user.twoFactorTempSecret = undefined;
+    user.twoFactorEnabled = true;
+    await user.save();
+    res.json({ enabled: true, message: 'Two-factor authentication enabled.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/disable  (protected, admin only)
+ * Body: { password } — disabling 2FA requires the current password, so a
+ * stolen session alone cannot strip the second factor.
+ */
+async function disableTwoFactor(req, res, next) {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Two-factor settings are available for admin accounts only.' },
+      });
+    }
+    const { password } = req.body || {};
+    if (!password) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'password is required.' },
+      });
+    }
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Incorrect password.' },
+      });
+    }
+    user.twoFactorSecret = undefined;
+    user.twoFactorTempSecret = undefined;
+    user.twoFactorEnabled = false;
+    await user.save();
+    res.json({ disabled: true, message: 'Two-factor authentication disabled.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/login  (public — carries the tempToken from login)
+ * Body: { tempToken, token } — tempToken is the 5-minute JWT login() returned
+ * with requires2FA:true; token is the 6-digit authenticator code.
+ * On success issues the normal asan_token cookie, exactly like login().
+ */
+async function verifyTwoFactorLogin(req, res, next) {
+  try {
+    const { tempToken, token } = req.body || {};
+    if (!tempToken || !token) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'tempToken and token are required.' },
+      });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({
+        error: { code: 'TWO_FACTOR_TOKEN_EXPIRED', message: 'The two-factor session expired. Please sign in again.' },
+      });
+    }
+    if (!payload || payload.purpose !== '2fa' || !payload.id) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid two-factor session. Please sign in again.' },
+      });
+    }
+    const user = await User.findById(payload.id).select('+twoFactorSecret');
+    if (!user || user.role !== 'admin' || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid two-factor session. Please sign in again.' },
+      });
+    }
+    // The account must still be in good standing — a suspension issued
+    // between the password step and this code must keep them out.
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        error: {
+          code: 'ACCOUNT_SUSPENDED',
+          message: user.suspensionReason
+            ? `Your account is suspended. Reason: ${user.suspensionReason}`
+            : 'Your account is suspended. Please contact support.',
+        },
+      });
+    }
+    const ok = authenticator.check(String(token).trim(), user.twoFactorSecret);
+    if (!ok) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
+      });
+    }
+    // Single-session: this verified login kills any older session.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    issueAuthCookie(res, user);
+    res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
   }
@@ -529,6 +725,9 @@ async function resetPassword(req, res, next) {
     user.resetPasswordExpiresAt = undefined;
     user.loginAttempts = 0;
     user.lockUntil = undefined;
+    // A forgot-password reset may mean the account was compromised —
+    // invalidate every existing session; the user signs in fresh.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
     res.json({ reset: true, message: 'Password reset. You can now sign in with the new password.' });
   } catch (err) {
@@ -670,7 +869,12 @@ async function changePassword(req, res, next) {
     }
 
     user.password = newPassword;
+    // Kill every other session: their tokens carry the old tokenVersion.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save(); // pre('save') hook re-hashes the new password
+    // Re-issue this session's cookie with the new version so the user
+    // who just changed the password is NOT logged out.
+    issueAuthCookie(res, user);
 
     res.json({ updated: true });
   } catch (err) {
@@ -678,4 +882,4 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword };
+module.exports = { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin };

@@ -15,9 +15,90 @@ function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Server-side validation for product create/update.
+ * Returns { code, message } for the FIRST problem found, or null when valid.
+ * Rejects bad values instead of silently coercing them — the client must
+ * send clean numbers and text.
+ */
+function validateListingFields(b, isUpdate) {
+  const fail = (code, message) => ({ code, message });
+
+  // name
+  if (!isUpdate || b.name !== undefined) {
+    const name = b.name !== undefined && b.name !== null ? String(b.name).trim() : '';
+    if (!name) return fail('MISSING_FIELDS', 'Product name is required.');
+    if (name.length > 120) return fail('NAME_TOO_LONG', 'Product name must be 120 characters or less.');
+  }
+
+  // category
+  if (!isUpdate || b.category !== undefined) {
+    const category = b.category !== undefined && b.category !== null ? String(b.category).trim() : '';
+    if (!category) return fail('MISSING_FIELDS', 'Category is required.');
+    if (!CATEGORIES.includes(category)) {
+      return fail('INVALID_CATEGORY', 'Category must be one of the 14 master categories.');
+    }
+  }
+
+  // price — must be a real number above zero
+  if (!isUpdate || b.price !== undefined) {
+    if (b.price === undefined || b.price === null || b.price === '') {
+      return fail('MISSING_FIELDS', 'Price is required.');
+    }
+    const price = Number(b.price);
+    if (!Number.isFinite(price)) return fail('INVALID_PRICE', 'Price must be a number.');
+    if (price <= 0) return fail('INVALID_PRICE', 'Price must be greater than 0.');
+    if (price > 999999999) return fail('INVALID_PRICE', 'Price is unrealistically large.');
+  }
+
+  // unit
+  if (b.unit !== undefined && b.unit !== null) {
+    const unit = String(b.unit).trim();
+    if (!unit) return fail('INVALID_UNIT', 'Unit cannot be blank.');
+    if (unit.length > 40) return fail('INVALID_UNIT', 'Unit must be 40 characters or less.');
+  }
+
+  // moq — whole packs, at least 1
+  if (b.moq !== undefined) {
+    const moq = Number(b.moq);
+    if (!Number.isInteger(moq) || moq < 1) {
+      return fail('INVALID_MOQ', 'MOQ must be a whole number of at least 1 pack.');
+    }
+  }
+
+  // stock — whole packs, zero or more
+  if (b.stock !== undefined) {
+    const stock = Number(b.stock);
+    if (!Number.isInteger(stock) || stock < 0) {
+      return fail('INVALID_STOCK', 'Stock must be a whole number of 0 or more packs.');
+    }
+  }
+
+  // description
+  if (b.description !== undefined && b.description !== null) {
+    if (String(b.description).length > 2000) {
+      return fail('DESCRIPTION_TOO_LONG', 'Description must be 2000 characters or less.');
+    }
+  }
+
+  return null;
+}
+
+/**
+ * MOQ can never exceed available stock — otherwise nobody could ever place
+ * an order. (stock = 0 simply means Out of Stock; any MOQ is fine there.)
+ */
+function checkMoqAgainstStock(moq, stock) {
+  if (stock > 0 && moq > stock) {
+    return { code: 'MOQ_EXCEEDS_STOCK', message: 'MOQ cannot be larger than the available stock.' };
+  }
+  return null;
+}
+
 // Photos are handled separately (they may arrive as base64 uploads to write to
 // disk) — see saveProductImages().
-const MUTABLE_FIELDS = ['name', 'category', 'price', 'unit', 'moq', 'stock', 'description'];
+// NOTE: `status` is deliberately NOT client-mutable — it is always derived
+// server-side via deriveStatus().
 
 /**
  * Stores the supplier's uploaded photos and returns the fields to persist:
@@ -163,40 +244,54 @@ async function createProduct(req, res, next) {
     const supplier = req.user;
     const b = req.body;
 
-    if (!b.name || !b.category) {
-      return res.status(400).json({
-        error: { code: 'MISSING_FIELDS', message: 'name and category are required.' },
-      });
+    // Validate every field BEFORE touching the disk, so a rejected value
+    // never leaves orphan photos behind.
+    const invalid = validateListingFields(b, false);
+    if (invalid) {
+      return res.status(400).json({ error: invalid });
     }
 
-    if (!CATEGORIES.includes(String(b.category).trim())) {
-      return res.status(400).json({
-        error: { code: 'INVALID_CATEGORY', message: 'Category must be one of the 14 master categories.' },
-      });
+    const name = String(b.name).trim();
+    const category = String(b.category).trim();
+    const price = Number(b.price);
+    const unit = b.unit !== undefined && b.unit !== null && String(b.unit).trim() !== ''
+      ? String(b.unit).trim()
+      : 'unit';
+    const moq = b.moq !== undefined ? Math.trunc(Number(b.moq)) : 1;
+    const stock = b.stock !== undefined ? Math.trunc(Number(b.stock)) : 0;
+    const description = b.description ? String(b.description) : '';
+
+    const moqStockError = checkMoqAgainstStock(moq, stock);
+    if (moqStockError) {
+      return res.status(400).json({ error: moqStockError });
     }
 
     // Write the photos BEFORE creating the listing, so a rejected upload never
     // leaves a dangling product behind.
     const photos = storePhotos(req, res);
     if (!photos) return undefined;
-
-    const stock = Math.max(0, Number(b.stock) || 0);
-    const moq = Math.max(1, Number(b.moq) || 1);
+    if (!photos.image) {
+      return res.status(400).json({
+        error: { code: 'PHOTO_REQUIRED', message: 'At least one product photo is required.' },
+      });
+    }
 
     let product;
     try {
       product = await Product.create({
-        name: b.name.trim(),
-        category: b.category.trim(),
-        price: Math.max(0, Number(b.price) || 0),
-        unit: (b.unit || 'unit').trim(),
+        name,
+        category,
+        price,
+        unit,
         moq,
         stock,
-        status: b.status || deriveStatus(stock, moq),
+        // Status is ALWAYS derived server-side — a client-supplied status is
+        // ignored, so nobody can force a listing 'Active' via the API.
+        status: deriveStatus(stock, moq),
         image: photos.image,
         additionalImages: photos.additionalImages,
         imageUploads: photos.imageUploads,
-        description: b.description || '',
+        description,
         supplierId: supplier._id,
         supplierName: supplier.businessName || supplier.name,
         supplierCity: supplier.city || '',
@@ -236,14 +331,41 @@ async function updateProduct(req, res, next) {
       });
     }
 
-    for (const field of MUTABLE_FIELDS) {
-      if (req.body[field] !== undefined) product[field] = req.body[field];
+    // Validate the incoming fields first — never assign raw client values.
+    const invalid = validateListingFields(req.body, true);
+    if (invalid) {
+      return res.status(400).json({ error: invalid });
+    }
+
+    const effMoq = req.body.moq !== undefined ? Math.trunc(Number(req.body.moq)) : product.moq;
+    const effStock = req.body.stock !== undefined ? Math.trunc(Number(req.body.stock)) : product.stock;
+    const moqStockError = checkMoqAgainstStock(effMoq, effStock);
+    if (moqStockError) {
+      return res.status(400).json({ error: moqStockError });
+    }
+
+    // Assign CLEANED values only. `status` stays out — it is re-derived below.
+    if (req.body.name !== undefined) product.name = String(req.body.name).trim();
+    if (req.body.category !== undefined) product.category = String(req.body.category).trim();
+    if (req.body.price !== undefined) product.price = Number(req.body.price);
+    if (req.body.unit !== undefined && req.body.unit !== null && String(req.body.unit).trim() !== '') {
+      product.unit = String(req.body.unit).trim();
+    }
+    if (req.body.moq !== undefined) product.moq = effMoq;
+    if (req.body.stock !== undefined) product.stock = effStock;
+    if (req.body.description !== undefined) {
+      product.description = req.body.description === null ? '' : String(req.body.description);
     }
 
     let pendingFiles = [];
     if (req.body.images !== undefined || req.body.image !== undefined) {
       const photos = storePhotos(req, res);
       if (!photos) return undefined;
+      if (!photos.image) {
+        return res.status(400).json({
+          error: { code: 'PHOTO_REQUIRED', message: 'A listing must keep at least one photo.' },
+        });
+      }
       product.image = photos.image;
       product.additionalImages = photos.additionalImages;
       product.imageUploads = photos.imageUploads;

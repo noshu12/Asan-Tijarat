@@ -35,10 +35,13 @@ export default function SupplierOrdersPage() {
     api.orders()
       .then((res) => {
         if (!mounted) return;
-        const mine = res.orders.filter((o: Order) => String(o.supplierId) === String(user.id));
+        // A buyer-cancelled pending order never reaches the supplier —
+        // keep cancelled orders out of this list entirely.
+        const notCancelled = (o: Order) => o.status !== 'cancelled';
+        const mine = res.orders.filter((o: Order) => String(o.supplierId) === String(user.id) && notCancelled(o));
         // Loose (string) id comparison + server-list fallback: if the id shapes
         // ever diverge we still show the supplier's orders instead of nothing.
-        setOrders(mine.length > 0 ? mine : res.orders);
+        setOrders(mine.length > 0 ? mine : res.orders.filter(notCancelled));
       })
       .catch((err) => {
         if (mounted) setError(err instanceof Error ? err.message : 'Failed to load orders');
@@ -75,7 +78,7 @@ export default function SupplierOrdersPage() {
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {(['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'] as const).map((tab) => (
+        {(['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}

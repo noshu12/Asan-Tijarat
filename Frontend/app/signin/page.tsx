@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -25,7 +25,7 @@ const ROLE_HOME: Record<UserRole, string> = {
 
 export default function SignInPage() {
   const router = useRouter();
-  const { user, loading: authLoading, login: authLogin } = useAuth();
+  const { user, loading: authLoading, login: authLogin, verifyTwoFactorLogin: authVerify2FA } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +34,10 @@ export default function SignInPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorCode, setErrorCode] = useState('');
   const [redirectTarget, setRedirectTarget] = useState('');
+  // Admin 2FA step 2 — set when login() answers { requires2FA: true }.
+  const [needs2FA, setNeeds2FA] = useState(false);
+  const [tempToken, setTempToken] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   // Already signed in: send the user straight to their dashboard by
   // server role, instead of showing the sign-in form again.
@@ -63,6 +67,8 @@ export default function SignInPage() {
   // httpOnly cookie), then redirects by the account's ACTUAL role — never
   // by a tab, because there is no tab any more. No token is stored in
   // localStorage and no Authorization header is sent.
+  // Admins with 2FA enabled get { requires2FA: true } instead of a session —
+  // then this page shows the 6-digit code step (handleTwoFactorSubmit).
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
@@ -70,16 +76,16 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      const result: any = await authLogin(identifier.trim(), password);
-      const actualRole: UserRole | undefined = result?.role || result?.user?.role;
-      if (actualRole && ROLE_HOME[actualRole]) {
-        router.push(redirectTarget || ROLE_HOME[actualRole]);
-      } else if (redirectTarget) {
-        router.push(redirectTarget);
+      const result = await authLogin(identifier.trim(), password);
+      if (result.requires2FA) {
+        setTempToken(result.tempToken || '');
+        setTwoFactorCode('');
+        setNeeds2FA(true);
+        setIsLoading(false);
+        return;
       }
-      // If authLogin returns no user, the already-signed-in useEffect
-      // above sends the user to their actual-role dashboard once the
-      // AuthProvider user state updates.
+      // Normal sign-in: the already-signed-in useEffect above sends the user
+      // to their actual-role dashboard once the AuthProvider user state updates.
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -89,6 +95,35 @@ export default function SignInPage() {
       }
       setIsLoading(false);
     }
+  };
+
+  // Admin 2FA step 2 — exchanges the tempToken + 6-digit authenticator code
+  // for the normal session. Redirect happens via the useEffect watching user.
+  const handleTwoFactorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setErrorCode('');
+    setIsLoading(true);
+
+    try {
+      await authVerify2FA(tempToken, twoFactorCode);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorMessage(err.message);
+        setErrorCode(err.code);
+      } else {
+        setErrorMessage('Unexpected error. Please try again.');
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const backToPasswordStep = () => {
+    setNeeds2FA(false);
+    setTempToken('');
+    setTwoFactorCode('');
+    setErrorMessage('');
+    setErrorCode('');
   };
 
   return (
@@ -145,10 +180,58 @@ export default function SignInPage() {
         <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
           
           <div className="mb-6">
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Sign In</h3>
-            <p className="text-xs text-slate-500 mt-1">Enter your credentials to continue</p>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+              {needs2FA ? 'Two-Factor Authentication' : 'Sign In'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {needs2FA
+                ? 'Enter the 6-digit code from your authenticator app'
+                : 'Enter your credentials to continue'}
+            </p>
           </div>
 
+          {needs2FA ? (
+            <form onSubmit={handleTwoFactorSubmit} className="space-y-4">
+              <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3">
+                <ShieldCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Your password was correct. Enter the 6-digit code from your authenticator app to finish signing in.
+                </p>
+              </div>
+
+              <Input
+                label="Authentication code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+              />
+
+              {errorMessage && (
+                <p
+                  role="alert"
+                  className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5"
+                >
+                  {errorMessage}
+                </p>
+              )}
+
+              <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">
+                Verify & Sign In
+              </Button>
+
+              <button
+                type="button"
+                onClick={backToPasswordStep}
+                className="w-full text-xs font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                ← Use a different account
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleLogin} className="space-y-4">
             <Input
               label="Phone or Email"
@@ -203,13 +286,16 @@ export default function SignInPage() {
               Sign In
             </Button>
           </form>
+          )}
 
-          <p className="text-center text-xs text-slate-500 mt-6">
-            New to Asan Tijarat?{' '}
-            <Link href="/getstarted" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
-              Create account
-            </Link>
-          </p>
+          {!needs2FA && (
+            <p className="text-center text-xs text-slate-500 mt-6">
+              New to Asan Tijarat?{' '}
+              <Link href="/getstarted" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                Create account
+              </Link>
+            </p>
+          )}
         </div>
       </div>
 

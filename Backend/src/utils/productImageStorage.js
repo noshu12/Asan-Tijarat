@@ -14,6 +14,7 @@
 const {
   UploadError,
   parseDataUrl,
+  fileSignatureMatches,
   sanitizeOriginalName,
   writeUploadedFile,
   deleteStoredFiles,
@@ -81,6 +82,11 @@ function saveOneImage(entry) {
   }
   if (parsed.buffer.length > MAX_IMAGE_BYTES) {
     throw new ProductImageError('Product photo is larger than 5MB.');
+  }
+  // Magic-byte check: the data-URL mime header is client-controlled, so verify
+  // the bytes really are a JPEG/PNG/WEBP before writing the file to disk.
+  if (!fileSignatureMatches(parsed.buffer, parsed.mimeType)) {
+    throw new ProductImageError('Product photo content does not match its claimed image type.');
   }
 
   const { file, url } = writeUploadedFile({

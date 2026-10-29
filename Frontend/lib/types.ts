@@ -68,10 +68,14 @@ export interface User {
   /** Shopkeeper only — must match the account number on the uploaded utility bill. */
   utilityBillAccountNumber?: string;
   category?: string;
+  /** Supplier only — the 14 master categories (multi-select). */
+  categories?: string[];
   avatar?: string;
   /** Registration KYC uploads — rendered in the Admin Dashboard. */
   documents?: KycDocuments;
   verified?: boolean;
+  /** Admin only — true once TOTP two-factor authentication is enabled. */
+  twoFactorEnabled?: boolean;
 }
 
 export interface Product {

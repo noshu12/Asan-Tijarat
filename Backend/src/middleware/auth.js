@@ -49,6 +49,21 @@ async function protect(req, res, next) {
       });
     }
 
+    // Session invalidation: the login JWT carries the tokenVersion that was
+    // current when it was issued. A password change bumps the version, so any
+    // older token is dead — the holder must sign in again. `?? 0` keeps
+    // pre-change tokens (which carry no version) working until the first
+    // password change, so nobody is logged out by the deploy itself.
+    const tokenVersion = payload.tokenVersion ?? 0;
+    if (tokenVersion !== (user.tokenVersion || 0)) {
+      return res.status(401).json({
+        error: {
+          code: 'SESSION_INVALIDATED',
+          message: 'Your password was changed. Please sign in again.',
+        },
+      });
+    }
+
     // A pending (unverified) shopkeeper/supplier is not an active account: even
     // a previously-valid token is refused until an admin verifies the KYC.
     if (user.role !== 'admin' && !user.verified) {

@@ -20,6 +20,7 @@ const {
   UPLOAD_ROOT,
   UploadError,
   parseDataUrl,
+  fileSignatureMatches,
   sanitizeOriginalName,
   writeUploadedFile,
   deleteStoredFiles,
@@ -76,6 +77,11 @@ function saveOneDocument(field, value) {
   }
   if (parsed.buffer.length > MAX_FILE_BYTES) {
     throw new KycUploadError(`${label} is larger than 5MB.`);
+  }
+  // Magic-byte check: the data-URL mime header is client-controlled, so verify
+  // the bytes really are a JPG/PNG/WEBP/PDF before writing the file to disk.
+  if (!fileSignatureMatches(parsed.buffer, parsed.mimeType)) {
+    throw new KycUploadError(`${label} content does not match its claimed file type.`);
   }
 
   const { file, url } = writeUploadedFile({

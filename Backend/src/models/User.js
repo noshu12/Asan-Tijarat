@@ -144,6 +144,18 @@ const userSchema = new mongoose.Schema(
     // Login lockout — 5 failed attempts → 15-min lock (enforced in login).
     loginAttempts: { type: Number, default: 0, min: 0 },
     lockUntil: { type: Date, default: undefined },
+    // Admin 2FA (TOTP authenticator app) — setup / verify / disable live in
+    // auth.controller.js. The secret is NEVER sent to the frontend
+    // (select: false) and is only needed server-side to check the 6-digit code.
+    twoFactorSecret: { type: String, select: false, default: undefined },
+    twoFactorEnabled: { type: Boolean, default: false },
+    // Holds the freshly generated secret between "setup" (QR code shown) and
+    // "verify-setup" (first code confirmed). Cleared as soon as 2FA is enabled.
+    twoFactorTempSecret: { type: String, select: false, default: undefined },
+    // Session invalidation: bumped every time the password changes.
+    // The login JWT carries this number; protect() rejects tokens whose
+    // number no longer matches, so old sessions die on password change.
+    tokenVersion: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -200,6 +212,8 @@ userSchema.methods.toSafeJSON = function () {
   delete doc.password;
   delete doc.otpHash;
   delete doc.resetPasswordTokenHash;
+  delete doc.twoFactorSecret;
+  delete doc.twoFactorTempSecret;
   return doc;
 };
 

@@ -19,6 +19,10 @@ router.get('/products', admin.listProducts);
 router.delete('/products/:id', admin.deleteProduct);
 
 router.get('/orders', admin.listOrders);
-router.patch('/orders/:id/status', admin.updateOrderStatus);
+router.get('/audit-log', admin.listAuditLog);
+
+router.get('/contacts', admin.listContacts);
+router.delete('/contacts/:id', admin.deleteContact);
+router.post('/contacts/:id/reply', admin.replyContact);
 
 module.exports = router;

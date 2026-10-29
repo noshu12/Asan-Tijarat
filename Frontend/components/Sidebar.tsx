@@ -15,6 +15,7 @@ import {
   Users,
   Boxes,
   ShieldCheck,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthProvider';
@@ -59,6 +60,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     { name: 'Users & KYC', href: '/admin/users', icon: Users },
     { name: 'Products', href: '/admin/products', icon: Boxes },
     { name: 'Orders', href: '/admin/orders', icon: Package },
+    { name: 'Security', href: '/admin/security', icon: ShieldCheck },
+    { name: 'Messages', href: '/admin/messages', icon: Mail },
   ];
 
   const links = isAdmin ? adminNav : isSupplier ? supplierNav : shopkeeperNav;

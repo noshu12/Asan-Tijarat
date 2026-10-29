@@ -11,7 +11,6 @@ import { Order, OrderStatus } from '@/lib/types';
 import { formatPKR, formatDate } from '@/lib/utils';
 
 const TABS: ('All' | OrderStatus)[] = ['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
-const ORDER_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 
 const statusLabel = (s: string) => (s === 'All' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1));
 
@@ -22,8 +21,7 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+
 
   useEffect(() => {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
@@ -45,20 +43,6 @@ export default function AdminOrdersPage() {
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, [user, activeTab]);
-
-  const updateStatus = (o: Order, status: OrderStatus) => {
-    setBusyId(o.id);
-    setMessage(null);
-    setError(null);
-    api.admin
-      .updateOrderStatus(o.id, status)
-      .then((res) => {
-        setMessage(`Order ${res.order.orderNumber} is now ${statusLabel(status)}.`);
-        setOrders(orders.map((x) => (x.id === o.id ? res.order : x)));
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Status update failed.'))
-      .finally(() => setBusyId(null));
-  };
 
   const getVariant = (s: OrderStatus) => {
     switch (s) {
@@ -95,11 +79,6 @@ export default function AdminOrdersPage() {
         subtitle="Monitor every buyer↔supplier order on the platform"
       />
 
-      {message && (
-        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
-          ✅ {message}
-        </div>
-      )}
       {error && (
         <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">
           ⚠️ {error}
@@ -177,18 +156,7 @@ export default function AdminOrdersPage() {
                     {formatPKR(o.totalAmount)}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <Badge variant={getVariant(o.status)}>{statusLabel(o.status)}</Badge>
-                      <select
-                        value={o.status}
-                        disabled={busyId !== null}
-                        onChange={(e) => updateStatus(o, e.target.value as OrderStatus)}
-                        className="h-7 px-1.5 text-[11px] rounded-lg border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none"
-                        title="Admin status override"
-                      >
-                        {ORDER_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                      </select>
-                    </div>
+                    <Badge variant={getVariant(o.status)}>{statusLabel(o.status)}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                     {formatDate(o.createdAt)}

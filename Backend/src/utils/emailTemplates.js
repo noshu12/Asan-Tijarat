@@ -1,18 +1,29 @@
-const fs = require('fs');
-const path = require('path');
+// emailTemplates.js — v5 (built on emailTemplates-4-fixed.js)
+// CHANGELOG v5:
+// - Logo is NO LONGER sent as a CID attachment. Gmail was showing "logo.png"
+//   under the email in the inbox list (it shows attachment names), which
+//   looked unprofessional. Now the header loads the logo from a PUBLIC URL
+//   set in Backend/.env as LOGO_URL (e.g. the Cloudinary URL of
+//   Frontend/public/logo.png). No attachment = no "logo.png" in the inbox
+//   list, and the logo still renders at the top of every email.
+// - If LOGO_URL is not set, a styled text header is used instead of a
+//   broken image. Set LOGO_URL in .env — the logo is mandatory for the brand.
+// - Keeps all 9 template exports from v4 (incl. contactReplyEmail).
 
-// Logo for emails: Backend/assets/logo.png (copied from Frontend/public/logo.png).
-// If the file is missing, emails fall back to a styled text header —
-// a broken logo image is never sent.
-const LOGO_PATH = path.join(__dirname, '..', '..', 'assets', 'logo.png');
+/**
+ * Public https URL of the brand logo, set in Backend/.env:
+ *   LOGO_URL=https://res.cloudinary.com/<cloud>/image/upload/.../logo.png
+ * Upload Frontend/public/logo.png to Cloudinary once (Media Library ->
+ * Upload) and paste the URL here. Gmail loads external images through its
+ * own proxy, so this renders for every recipient.
+ */
+function logoUrl() {
+  const u = (process.env.LOGO_URL || '').trim();
+  return u.startsWith('http://') || u.startsWith('https://') ? u : '';
+}
 
 function baseUrl() {
   return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-}
-
-function logoAttachment() {
-  if (!fs.existsSync(LOGO_PATH)) return [];
-  return [{ filename: 'logo.png', path: LOGO_PATH, cid: 'asan-logo' }];
 }
 
 function escapeHtml(value) {
@@ -24,8 +35,9 @@ function escapeHtml(value) {
 }
 
 function header() {
-  const logo = fs.existsSync(LOGO_PATH)
-    ? '<img src="cid:asan-logo" alt="Asan Tijarat" width="120" style="display:block;margin:0 auto 12px auto;" />'
+  const url = logoUrl();
+  const logo = url
+    ? '<img src="' + url + '" alt="Asan Tijarat" width="120" style="display:block;margin:0 auto 12px auto;max-width:120px;" />'
     : '<div style="font-size:24px;font-weight:800;color:#0B3D2E;margin-bottom:12px;">Asan Tijarat</div>';
   return (
     '<div style="background:#0B3D2E;padding:24px;text-align:center;">' +
@@ -79,7 +91,7 @@ function otpEmail({ name, otp }) {
     `Your Asan Tijarat verification code is: ${otp}\n\n` +
     'This code expires in 5 minutes. Do not share it with anyone.\n\n' +
     'If you did not request this code, ignore this email.';
-  return { subject: 'Asan Tijarat - Your verification code', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - Your verification code', html, text };
 }
 
 /**
@@ -118,7 +130,7 @@ function pendingVerificationEmail({ name, businessName, role }) {
     '2. Once verification is complete, you will receive a confirmation email and your registration will be granted.\n' +
     '3. Only then will you be able to sign in and start your business on Asan Tijarat.\n\n' +
     'No further action is needed from you right now. Please wait for the confirmation email.';
-  return { subject: 'Asan Tijarat - Your account is under verification', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - Your account is under verification', html, text };
 }
 
 /**
@@ -147,7 +159,7 @@ function accountVerifiedEmail({ name, businessName }) {
     'You can now sign in with your registered email and password and start your business on Asan Tijarat.\n\n' +
     `Sign in here: ${signinUrl}\n\n` +
     'Thank you for joining Asan Tijarat.';
-  return { subject: 'Asan Tijarat - Your account has been approved', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - Your account has been approved', html, text };
 }
 
 /**
@@ -185,7 +197,7 @@ function contactAdminNotificationEmail({ name, email, subject, message }) {
     'Subject: ' + (subject || 'New message') + '\n\n' +
     message + '\n\n' +
     'To reply, email the sender directly at ' + email + '.';
-  return { subject: 'Asan Tijarat contact: ' + (subject || 'New message'), html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat contact: ' + (subject || 'New message'), html, text };
 }
 
 /**
@@ -209,7 +221,7 @@ function contactAutoReplyEmail({ name, subject, message }) {
     'Thank you for contacting Asan Tijarat. We received your message and our team will review it.\n\n' +
     message + '\n\n' +
     'We will get back to you on your email address.';
-  return { subject: 'Asan Tijarat - We received your message', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - We received your message', html, text };
 }
 
 /**
@@ -238,7 +250,7 @@ function accountSuspendedEmail({ name, businessName, reason }) {
     (businessName ? `Business: ${businessName}\n\n` : '') +
     (reason ? `Reason: ${reason}\n\n` : '') +
     'If you believe this is a mistake, please contact us through the contact form on the website and our team will review it.';
-  return { subject: 'Asan Tijarat - Your account has been suspended', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - Your account has been suspended', html, text };
 }
 
 /**
@@ -266,7 +278,7 @@ function accountRejectedEmail({ name, businessName, reason }) {
     (businessName ? `Business: ${businessName}\n\n` : '') +
     (reason ? `Reason: ${reason}\n\n` : '') +
     'If you believe the information submitted was incorrect, please contact us through the contact form on the website.';
-  return { subject: 'Asan Tijarat - Your registration was not approved', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - Your registration was not approved', html, text };
 }
 
 /**
@@ -294,7 +306,29 @@ function accountReactivatedEmail({ name, businessName }) {
     'You can now sign in with your registered email and password and start your business on Asan Tijarat.\n\n' +
     `Sign in here: ${signinUrl}\n\n` +
     'Thank you for continuing with Asan Tijarat.';
-  return { subject: 'Asan Tijarat - Your account has been reactivated', html, text, attachments: logoAttachment() };
+  return { subject: 'Asan Tijarat - Your account has been reactivated', html, text };
 }
 
-module.exports = { otpEmail, pendingVerificationEmail, accountVerifiedEmail, contactAdminNotificationEmail, contactAutoReplyEmail, accountSuspendedEmail, accountRejectedEmail, accountReactivatedEmail };
+/**
+ * Admin reply to a contact-form message — typed on the /admin/messages page.
+ * The admin writes the subject + message on the site; this wraps it in the
+ * branded layout and it goes out from the platform email address.
+ */
+function contactReplyEmail({ name, subject, message }) {
+  const safeName = escapeHtml(name);
+  const safeSubject = escapeHtml(subject);
+  const safeMessage = escapeHtml(message).replace(/\n/g, '<br />');
+  const html = wrap(
+    safeSubject,
+    `<p>Hello ${safeName},</p>` +
+      `<p>${safeMessage}</p>` +
+      '<p>Thank you for contacting Asan Tijarat.</p>'
+  );
+  const text =
+    `Hello ${name},\n\n` +
+    `${message}\n\n` +
+    'Thank you for contacting Asan Tijarat.';
+  return { subject: `Asan Tijarat - ${subject}`, html, text };
+}
+
+module.exports = { otpEmail, pendingVerificationEmail, accountVerifiedEmail, contactAdminNotificationEmail, contactAutoReplyEmail, accountSuspendedEmail, accountRejectedEmail, accountReactivatedEmail, contactReplyEmail };

@@ -133,6 +133,7 @@ app.use('/api/products', require('./src/routes/product.routes'));
 app.use('/api/orders', require('./src/routes/order.routes'));
 app.use('/api/admin', require('./src/routes/admin.routes'));
 app.use('/api/public', require('./src/routes/public.routes'));
+app.use('/api/analytics', require('./src/routes/analytics.routes'));
 
 
 // Health check: `GET /api/health` -> { status, db }

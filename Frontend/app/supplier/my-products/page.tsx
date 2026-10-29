@@ -30,6 +30,26 @@ const EMPTY_EDIT_FORM: EditProductFormState = {
   status: 'Active',
 };
 
+/**
+ * Turns the product's free-text unit into the buyer-friendly pack noun.
+ * Copied from ProductCard so this table always matches the marketplace:
+ * - Weight = the first number + kg/g/litre found in the unit, if any.
+ * - Pack noun = a pack word found in the unit (bag/carton/tin/box/drum/
+ *   pack/sack), else "bag" when a weight exists, else the unit itself.
+ * - Nothing is invented: no weight shown unless one was parsed.
+ */
+function parsePack(unit: string): { pack: string; weight: string | null } {
+  const text = (unit || '').trim();
+  const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(kg|g|litre|litres|l|ml)\b/i);
+  const weight = weightMatch
+    ? `${weightMatch[1]} ${weightMatch[2].toLowerCase().startsWith('lit') ? 'litre' : weightMatch[2].toLowerCase()}`
+    : null;
+  const nounMatch = text.match(/\b(bag|carton|tin|box|drum|pack|packet|sack|crate|bottle|jar)\b/i);
+  if (nounMatch) return { pack: nounMatch[1].toLowerCase(), weight };
+  if (weight) return { pack: 'bag', weight };
+  return { pack: text || 'unit', weight: null };
+}
+
 export default function SupplierMyProductsPage() {
   const { user, loading: authLoading } = useAuth();
   const myId = user?.id;
@@ -202,7 +222,9 @@ export default function SupplierMyProductsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filtered.map((prod) => (
+            {filtered.map((prod) => {
+              const { pack } = parsePack(prod.unit);
+              return (
               <tr key={prod.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
@@ -214,13 +236,13 @@ export default function SupplierMyProductsPage() {
                   </div>
                 </td>
                 <td className="px-5 py-4 font-bold text-slate-900 dark:text-white">
-                  {formatPKR(prod.price)}
+                  {formatPKR(prod.price)} / {pack}
                 </td>
                 <td className="px-5 py-4 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {prod.moq} {prod.unit}
+                  {prod.moq} {pack}
                 </td>
                 <td className="px-5 py-4 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {prod.stock} units
+                  {prod.stock} {pack}
                 </td>
                 <td className="px-5 py-4">
                   <Badge variant={prod.status === 'Active' ? 'active' : 'warning'}>
@@ -246,7 +268,8 @@ export default function SupplierMyProductsPage() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
