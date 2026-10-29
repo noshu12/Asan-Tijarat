@@ -23,7 +23,7 @@ function escapeRegex(text) {
 }
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
-const KYC_FIELDS = ['cnicFront', 'cnicBack', 'ntn'];
+const KYC_FIELDS = ['cnicFront', 'cnicBack', 'ntn', 'utilityBill'];
 
 /**
  * GET /api/admin/stats
@@ -286,8 +286,8 @@ async function deleteUser(req, res, next) {
  * Admin-only KYC preview — yehi wo route hai jo Safety mein band
  * hui public /uploads preview ki jagah lega.
  *
- * field ∈ cnicFront, cnicBack, ntn. File ka naam sirf stored URL se
- * basename lekar banaya jata hai, taake URL mein ../ likh kar koi
+ * field ∈ cnicFront, cnicBack, ntn, utilityBill. File ka naam sirf stored
+ * URL se basename lekar banaya jata hai, taake URL mein ../ likh kar koi
  * doosri file nahi kholi ja sake. Public nahi hai — router par
  * protect + requireRole('admin') pehle se laga hua hai.
  */
@@ -297,7 +297,7 @@ async function getKycDocument(req, res, next) {
 
     if (!KYC_FIELDS.includes(field)) {
       return res.status(400).json({
-        error: { code: 'INVALID_FIELD', message: 'field must be cnicFront, cnicBack or ntn.' },
+        error: { code: 'INVALID_FIELD', message: 'field must be cnicFront, cnicBack, ntn or utilityBill.' },
       });
     }
 
@@ -380,6 +380,7 @@ async function listOrders(req, res, next) {
     }
 
     const orders = await Order.find(query).sort({ createdAt: -1 }).limit(500).lean();
+
     res.json({ orders: toClient(orders), count: orders.length });
   } catch (err) {
     next(err);

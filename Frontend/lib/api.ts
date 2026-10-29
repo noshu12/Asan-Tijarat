@@ -104,16 +104,25 @@ export interface RegisterPayload {
   role: UserRole;
   businessName?: string;
   city?: string;
+  /** Supplier only — shopkeepers have no NTN since the 2026-10-29 redesign. */
   ntn?: string;
+  /** Supplier only — multi-select from the 14 master categories. */
+  categories?: string[];
   category?: string;
+  /** Shopkeeper only — one of the 10 shop types. */
+  shopType?: string;
+  /** Shopkeeper only — the shop's address/market. */
+  shopLocation?: string;
+  /** Shopkeeper only — must match the account number on the uploaded utility bill. */
+  utilityBillAccountNumber?: string;
   avatar?: string;
   /** Residential details collected in Step 1 of registration. */
   houseAddress?: string;
   currentHouseLocation?: string;
   /** GPS point captured from the device via the browser Geolocation API. */
   currentLocation?: DeviceLocation;
-  /** Step-3 uploads: CNIC front, CNIC back and the NTN certificate. */
-  documents?: Partial<Record<'cnicFront' | 'cnicBack' | 'ntn', KycDocumentPayload>>;
+  /** Step-3 uploads: CNIC front/back + NTN certificate (supplier) or shop utility bill (shopkeeper). */
+  documents?: Partial<Record<'cnicFront' | 'cnicBack' | 'ntn' | 'utilityBill', KycDocumentPayload>>;
 }
 
 /** Editable fields on PATCH /api/auth/me — role/verified are admin-only. */
@@ -124,6 +133,12 @@ export interface ProfileUpdatePayload {
   businessName?: string;
   city?: string;
   ntn?: string;
+  /** Shopkeeper only — one of the 10 shop types. */
+  shopType?: string;
+  /** Shopkeeper only — the shop's address/market. */
+  shopLocation?: string;
+  /** Shopkeeper only — must match the account number on the uploaded utility bill. */
+  utilityBillAccountNumber?: string;
   category?: string;
   avatar?: string;
   houseAddress?: string;

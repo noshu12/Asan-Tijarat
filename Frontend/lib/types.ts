@@ -13,7 +13,7 @@ export interface UploadedFile {
   uploadedAt?: string;
 }
 
-/** A registration KYC document (CNIC front/back, NTN certificate). */
+/** A registration KYC document (CNIC front/back, NTN certificate, or shop utility bill). */
 export type KycDocument = UploadedFile;
 
 /**
@@ -27,18 +27,23 @@ export interface DeviceLocation {
   capturedAt?: string;
 }
 
-/** The three compliance documents both shopkeepers and suppliers submit. */
+/**
+ * The compliance documents submitted at registration —
+ * supplier: CNIC front/back + NTN certificate;
+ * shopkeeper: CNIC front/back + shop utility bill (no NTN).
+ */
 export interface KycDocuments {
   cnicFront?: KycDocument;
   cnicBack?: KycDocument;
   ntn?: KycDocument;
+  utilityBill?: KycDocument;
 }
 
 /** A photo the supplier uploaded with a listing (mirrors Product.imageUploads). */
 export interface ProductImageUpload extends UploadedFile {}
 
-/** Which of the three uploads a UI element refers to. */
-export type KycDocumentKey = 'cnicFront' | 'cnicBack' | 'ntn';
+/** Which of the registration uploads a UI element refers to. */
+export type KycDocumentKey = 'cnicFront' | 'cnicBack' | 'ntn' | 'utilityBill';
 
 export interface User {
   id: string;
@@ -54,10 +59,17 @@ export interface User {
   currentHouseLocation?: string;
   /** GPS point captured from the device — shown as a Google Maps link. */
   currentLocation?: DeviceLocation | null;
+  /** Supplier only — shopkeepers have no NTN since the 2026-10-29 redesign. */
   ntn?: string;
+  /** Shopkeeper only — one of the 10 shop types; never a product category. */
+  shopType?: string;
+  /** Shopkeeper only — the shop's address/market. */
+  shopLocation?: string;
+  /** Shopkeeper only — must match the account number on the uploaded utility bill. */
+  utilityBillAccountNumber?: string;
   category?: string;
   avatar?: string;
-  /** CNIC front/back + NTN uploads — rendered in the Admin Dashboard. */
+  /** Registration KYC uploads — rendered in the Admin Dashboard. */
   documents?: KycDocuments;
   verified?: boolean;
 }

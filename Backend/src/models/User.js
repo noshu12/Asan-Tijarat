@@ -3,6 +3,23 @@ const bcrypt = require('bcryptjs');
 const { CATEGORIES } = require('../constants/categories');
 
 /**
+ * Shop types for the shopkeeper form — a shopkeeper NEVER picks a product
+ * category. Must match Frontend/app/getstarted/page.tsx SHOP_TYPES exactly.
+ */
+const SHOP_TYPES = [
+  'Kiryana Store',
+  'General Store',
+  'Provision Store',
+  'Super Store',
+  'Mart',
+  'Departmental Store',
+  'Shopping Centre',
+  'Cash & Carry',
+  'Traders',
+  'Simple Store',
+];
+
+/**
  * One uploaded compliance document — `url` is the private path served only
  * via an authenticated admin route (see server.js uploads guard), the rest
  * is audit metadata shown next to the preview in the Admin Dashboard.
@@ -19,8 +36,9 @@ const kycDocumentSchema = new mongoose.Schema(
 );
 
 /**
- * Step 3 documents collected at registration for BOTH shopkeepers and
- * suppliers. Written by `src/utils/kycStorage.js`; every field is optional so
+ * Step 3 documents collected at registration.
+ * Supplier → CNIC front/back + NTN. Shopkeeper → CNIC front/back + Utility Bill.
+ * Written by `src/utils/kycStorage.js`; every field is optional so
  * older accounts stay valid.
  */
 const kycDocumentsSchema = new mongoose.Schema(
@@ -28,6 +46,7 @@ const kycDocumentsSchema = new mongoose.Schema(
     cnicFront: { type: kycDocumentSchema, default: undefined },
     cnicBack: { type: kycDocumentSchema, default: undefined },
     ntn: { type: kycDocumentSchema, default: undefined },
+    utilityBill: { type: kycDocumentSchema, default: undefined },
   },
   { _id: false }
 );
@@ -45,16 +64,19 @@ const { deviceLocationSchema } = require('../utils/location');
  *
  * categories: MULTI-SELECT list from the 14 master categories — this is what
  * the supplier dropdown at account creation stores. `category` is kept only
- * for backward compatibility with the old frontend.
+ * for backward compatibility with the old frontend. Shopkeepers NEVER have
+ * categories — they have a shopType instead.
  *
  * verified: kept for now — login/protect still use it, so PASS login is not
  * broken by this file alone. `status` + `emailVerified` are the new, separate
  * fields; the auth controller/protect migration to `status` comes in the
  * Auth APIs step.
  *
- * ntn/businessName/city are NOT marked required here: making them required
- * in the model would break saves for older accounts that lack them. The
- * mandatory check for NEW registrations comes in the register controller.
+ * ntn/businessName/city/shopType/shopLocation/utilityBillAccountNumber are NOT
+ * marked required here: making them required in the model would break saves
+ * for older accounts that lack them. The mandatory check for NEW registrations
+ * (supplier → NTN; shopkeeper → shopType + utilityBillAccountNumber, NO NTN)
+ * comes in the register controller.
  */
 const userSchema = new mongoose.Schema(
   {
@@ -67,11 +89,21 @@ const userSchema = new mongoose.Schema(
     city: { type: String, trim: true },
     // Residential details collected at registration (shopkeepers & suppliers)
     // and editable later from the portal settings pages.
+    // Supplier → Warehouse Address + Warehouse Location.
+    // Shopkeeper → House Address + Shop Location.
     houseAddress: { type: String, trim: true },
     currentHouseLocation: { type: String, trim: true },
+    // Shopkeeper only — the shop's address/market, from the Shop Location field.
+    shopLocation: { type: String, trim: true },
     // GPS coordinates of the device that registered/updated the account.
     currentLocation: { type: deviceLocationSchema, default: undefined },
+    // Supplier only — shopkeepers have NO NTN since the 2026-10-29 redesign.
     ntn: { type: String, trim: true },
+    // Shopkeeper only — one of the 10 SHOP_TYPES; never a product category.
+    shopType: { type: String, enum: SHOP_TYPES, trim: true },
+    // Shopkeeper only — must match the account number on the uploaded utility
+    // bill; the admin verifies the match visually during verification (no OCR).
+    utilityBillAccountNumber: { type: String, trim: true },
     // CNIC number itself (13 digits, digits only) — validated only when given,
     // so older accounts without it stay valid.
     cnic: {
@@ -88,7 +120,7 @@ const userSchema = new mongoose.Schema(
       default: [],
     },
     avatar: { type: String, default: '' },
-    // KYC uploads: { cnicFront: {...}, cnicBack: {...}, ntn: {...} }
+    // KYC uploads: { cnicFront: {...}, cnicBack: {...}, ntn: {...}, utilityBill: {...} }
     documents: { type: kycDocumentsSchema, default: {} },
     verified: { type: Boolean, default: false },
     status: {

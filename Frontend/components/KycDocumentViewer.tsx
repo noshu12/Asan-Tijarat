@@ -4,15 +4,27 @@ import React, { useEffect, useState } from 'react';
 import { Download, FileText, ImageOff, ZoomIn } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { API_URL } from '@/lib/api';
-import type { KycDocument, KycDocuments } from '@/lib/types';
+import type { KycDocument, KycDocuments, UserRole } from '@/lib/types';
 import { cn, formatDate, formatFileSize } from '@/lib/utils';
 
-/** The three uploads the registration wizard collects, in review order. */
-const DOCUMENT_SLOTS: { key: keyof KycDocuments; label: string }[] = [
+/** Every upload the registration wizard can collect, in review order. */
+const ALL_DOCUMENT_SLOTS: { key: keyof KycDocuments; label: string }[] = [
   { key: 'cnicFront', label: 'CNIC Front Image' },
   { key: 'cnicBack', label: 'CNIC Back Image' },
   { key: 'ntn', label: 'NTN Certificate / Image' },
+  { key: 'utilityBill', label: 'Shop Utility Bill' },
 ];
+
+/**
+ * Suppliers upload an NTN certificate, shopkeepers upload a shop utility bill
+ * instead (no NTN since the 2026-10-29 redesign) — the third slot follows the role.
+ */
+function slotsForRole(role?: UserRole) {
+  const thirdKey: keyof KycDocuments = role === 'shopkeeper' ? 'utilityBill' : 'ntn';
+  return ALL_DOCUMENT_SLOTS.filter(
+    (slot) => slot.key === 'cnicFront' || slot.key === 'cnicBack' || slot.key === thirdKey
+  );
+}
 
 function isPdf(doc: KycDocument) {
   return (doc.mimeType || '').includes('pdf');
@@ -24,14 +36,16 @@ export interface KycDocumentViewerProps {
   userId?: string;
   /** Whose documents these are — shown in the lightbox so accounts never get mixed up. */
   ownerLabel?: string;
+  /** Picks the third document slot: shopkeeper → utility bill, otherwise → NTN. */
+  role?: UserRole;
   className?: string;
 }
 
 /**
- * Admin-side renderer for the CNIC front/back + NTN files a shopkeeper or
- * supplier uploaded during registration. Shows a thumbnail per document and
- * opens the full-size image (or the PDF) in a lightbox — the real files the
- * trader submitted, never a placeholder.
+ * Admin-side renderer for the KYC files a shopkeeper or supplier uploaded
+ * during registration. Shows a thumbnail per document and opens the full-size
+ * image (or the PDF) in a lightbox — the real files the trader submitted,
+ * never a placeholder.
  *
  * Documents are loaded ONLY through the authenticated admin route
  * GET /api/admin/users/:id/kyc/:field (httpOnly cookie, admin role), never
@@ -40,11 +54,13 @@ export interface KycDocumentViewerProps {
  * an object URL, which is revoked when the viewer unmounts or the preview
  * changes.
  */
-export function KycDocumentViewer({ documents, userId, ownerLabel, className }: KycDocumentViewerProps) {
+export function KycDocumentViewer({ documents, userId, ownerLabel, role, className }: KycDocumentViewerProps) {
   const [preview, setPreview] = useState<{ key: string; label: string; doc: KycDocument } | null>(null);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState<Record<string, boolean>>({});
+
+  const slots = slotsForRole(role);
 
   // Load every uploaded document through the admin KYC route.
   useEffect(() => {
@@ -58,8 +74,8 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, className }: 
       return;
     }
 
-    const slots = DOCUMENT_SLOTS.filter((slot) => documents[slot.key]?.url);
-    if (slots.length === 0) {
+    const activeSlots = slots.filter((slot) => documents[slot.key]?.url);
+    if (activeSlots.length === 0) {
       setBlobUrls({});
       setLoading(false);
       return;
@@ -69,7 +85,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, className }: 
     setLoadFailed({});
 
     void Promise.all(
-      slots.map(async (slot) => {
+      activeSlots.map(async (slot) => {
         try {
           const response = await fetch(
             `${API_URL}/api/admin/users/${userId}/kyc/${slot.key}`,
@@ -96,9 +112,10 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, className }: 
       cancelled = true;
       created.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
     };
-  }, [userId, documents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, documents, role]);
 
-  const uploadedCount = DOCUMENT_SLOTS.filter((slot) => documents?.[slot.key]?.url).length;
+  const uploadedCount = slots.filter((slot) => documents?.[slot.key]?.url).length;
   const previewUrl = preview ? blobUrls[preview.key] : undefined;
 
   return (
@@ -110,12 +127,12 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, className }: 
         <span
           className={cn(
             'text-[10px] font-bold px-2 py-0.5 rounded-full border',
-            uploadedCount === DOCUMENT_SLOTS.length
+            uploadedCount === slots.length
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
               : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
           )}
         >
-          {uploadedCount}/{DOCUMENT_SLOTS.length} uploaded
+          {uploadedCount}/{slots.length} uploaded
         </span>
       </div>
 
@@ -126,7 +143,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, className }: 
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {DOCUMENT_SLOTS.map((slot) => {
+        {slots.map((slot) => {
           const doc = documents?.[slot.key];
           const url = doc?.url ? blobUrls[slot.key] : undefined;
           const failed = !!loadFailed[slot.key];

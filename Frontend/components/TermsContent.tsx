@@ -8,7 +8,7 @@ export default function TermsContent() {
         agree to these terms. If you do not agree, please do not use the
         platform.
       </p>
-      <p className="text-sm text-gray-500">Last updated: 28 October 2026</p>
+      <p className="text-sm text-gray-500">Last updated: 29 October 2026</p>
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-gray-900">1. Who can use Asan Tijarat</h2>
@@ -27,15 +27,19 @@ export default function TermsContent() {
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-gray-900">2. Registration and verification</h2>
         <p>
-          To register, you must provide your name, business name, city, and
-          NTN, along with your CNIC details and the required KYC documents:
-          CNIC front, CNIC back, and your NTN document.
+          To register, you must provide your name, business name, and city,
+          along with your CNIC details and the required KYC documents: CNIC
+          front and CNIC back. Suppliers must also provide their NTN number
+          and NTN document. Shopkeepers do not provide an NTN — they must
+          instead select their shop type and upload a shop utility bill
+          showing the bill account number.
         </p>
         <p>
           Email verification only confirms that you control the email
           address you registered with. It does not activate your account.
           After email verification, your account remains pending while our
-          team reviews your NTN and CNIC documents. You can sign in and
+          team reviews your documents (NTN and CNIC for suppliers; shop
+          utility bill and CNIC for shopkeepers). You can sign in and
           start trading only after an admin has verified your account.
         </p>
         <p>
@@ -101,7 +105,8 @@ export default function TermsContent() {
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-gray-900">7. KYC documents and privacy</h2>
         <p>
-          Your CNIC and NTN documents are collected only for account
+          Your CNIC documents, and your NTN document (suppliers) or shop
+          utility bill (shopkeepers), are collected only for account
           verification. They are not published on the website and are not
           visible to other users. They are viewable only by an admin
           through an authenticated route for verification purposes.
@@ -112,7 +117,7 @@ export default function TermsContent() {
         <h2 className="text-lg font-semibold text-gray-900">8. Fair use</h2>
         <p>You must not:</p>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Provide false business, NTN, CNIC, or product information.</li>
+          <li>Provide false business, NTN, utility bill, CNIC, or product information.</li>
           <li>List products you do not intend or are not able to supply.</li>
           <li>Use the platform to mislead another user.</li>
           <li>Attempt to access another user&apos;s account or data.</li>

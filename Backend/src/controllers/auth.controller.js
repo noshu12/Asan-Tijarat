@@ -57,12 +57,18 @@ async function checkAvailability(req, res, next) {
 
 /**
  * POST /api/auth/register
- * Body: { name, email, phone, password, role, businessName, city, ntn,
+ * Body: { name, email, phone, password, role, businessName, city,
  *         category?, categories?, cnic?, avatar?,
- *         houseAddress?, currentHouseLocation?, currentLocation?, documents?: { cnicFront?, cnicBack?, ntn? } }
+ *         houseAddress?, currentHouseLocation?, currentLocation?,
+ *         documents?: { cnicFront?, cnicBack?, ntn?, utilityBill? },
+ *         // supplier only:
+ *         ntn,
+ *         // shopkeeper only:
+ *         shopType, shopLocation, utilityBillAccountNumber }
  *
- * `documents` carries Step-3 KYC uploads (base64 data URLs) for both
- * shopkeepers and suppliers: CNIC front, CNIC back and the NTN certificate.
+ * `documents` carries Step-3 KYC uploads (base64 data URLs):
+ * supplier → CNIC front, CNIC back and the NTN certificate;
+ * shopkeeper → CNIC front, CNIC back and the shop utility bill.
  * Each one is written to uploads/kyc and stored on the account as
  * `documents:<field> = { url, originalName, mimeType, size, uploadedAt }`, so
  * the Admin Dashboard previews the exact images the trader uploaded.
@@ -71,11 +77,13 @@ async function checkAvailability(req, res, next) {
  * issued, so registration never signs the trader in. The submitted details go
  * straight to the Admin Dashboard; an admin must approve the account
  * (PATCH /api/admin/users/:id/verify) before login succeeds.
- * businessName, city and ntn are mandatory for shopkeepers and suppliers.
+ * businessName and city are mandatory for both roles; ntn + at least one
+ * category are mandatory for suppliers; shopType + utilityBillAccountNumber
+ * are mandatory for shopkeepers (who have NO ntn and NO categories).
  */
 async function register(req, res, next) {
   try {
-    const { name, email, phone, password, role, businessName, city, ntn, cnic, category, categories, avatar, documents, houseAddress, currentHouseLocation, currentLocation } = req.body;
+    const { name, email, phone, password, role, businessName, city, ntn, cnic, category, categories, avatar, documents, houseAddress, currentHouseLocation, currentLocation, shopType, shopLocation, utilityBillAccountNumber } = req.body;
 
     if (!name || !email || !phone || !password || !role) {
       return res.status(400).json({
@@ -89,25 +97,54 @@ async function register(req, res, next) {
         error: { code: 'INVALID_ROLE', message: 'role must be "shopkeeper" or "supplier".' },
       });
     }
-    if (!businessName || !city || !ntn) {
+    if (!businessName || !city) {
       return res.status(400).json({
-        error: { code: 'MISSING_FIELDS', message: 'businessName, city and ntn are required.' },
+        error: { code: 'MISSING_FIELDS', message: 'businessName and city are required.' },
       });
+    }
+    if (role === 'supplier') {
+      // NTN is supplier-only since the 2026-10-29 form redesign.
+      if (!ntn) {
+        return res.status(400).json({
+          error: { code: 'MISSING_FIELDS', message: 'ntn is required for supplier accounts.' },
+        });
+      }
+    } else {
+      // Shopkeeper — no NTN, no categories; shop type + utility bill instead.
+      if (!shopType) {
+        return res.status(400).json({
+          error: { code: 'MISSING_FIELDS', message: 'shopType is required for shopkeeper accounts.' },
+        });
+      }
+      if (!utilityBillAccountNumber || !String(utilityBillAccountNumber).trim()) {
+        return res.status(400).json({
+          error: { code: 'MISSING_FIELDS', message: 'utilityBillAccountNumber is required for shopkeeper accounts.' },
+        });
+      }
     }
     if (cnic && !/^\d{13}$/.test(String(cnic).trim())) {
       return res.status(400).json({
         error: { code: 'INVALID_CNIC', message: 'CNIC must be exactly 13 digits.' },
       });
     }
-    // Categories: multi-select list from the 14 master categories.
-    // A single legacy `category` string is accepted and converted to a list.
+    // Categories: multi-select list from the 14 master categories — supplier
+    // only. A single legacy `category` string is accepted and converted to a
+    // list. Anything a shopkeeper client sends here is dropped: shopkeepers
+    // NEVER carry categories.
     let categoriesList = [];
-    if (Array.isArray(categories)) categoriesList = categories;
-    else if (category) categoriesList = [category];
-    if (categoriesList.length > 0 && !categoriesList.every((c) => CATEGORIES.includes(c))) {
-      return res.status(400).json({
-        error: { code: 'INVALID_CATEGORY', message: 'categories must be from the 14 master categories.' },
-      });
+    if (role === 'supplier') {
+      if (Array.isArray(categories)) categoriesList = categories;
+      else if (category) categoriesList = [category];
+      if (categoriesList.length === 0) {
+        return res.status(400).json({
+          error: { code: 'MISSING_FIELDS', message: 'Select at least one business category.' },
+        });
+      }
+      if (!categoriesList.every((c) => CATEGORIES.includes(c))) {
+        return res.status(400).json({
+          error: { code: 'INVALID_CATEGORY', message: 'categories must be from the 14 master categories.' },
+        });
+      }
     }
 
     // GPS point the browser captured for this trader (optional) — validate it
@@ -132,8 +169,9 @@ async function register(req, res, next) {
       });
     }
 
-    // Validate + persist the uploaded CNIC/NTN files BEFORE creating the
+    // Validate + persist the uploaded KYC files BEFORE creating the
     // account: a rejected document never leaves a half-registered user behind.
+    // Supplier → CNIC front/back + NTN; shopkeeper → CNIC front/back + utility bill.
     let stored;
     try {
       stored = saveKycDocuments(documents);
@@ -148,16 +186,28 @@ async function register(req, res, next) {
     try {
       user = await User.create({
         name, email, phone, password, role,
-        businessName, city, ntn, cnic,
-        category: categoriesList[0] || undefined,
-        categories: categoriesList,
+        businessName, city, cnic,
         avatar,
-        houseAddress, currentHouseLocation,
+        houseAddress,
         currentLocation: currentLocationPoint,
         documents: stored.documents,
         verified: false, // never trust a client-supplied `verified`
         status: 'pending',
         emailVerified: false,
+        ...(role === 'supplier'
+          ? {
+              ntn,
+              category: categoriesList[0] || undefined,
+              categories: categoriesList,
+              currentHouseLocation,
+            }
+          : {
+              // Shopkeeper: no ntn, no categories, no currentHouseLocation —
+              // anything the client sent for those is intentionally dropped.
+              shopType,
+              shopLocation,
+              utilityBillAccountNumber: String(utilityBillAccountNumber).trim(),
+            }),
       });
     } catch (err) {
       // Roll the written files back — nothing should point at a ghost account.
@@ -490,7 +540,8 @@ async function resetPassword(req, res, next) {
  * PATCH /api/auth/me  (protected)
  * Body: { name?, businessName?, email?, phone?, city?, ntn?, cnic?,
  *         category?, categories?, avatar?,
- *         houseAddress?, currentHouseLocation?, currentLocation? }
+ *         houseAddress?, currentHouseLocation?, currentLocation?,
+ *         shopType?, shopLocation?, utilityBillAccountNumber? }
  *
  * Self-service profile update — powers the shopkeeper/supplier settings pages.
  * `role` and `verified` are intentionally NOT editable here: only an admin
@@ -498,7 +549,7 @@ async function resetPassword(req, res, next) {
  */
 async function updateMe(req, res, next) {
   try {
-    const EDITABLE = ['name', 'businessName', 'email', 'phone', 'city', 'ntn', 'cnic', 'category', 'categories', 'avatar', 'houseAddress', 'currentHouseLocation', 'currentLocation'];
+    const EDITABLE = ['name', 'businessName', 'email', 'phone', 'city', 'ntn', 'cnic', 'category', 'categories', 'avatar', 'houseAddress', 'currentHouseLocation', 'currentLocation', 'shopType', 'shopLocation', 'utilityBillAccountNumber'];
 
     const updates = {};
     for (const field of EDITABLE) {

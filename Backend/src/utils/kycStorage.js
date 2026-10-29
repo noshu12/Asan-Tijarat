@@ -2,10 +2,12 @@
 //  KYC document storage
 //
 //  Registration (Step 3 of /getstarted) collects three compliance
-//  documents from BOTH shopkeepers and suppliers:
-//    • cnicFront — front side of the CNIC
-//    • cnicBack  — back side of the CNIC
-//    • ntn       — NTN certificate / scanned copy
+//  documents:
+//    • cnicFront   — front side of the CNIC (both roles)
+//    • cnicBack    — back side of the CNIC (both roles)
+//    • ntn         — NTN certificate / scanned copy (supplier only)
+//    • utilityBill — shop utility bill showing the account number
+//                    (shopkeeper only, since the 2026-10-29 redesign)
 //
 //  The browser sends each one as a base64 `data:` URL inside the JSON
 //  body of POST /api/auth/register, so the API needs no multipart
@@ -39,13 +41,14 @@ const ALLOWED_MIME = {
 };
 
 /** Fields accepted under `documents` on POST /api/auth/register. */
-const DOCUMENT_FIELDS = ['cnicFront', 'cnicBack', 'ntn'];
+const DOCUMENT_FIELDS = ['cnicFront', 'cnicBack', 'ntn', 'utilityBill'];
 
 /** Human labels used in validation messages. */
 const DOCUMENT_LABELS = {
   cnicFront: 'CNIC front image',
   cnicBack: 'CNIC back image',
   ntn: 'NTN certificate',
+  utilityBill: 'Shop utility bill',
 };
 
 class KycUploadError extends UploadError {
@@ -98,10 +101,10 @@ function saveOneDocument(field, value) {
 /**
  * Stores every supplied KYC document.
  *
- * @param {object|undefined} input `{ cnicFront?, cnicBack?, ntn? }` where each
- *        entry is `{ dataUrl, name }`. Missing/blank entries are ignored, so
- *        the endpoint stays backward compatible with registrations that send
- *        no documents at all.
+ * @param {object|undefined} input `{ cnicFront?, cnicBack?, ntn?, utilityBill? }`
+ *        where each entry is `{ dataUrl, name }`. Missing/blank entries are
+ *        ignored, so the endpoint stays backward compatible with registrations
+ *        that send no documents at all.
  * @returns {{ documents: object, files: string[] }} the metadata to persist on
  *          the User document plus the absolute paths written (for cleanup).
  * @throws {KycUploadError} on an invalid file.

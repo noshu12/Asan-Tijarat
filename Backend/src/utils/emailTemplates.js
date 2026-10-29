@@ -85,13 +85,17 @@ function otpEmail({ name, otp }) {
 /**
  * Pending-verification email — sent right AFTER OTP verification succeeds.
  * Main point, in plain words: the account is now in the verification process,
- * it will be verified against the trader's NTN and CNIC documents, and only
- * then will registration be granted. No time promise is made here.
+ * it will be verified against the trader's documents, and only then will
+ * registration be granted. No time promise is made here.
+ * The documents named follow the role: suppliers → NTN + CNIC, shopkeepers →
+ * shop utility bill + CNIC (shopkeepers have no NTN).
  */
 function pendingVerificationEmail({ name, businessName, role }) {
   const safeName = escapeHtml(name);
   const safeBusiness = escapeHtml(businessName);
   const roleLabel = role === 'supplier' ? 'supplier' : 'shopkeeper';
+  const verifyDocs =
+    role === 'supplier' ? 'NTN number and CNIC documents' : 'shop utility bill and CNIC documents';
   const html = wrap(
     'Your account is under verification',
     `<p>Hello ${safeName},</p>` +
@@ -99,7 +103,7 @@ function pendingVerificationEmail({ name, businessName, role }) {
       `<p>Business: <strong>${safeBusiness}</strong><br />Account type: <strong>${roleLabel}</strong></p>` +
       '<p>What happens next:</p>' +
       '<ol>' +
-      '<li>Our team will verify your account against the <strong>NTN number and CNIC documents</strong> you submitted during registration.</li>' +
+      `<li>Our team will verify your account against the <strong>${verifyDocs}</strong> you submitted during registration.</li>` +
       '<li>Once verification is complete, you will receive a confirmation email and your registration will be granted.</li>' +
       '<li>Only then will you be able to sign in and start your business on Asan Tijarat.</li>' +
       '</ol>' +
@@ -110,7 +114,7 @@ function pendingVerificationEmail({ name, businessName, role }) {
     'Thank you for verifying your email. Your Asan Tijarat account is now in the verification process.\n\n' +
     `Business: ${businessName}\nAccount type: ${roleLabel}\n\n` +
     'What happens next:\n' +
-    '1. Our team will verify your account against the NTN number and CNIC documents you submitted during registration.\n' +
+    `1. Our team will verify your account against the ${verifyDocs} you submitted during registration.\n` +
     '2. Once verification is complete, you will receive a confirmation email and your registration will be granted.\n' +
     '3. Only then will you be able to sign in and start your business on Asan Tijarat.\n\n' +
     'No further action is needed from you right now. Please wait for the confirmation email.';

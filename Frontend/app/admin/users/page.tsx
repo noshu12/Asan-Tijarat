@@ -233,6 +233,39 @@ export default function AdminUsersPage() {
               {filteredUsers.map((u) => {
                 const isOpen = expandedId === u.id;
                 const status = getStatus(u);
+                // Detail rows differ per role — shopkeepers have a shop type +
+                // utility bill (no NTN, no category); suppliers have NTN +
+                // categories (no shop type, no utility bill).
+                const shopkeeperView = u.role === 'shopkeeper';
+                const detailRows: { label: string; value: React.ReactNode }[] = [
+                  { label: shopkeeperView ? 'Shop Name' : 'Business / Enterprise', value: u.businessName || '—' },
+                  { label: 'Full Name', value: u.name },
+                  shopkeeperView
+                    ? { label: 'Shop Type', value: u.shopType || '—' }
+                    : { label: 'Business Category', value: u.category || '—' },
+                  { label: 'City / Mandi Hub', value: u.city || '—' },
+                  shopkeeperView
+                    ? { label: 'House Address', value: u.houseAddress || '—' }
+                    : { label: 'Warehouse Address', value: u.houseAddress || '—' },
+                  shopkeeperView
+                    ? { label: 'Shop Location', value: u.shopLocation || '—' }
+                    : { label: 'Warehouse Location', value: u.currentHouseLocation || '—' },
+                  { label: 'Live Location', value: <MapsLink key={u.id} user={u} /> },
+                  shopkeeperView
+                    ? { label: 'Utility Bill Account Number', value: u.utilityBillAccountNumber || '—' }
+                    : { label: 'NTN Number', value: u.ntn || '—' },
+                  {
+                    label: 'Account Type',
+                    value: u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin',
+                  },
+                  { label: 'Status', value: statusLabel(status) },
+                  { label: 'Suspension Reason', value: u.suspensionReason || '—' },
+                  { label: 'Rejection Reason', value: u.rejectionReason || '—' },
+                  { label: 'Email', value: u.email },
+                  { label: 'Email OTP', value: u.role === 'admin' ? '—' : isOtpVerified(u) ? 'Verified' : 'Pending' },
+                  { label: 'Phone', value: u.phone },
+                  { label: 'Registered On', value: u.createdAt ? formatDate(u.createdAt) : '—' },
+                ];
                 return (
                   <React.Fragment key={u.id}>
                     <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -383,27 +416,7 @@ export default function AdminUsersPage() {
                       <tr className="bg-slate-50/70 dark:bg-slate-800/30">
                         <td colSpan={8} className="px-4 py-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
-                            {([
-                              ['Business / Enterprise', u.businessName || '—'],
-                              ['Full Name', u.name],
-                              ['Business Category', u.category || '—'],
-                              ['City / Mandi Hub', u.city || '—'],
-                              ['House Address', u.houseAddress || '—'],
-                              ['Current House Location', u.currentHouseLocation || '—'],
-                              ['Live Location', <MapsLink key={u.id} user={u} />],
-                              ['NTN Number', u.ntn || '—'],
-                              [
-                                'Account Type',
-                                u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin',
-                              ],
-                              ['Status', statusLabel(status)],
-                              ['Suspension Reason', u.suspensionReason || '—'],
-                              ['Rejection Reason', u.rejectionReason || '—'],
-                              ['Email', u.email],
-                              ['Email OTP', u.role === 'admin' ? '—' : isOtpVerified(u) ? 'Verified' : 'Pending'],
-                              ['Phone', u.phone],
-                              ['Registered On', u.createdAt ? formatDate(u.createdAt) : '—'],
-                            ] as const).map(([label, value]) => (
+                            {detailRows.map(({ label, value }) => (
                               <div key={label}>
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
                                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 break-words">
@@ -415,6 +428,7 @@ export default function AdminUsersPage() {
                           <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
                             <KycDocumentViewer
                               userId={u.id}
+                              role={u.role}
                               documents={u.documents}
                               ownerLabel={`${u.businessName || u.name} (${
                                 u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin'

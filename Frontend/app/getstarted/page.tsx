@@ -19,10 +19,12 @@ import {
   AlertCircle,
   MapPin,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronDown,
+  X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { api, ApiError, RegisterPayload } from '@/lib/api';
+import { api, ApiError, RegisterPayload, KycDocumentPayload } from '@/lib/api';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
 
 /**
@@ -53,11 +55,134 @@ const CATEGORIES = [
   'Over-the-Counter Healthcare',
 ];
 
+/** Shop types for the shopkeeper form — a shopkeeper NEVER picks a product category. */
+const SHOP_TYPES = [
+  'Kiryana Store',
+  'General Store',
+  'Provision Store',
+  'Super Store',
+  'Mart',
+  'Departmental Store',
+  'Shopping Centre',
+  'Cash & Carry',
+  'Traders',
+  'Simple Store',
+];
+
+/**
+ * Searchable multi-select dropdown for the 14 supplier categories.
+ * Replaces the long checkbox list — same payload (string[]), only the look changed.
+ */
+function CategoryMultiSelect({
+  selected,
+  onToggle,
+}: {
+  selected: string[];
+  onToggle: (category: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = CATEGORIES.filter((c) =>
+    c.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+        Business Categories (select at least one)
+      </label>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent flex items-center justify-between gap-2"
+        >
+          <span className={selected.length === 0 ? 'text-slate-400' : 'font-semibold'}>
+            {selected.length === 0
+              ? 'Search & select categories'
+              : `${selected.length} categor${selected.length === 1 ? 'y' : 'ies'} selected`}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {open && (
+          <>
+            {/* Outside-click catcher */}
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-xl dark:bg-slate-900 dark:border-slate-800 overflow-hidden">
+              <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+                <input
+                  type="text"
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search categories..."
+                  className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
+                />
+              </div>
+              <div className="max-h-56 overflow-y-auto p-1">
+                {filtered.map((cat) => (
+                  <label
+                    key={cat}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                      selected.includes(cat)
+                        ? 'bg-emerald-50 text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(cat)}
+                      onChange={() => onToggle(cat)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    {cat}
+                  </label>
+                ))}
+                {filtered.length === 0 && (
+                  <p className="px-3 py-4 text-xs text-slate-400 text-center">
+                    No categories found
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Selected chips — removable without reopening the dropdown */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {selected.map((cat) => (
+            <span
+              key={cat}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-asan-dark border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800"
+            >
+              {cat}
+              <button
+                type="button"
+                aria-label={`Remove ${cat}`}
+                onClick={() => onToggle(cat)}
+                className="hover:text-red-500"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GetStartedPage() {
   const router = useRouter();
 
   // Device GPS capture — the browser permission pop-up opens when the trader
-  // focuses the "Current House Location" field (or presses the detect button).
+  // focuses the location field (or presses the detect button).
   const deviceLocation = useDeviceLocation();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -70,21 +195,31 @@ export default function GetStartedPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  // Step 1: Residential details — stored on the account and shown in the Admin Dashboard.
+  // Step 1: location details — labels differ per role, payload keys stay the
+  // same so the current backend keeps working for suppliers.
+  // Supplier → Warehouse Address + Warehouse Location.
+  // Shopkeeper → House Address + Shop Location.
   const [houseAddress, setHouseAddress] = useState('');
   const [currentHouseLocation, setCurrentHouseLocation] = useState('');
+  const [shopLocation, setShopLocation] = useState('');
 
-  // Step 2: Business Info — intentionally empty, categories are multi-select from the 14.
+  // Step 2: Business Info — intentionally empty.
+  // Supplier → categories (multi-select dropdown). Shopkeeper → shop type (dropdown, never a category).
   const [businessName, setBusinessName] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [shopType, setShopType] = useState('');
   const [city, setCity] = useState('');
   const [ntn, setNtn] = useState('');
 
-  // Step 3: Documents only — the real KYC documents (CNIC front/back, NTN).
+  // Step 3: Documents only — the real KYC documents.
+  // Supplier → CNIC front/back + NTN. Shopkeeper → CNIC front/back + Utility Bill.
   // No OTP here: OTP is verified AFTER registration, on an existing account.
   const [cnicFrontDraft, setCnicFrontDraft] = useState<KycFileDraft | null>(null);
   const [cnicBackDraft, setCnicBackDraft] = useState<KycFileDraft | null>(null);
   const [ntnDraft, setNtnDraft] = useState<KycFileDraft | null>(null);
+  const [utilityBillDraft, setUtilityBillDraft] = useState<KycFileDraft | null>(null);
+  // Shopkeeper only — must match the account number on the uploaded bill (admin verifies visually).
+  const [utilityBillAccountNumber, setUtilityBillAccountNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -157,13 +292,17 @@ export default function GetStartedPage() {
 
   // Once the GPS point is captured, prefill the written location with the
   // coordinates — unless the trader already typed an address there.
+  // Supplier → Warehouse Location, Shopkeeper → Shop Location.
   useEffect(() => {
     const point = deviceLocation.coords;
     if (!point) return;
-    setCurrentHouseLocation((prev) =>
-      prev.trim() ? prev.trim() : `${point.lat}, ${point.lng}`
-    );
-  }, [deviceLocation.coords]);
+    const text = `${point.lat}, ${point.lng}`;
+    if (role === 'shopkeeper') {
+      setShopLocation((prev) => (prev.trim() ? prev.trim() : text));
+    } else {
+      setCurrentHouseLocation((prev) => (prev.trim() ? prev.trim() : text));
+    }
+  }, [deviceLocation.coords, role]);
 
   const toggleCategory = (category: string) => {
     setSelectedCategories((prev) =>
@@ -184,25 +323,43 @@ export default function GetStartedPage() {
   };
 
   // POST /api/auth/register → creates a PENDING account (no session) and moves
-  // to the OTP step. The CNIC front/back + NTN images picked in Step 3 travel
-  // with the request as base64 data URLs and are stored against this exact
-  // account, so the Admin Dashboard can preview the files the trader actually uploaded.
+  // to the OTP step. The documents picked in Step 3 travel with the request as
+  // base64 data URLs and are stored against this exact account, so the Admin
+  // Dashboard can preview the files the trader actually uploaded.
+  // Supplier → CNIC front/back + NTN. Shopkeeper → CNIC front/back + Utility Bill.
   const handleCompleteRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (selectedCategories.length === 0) {
-      setErrorMessage('Please select at least one business category.');
+    if (role === 'supplier') {
+      if (selectedCategories.length === 0) {
+        setErrorMessage('Please select at least one business category.');
+        return;
+      }
+    } else {
+      if (!shopType) {
+        setErrorMessage('Please select your shop type.');
+        return;
+      }
+    }
+
+    if (!cnicFrontDraft || !cnicBackDraft) {
+      setErrorMessage('Please upload your CNIC front and back images before completing registration.');
       return;
     }
 
-    if (!cnicFrontDraft || !cnicBackDraft || !ntnDraft) {
-      const missing = [
-        !cnicFrontDraft && 'CNIC front image',
-        !cnicBackDraft && 'CNIC back image',
-        !ntnDraft && 'NTN certificate',
-      ].filter(Boolean).join(', ');
-      setErrorMessage(`Please upload the following document(s) before completing registration: ${missing}.`);
+    const thirdDraft = role === 'supplier' ? ntnDraft : utilityBillDraft;
+    if (!thirdDraft) {
+      setErrorMessage(
+        role === 'supplier'
+          ? 'Please upload your NTN certificate before completing registration.'
+          : 'Please upload your shop utility bill before completing registration.'
+      );
+      return;
+    }
+
+    if (role === 'shopkeeper' && !utilityBillAccountNumber.trim()) {
+      setErrorMessage('Please enter your utility bill account number.');
       return;
     }
 
@@ -214,28 +371,54 @@ export default function GetStartedPage() {
     setIsSubmitting(true);
 
     try {
-      const [cnicFront, cnicBack, ntnDocument] = await Promise.all([
+      const [cnicFront, cnicBack, thirdDocument] = await Promise.all([
         toKycPayload(cnicFrontDraft.file),
         toKycPayload(cnicBackDraft.file),
-        toKycPayload(ntnDraft.file),
+        toKycPayload(thirdDraft.file),
       ]);
 
-      const payload: RegisterPayload & { categories: string[] } = {
+      // 'utilityBill' is not in RegisterPayload['documents'] yet — the backend
+      // phase (User model → auth.controller → kycStorage) adds it there. The
+      // local DocMap keeps the build green until then.
+      type DocMap = Partial<
+        Record<'cnicFront' | 'cnicBack' | 'ntn' | 'utilityBill', KycDocumentPayload>
+      >;
+      const documents: DocMap = { cnicFront, cnicBack };
+      if (role === 'supplier') {
+        documents.ntn = thirdDocument;
+      } else {
+        documents.utilityBill = thirdDocument;
+      }
+
+      const payload: RegisterPayload & {
+        categories?: string[];
+        shopType?: string;
+        shopLocation?: string;
+        utilityBillAccountNumber?: string;
+      } = {
         name: `${firstName.trim()} ${lastName.trim()}`.trim(),
         email: email.trim(),
         phone: phone.trim(),
         password,
         role,
         businessName: businessName.trim(),
-        categories: selectedCategories,
-        category: selectedCategories[0] || '',
         city: city.trim(),
-        ntn: ntn.trim(),
         houseAddress: houseAddress.trim(),
-        currentHouseLocation: currentHouseLocation.trim(),
         // GPS point (when captured) — the Admin Dashboard renders it as a link.
         ...(deviceLocation.coords ? { currentLocation: deviceLocation.coords } : {}),
-        documents: { cnicFront, cnicBack, ntn: ntnDocument },
+        documents,
+        ...(role === 'supplier'
+          ? {
+              categories: selectedCategories,
+              category: selectedCategories[0] || '',
+              ntn: ntn.trim(),
+              currentHouseLocation: currentHouseLocation.trim(),
+            }
+          : {
+              shopType,
+              shopLocation: shopLocation.trim(),
+              utilityBillAccountNumber: utilityBillAccountNumber.trim(),
+            }),
       };
 
       await api.register(payload);
@@ -313,9 +496,14 @@ export default function GetStartedPage() {
     }
   };
 
+  const isShopkeeper = role === 'shopkeeper';
+  const attachedCount = [cnicFrontDraft, cnicBackDraft, isShopkeeper ? utilityBillDraft : ntnDraft].filter(
+    Boolean
+  ).length;
+
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950">
-      
+
       {/* Left Brand Panel */}
       <div className="w-full md:w-1/2 bg-asan-dark text-white p-8 sm:p-14 lg:p-20 flex flex-col justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -365,7 +553,7 @@ export default function GetStartedPage() {
       {/* Right Form Wizard */}
       <div className="w-full md:w-1/2 p-6 sm:p-12 lg:p-16 flex items-center justify-center">
         <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
-          
+
           {submitted ? (
             /* ── Confirmation: account created, OTP verified, awaiting admin verification ── */
             <div className="text-center py-2">
@@ -604,24 +792,50 @@ export default function GetStartedPage() {
                   </div>
                 </div>
 
-                <Input
-                  label="House Address"
-                  placeholder="House 123, Street 4, Block B, Model Town"
-                  value={houseAddress}
-                  onChange={(e) => setHouseAddress(e.target.value)}
-                  helperText="Complete residential address"
-                  required
-                />
-
-                <Input
-                  label="Current House Location"
-                  placeholder="Area / City, e.g. Model Town, Lahore"
-                  value={currentHouseLocation}
-                  onChange={(e) => setCurrentHouseLocation(e.target.value)}
-                  onFocus={deviceLocation.autoPrompt}
-                  helperText="Focus this field to share your device location"
-                  required
-                />
+                {/* Location fields differ per role:
+                    Supplier → Warehouse Address + Warehouse Location.
+                    Shopkeeper → House Address + Shop Location. */}
+                {isShopkeeper ? (
+                  <>
+                    <Input
+                      label="House Address"
+                      placeholder="House 123, Street 4, Block B, Model Town"
+                      value={houseAddress}
+                      onChange={(e) => setHouseAddress(e.target.value)}
+                      helperText="Complete residential address"
+                      required
+                    />
+                    <Input
+                      label="Shop Location"
+                      placeholder="Shop 12, Jodia Bazar, Karachi"
+                      value={shopLocation}
+                      onChange={(e) => setShopLocation(e.target.value)}
+                      onFocus={deviceLocation.autoPrompt}
+                      helperText="Your shop's address / market — focus to share your device location"
+                      required
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      label="Warehouse Address"
+                      placeholder="Plot 12, Sindh Industrial Trading Estate, Karachi"
+                      value={houseAddress}
+                      onChange={(e) => setHouseAddress(e.target.value)}
+                      helperText="Complete warehouse address"
+                      required
+                    />
+                    <Input
+                      label="Warehouse Location"
+                      placeholder="Area / City, e.g. SITE, Karachi"
+                      value={currentHouseLocation}
+                      onChange={(e) => setCurrentHouseLocation(e.target.value)}
+                      onFocus={deviceLocation.autoPrompt}
+                      helperText="Focus this field to share your device location"
+                      required
+                    />
+                  </>
+                )}
 
                 {/* GPS capture — opens the browser's location-permission pop-up.
                     The captured point is saved with the account and shown to the
@@ -672,38 +886,35 @@ export default function GetStartedPage() {
 
               <form onSubmit={handleStep2} className="space-y-4">
                 <Input
-                  label="Business / Enterprise Name"
-                  placeholder="Khan Enterprises Ltd."
+                  label={isShopkeeper ? 'Shop Name' : 'Business / Enterprise Name'}
+                  placeholder={isShopkeeper ? 'Ahmed Kiryana Store' : 'Khan Enterprises Ltd.'}
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   required
                 />
 
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Business Categories (select at least one)
-                  </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {CATEGORIES.map((cat) => (
-                      <label
-                        key={cat}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition ${
-                          selectedCategories.includes(cat)
-                            ? 'bg-emerald-50 border-asan-accent text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'border-slate-200 text-slate-600 dark:border-slate-800 dark:text-slate-300'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedCategories.includes(cat)}
-                          onChange={() => toggleCategory(cat)}
-                          className="w-4 h-4 accent-emerald-600"
-                        />
-                        {cat}
-                      </label>
-                    ))}
+                {isShopkeeper ? (
+                  /* Shopkeeper NEVER picks a product category — shop type instead. */
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Shop Type
+                    </label>
+                    <select
+                      value={shopType}
+                      onChange={(e) => setShopType(e.target.value)}
+                      required
+                      className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
+                    >
+                      <option value="" disabled>Select shop type</option>
+                      {SHOP_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
+                ) : (
+                  /* Supplier picks from the 14 master categories via a searchable dropdown. */
+                  <CategoryMultiSelect selected={selectedCategories} onToggle={toggleCategory} />
+                )}
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -727,14 +938,17 @@ export default function GetStartedPage() {
                   </select>
                 </div>
 
-                <Input
-                  label="NTN Number (National Tax Number)"
-                  placeholder="1234567-8"
-                  value={ntn}
-                  onChange={(e) => setNtn(e.target.value)}
-                  helperText="Required for both shopkeeper and supplier accounts"
-                  required
-                />
+                {/* NTN is supplier-only now — shopkeepers upload a utility bill instead. */}
+                {!isShopkeeper && (
+                  <Input
+                    label="NTN Number (National Tax Number)"
+                    placeholder="1234567-8"
+                    value={ntn}
+                    onChange={(e) => setNtn(e.target.value)}
+                    helperText="Required for supplier accounts"
+                    required
+                  />
+                )}
 
                 <div className="flex gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setStep(1)} className="w-1/3">
@@ -755,11 +969,12 @@ export default function GetStartedPage() {
               <div className="mb-6">
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Verification</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Upload your CNIC (front &amp; back) and NTN document — they are reviewed by our
-                  compliance team and shown to the admin for approval
+                  {isShopkeeper
+                    ? 'Upload your CNIC (front & back) and shop utility bill — they are reviewed by our compliance team and shown to the admin for approval'
+                    : 'Upload your CNIC (front & back) and NTN document — they are reviewed by our compliance team and shown to the admin for approval'}
                 </p>
               </div>
-              
+
               <form onSubmit={handleCompleteRegistration} className="space-y-4">
                 {/* KYC documents — the real files attached to this account */}
                 <div className="space-y-3 pt-1">
@@ -768,7 +983,7 @@ export default function GetStartedPage() {
                       Compliance Documents
                     </p>
                     <span className="text-[10px] font-semibold text-slate-400">
-                      {[cnicFrontDraft, cnicBackDraft, ntnDraft].filter(Boolean).length}/3 attached
+                      {attachedCount}/3 attached
                     </span>
                   </div>
 
@@ -786,13 +1001,35 @@ export default function GetStartedPage() {
                     onChange={setCnicBackDraft}
                   />
 
-                  <KycDocumentUpload
-                    label="NTN Certificate / Image"
-                    hint="FBR National Tax Number certificate or scanned copy"
-                    value={ntnDraft}
-                    onChange={setNtnDraft}
-                  />
+                  {isShopkeeper ? (
+                    <KycDocumentUpload
+                      label="Shop Utility Bill"
+                      hint="Electricity, gas or water bill of your shop — must clearly show the account number"
+                      value={utilityBillDraft}
+                      onChange={setUtilityBillDraft}
+                    />
+                  ) : (
+                    <KycDocumentUpload
+                      label="NTN Certificate / Image"
+                      hint="FBR National Tax Number certificate or scanned copy"
+                      value={ntnDraft}
+                      onChange={setNtnDraft}
+                    />
+                  )}
                 </div>
+
+                {/* Shopkeeper only — the bill account number, matched against the
+                    uploaded bill by the admin during verification (no OCR). */}
+                {isShopkeeper && (
+                  <Input
+                    label="Utility Bill Account Number"
+                    placeholder="e.g. 0412345678901"
+                    value={utilityBillAccountNumber}
+                    onChange={(e) => setUtilityBillAccountNumber(e.target.value)}
+                    helperText="Must match the account number on the uploaded bill — verified by admin"
+                    required
+                  />
+                )}
 
                 {/* Terms & Conditions — must be accepted before registration completes */}
                 <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2.5">
