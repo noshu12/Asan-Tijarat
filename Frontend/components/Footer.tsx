@@ -121,6 +121,10 @@ export function Footer() {
 
         <div className="mt-12 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-xs text-emerald-200/60 gap-4">
           <p>© 2026 Asan Tijarat. Final Year Project — Federal Urdu University (FUUAST).</p>
+          <div className="flex items-center gap-5">
+            <Link href="/terms" className="hover:text-white transition">Terms &amp; Conditions</Link>
+            <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
+          </div>
           <p className="text-[11px]">Cutting Out The Middle, Scaling Up The Profit</p>
         </div>
       </div>

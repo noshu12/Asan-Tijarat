@@ -163,6 +163,12 @@ export interface ProductQuery {
   search?: string;
   category?: string;
   sort?: 'price-asc' | 'price-desc';
+  city?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  page?: number;
+  limit?: number;
 }
 
 /**
@@ -374,9 +380,30 @@ export const api = {
       'price-desc': 'price_desc',
     } as const;
     if (query.sort) params.set('sort', SORT_MAP[query.sort]);
+    const city = (query.city || '').trim();
+    if (city) params.set('city', city);
+    if (query.minPrice !== undefined && Number.isFinite(query.minPrice) && query.minPrice >= 0)
+      params.set('minPrice', String(query.minPrice));
+    if (query.maxPrice !== undefined && Number.isFinite(query.maxPrice) && query.maxPrice >= 0)
+      params.set('maxPrice', String(query.maxPrice));
+    if (query.inStock) params.set('inStock', 'true');
+    if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+    if (query.limit !== undefined)
+      params.set('limit', String(Math.min(50, Math.max(1, Math.floor(query.limit)))));
     const suffix = params.toString() ? `?${params.toString()}` : '';
-    return request<{ products: Product[]; count: number }>(`/api/products${suffix}`, { auth: false });
+    return request<{
+      products: Product[];
+      count: number;
+      total?: number;
+      page?: number;
+      limit?: number;
+      totalPages?: number;
+    }>(`/api/products${suffix}`, { auth: false });
   },
+
+  /** Distinct supplier cities with live listings — feeds the marketplace city filter. */
+  productCities: () =>
+    request<{ cities: string[] }>('/api/products/cities', { auth: false }),
 
   product: (id: string) =>
     request<{ product: Product }>(`/api/products/${id}`, { auth: false }),

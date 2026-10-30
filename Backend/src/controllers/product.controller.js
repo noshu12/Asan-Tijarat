@@ -141,11 +141,36 @@ async function getProducts(req, res, next) {
     const search = (req.query.search || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
-      query.$or = [{ name: rx }, { description: rx }, { category: rx }, { supplierName: rx }];
+      query.$or = [{ name: rx }, { description: rx }, { category: rx }, { supplierName: rx }, { supplierCity: rx }];
     }
 
     const category = (req.query.category || '').trim();
-    if (category && category !== 'all') query.category = category;
+    if (category && category !== 'all') {
+      if (!CATEGORIES.includes(category)) {
+        return res.status(400).json({ error: { code: 'INVALID_CATEGORY', message: 'Unknown category filter.' } });
+      }
+      query.category = category;
+    }
+
+    // City filter — exact supplier city (the /cities endpoint lists the valid values).
+    const city = (req.query.city || '').trim();
+    if (city) query.supplierCity = city;
+
+    // Price range filter — invalid numbers are ignored; min > max is swapped, not rejected.
+    let minPrice = Number(req.query.minPrice);
+    let maxPrice = Number(req.query.maxPrice);
+    const priceQuery = {};
+    if (Number.isFinite(minPrice) && minPrice >= 0) priceQuery.$gte = minPrice;
+    if (Number.isFinite(maxPrice) && maxPrice >= 0) priceQuery.$lte = maxPrice;
+    if (priceQuery.$gte !== undefined && priceQuery.$lte !== undefined && priceQuery.$gte > priceQuery.$lte) {
+      const tmp = priceQuery.$gte;
+      priceQuery.$gte = priceQuery.$lte;
+      priceQuery.$lte = tmp;
+    }
+    if (Object.keys(priceQuery).length > 0) query.price = priceQuery;
+
+    // In-stock filter — only listings with units actually available.
+    if (String(req.query.inStock).toLowerCase() === 'true') query.stock = { $gt: 0 };
 
     if (req.query.supplierId) {
       query.supplierId = req.query.supplierId;
@@ -160,8 +185,50 @@ async function getProducts(req, res, next) {
       default: break;
     }
 
-    const products = await Product.find(query).sort(sortClause).lean();
-    res.json({ products: toClient(products), count: products.length });
+    // Server-side pagination — only when the client asks for a page. Older
+    // callers that pass no page/limit keep getting the full list as before.
+    const wantsPages = req.query.page !== undefined || req.query.limit !== undefined;
+    let page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
+
+    const total = await Product.countDocuments(query);
+    if (!wantsPages) {
+      const products = await Product.find(query).sort(sortClause).lean();
+      return res.json({ products: toClient(products), count: products.length });
+    }
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    if (page > totalPages) page = totalPages;
+    const products = await Product.find(query)
+      .sort(sortClause)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+    res.json({
+      products: toClient(products),
+      count: products.length,
+      total,
+      page,
+      limit,
+      totalPages,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/products/cities — distinct supplier cities that have live
+ * listings. Public; only used to populate the marketplace city filter.
+ * Returns city names only, nothing else.
+ */
+async function getProductCities(req, res, next) {
+  try {
+    const cities = await Product.distinct('supplierCity', { status: { $ne: 'Out of Stock' } });
+    const clean = [...new Set(cities.map((c) => String(c || '').trim()).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+    res.json({ cities: clean });
   } catch (err) {
     next(err);
   }
@@ -412,5 +479,5 @@ async function deleteProduct(req, res, next) {
   }
 }
 
-module.exports = { getProducts, getProduct, getProductMarketSale, createProduct, updateProduct, deleteProduct };
+module.exports = { getProducts, getProductCities, getProduct, getProductMarketSale, createProduct, updateProduct, deleteProduct };
 module.exports.deriveStatus = deriveStatus;
