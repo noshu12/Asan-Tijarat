@@ -95,6 +95,33 @@ function checkMoqAgainstStock(moq, stock) {
   return null;
 }
 
+/**
+ * Category ownership — a supplier may only list products in their OWN
+ * categories (the ones on their profile, editable in Settings →
+ * Specialisation). Falls back to the legacy single `category` field.
+ * Returns { code, message } when the category is not allowed, or null when
+ * it is. Checked BEFORE any photo is written, so a rejected category never
+ * leaves orphan files behind.
+ */
+function checkCategoryOwnership(user, category) {
+  const cats = Array.isArray(user.categories) && user.categories.length > 0
+    ? user.categories
+    : (user.category ? [user.category] : []);
+  if (cats.length === 0) {
+    return {
+      code: 'CATEGORY_SETUP_REQUIRED',
+      message: 'Please select your product categories in Settings before adding products.',
+    };
+  }
+  if (!cats.includes(category)) {
+    return {
+      code: 'CATEGORY_NOT_ALLOWED',
+      message: 'You can only list products in your own categories. Update them in Settings if needed.',
+    };
+  }
+  return null;
+}
+
 // Photos are handled separately (they may arrive as base64 uploads to write to
 // disk) — see saveProductImages().
 // NOTE: `status` is deliberately NOT client-mutable — it is always derived
@@ -305,6 +332,10 @@ async function getProductMarketSale(req, res, next) {
  * POST /api/products  (supplier only)
  * Body: { name, category, price, unit?, moq?, stock?, description?,
  *         images?: [{ dataUrl, name }], image?: { dataUrl, name } }
+ *
+ * Category ownership: the category must be one of the supplier's OWN
+ * categories (Settings → Specialisation) — otherwise 403 CATEGORY_NOT_ALLOWED
+ * (or 400 CATEGORY_SETUP_REQUIRED when the supplier has none set yet).
  */
 async function createProduct(req, res, next) {
   try {
@@ -327,6 +358,15 @@ async function createProduct(req, res, next) {
     const moq = b.moq !== undefined ? Math.trunc(Number(b.moq)) : 1;
     const stock = b.stock !== undefined ? Math.trunc(Number(b.stock)) : 0;
     const description = b.description ? String(b.description) : '';
+
+    // Category ownership — a supplier may only publish in their OWN
+    // categories (Settings → Specialisation). Rejected BEFORE photos are
+    // written, so nothing orphaned stays on disk.
+    const ownershipError = checkCategoryOwnership(supplier, category);
+    if (ownershipError) {
+      const statusCode = ownershipError.code === 'CATEGORY_NOT_ALLOWED' ? 403 : 400;
+      return res.status(statusCode).json({ error: ownershipError });
+    }
 
     const moqStockError = checkMoqAgainstStock(moq, stock);
     if (moqStockError) {
@@ -377,6 +417,10 @@ async function createProduct(req, res, next) {
 
 /**
  * PATCH /api/products/:id  (supplier owner only)
+ *
+ * Changing the category is allowed only to one of the supplier's OWN
+ * categories — otherwise 403 CATEGORY_NOT_ALLOWED. Edits that keep the
+ * existing category are unaffected.
  */
 async function updateProduct(req, res, next) {
   try {
@@ -396,6 +440,17 @@ async function updateProduct(req, res, next) {
       return res.status(400).json({
         error: { code: 'INVALID_CATEGORY', message: 'Category must be one of the 14 master categories.' },
       });
+    }
+
+    // Category ownership on change — the new category must be one of the
+    // supplier's OWN categories (Settings → Specialisation). Edits that do
+    // not touch the category are unaffected, so older listings stay editable.
+    if (req.body.category !== undefined) {
+      const ownershipError = checkCategoryOwnership(req.user, String(req.body.category).trim());
+      if (ownershipError) {
+        const statusCode = ownershipError.code === 'CATEGORY_NOT_ALLOWED' ? 403 : 400;
+        return res.status(statusCode).json({ error: ownershipError });
+      }
     }
 
     // Validate the incoming fields first — never assign raw client values.

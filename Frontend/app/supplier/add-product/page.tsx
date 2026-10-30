@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { toProductImagePayload } from '@/lib/uploads';
 import { Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthProvider';
 
 const CATEGORIES = [
   'Staples, Grains & Flours',
@@ -31,6 +32,7 @@ const PACK_TYPES = ['bag', 'carton', 'tin', 'box', 'drum', 'pack'];
 
 export default function SupplierAddProductPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
@@ -46,6 +48,27 @@ export default function SupplierAddProductPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Category ownership — a supplier may only publish in their OWN categories
+  // (the ones on their profile, editable in Settings → Specialisation).
+  // Falls back to the legacy single `category` field. Changing categories in
+  // Settings automatically changes this dropdown, because both read the same
+  // `user.categories`.
+  const allowedCategories = React.useMemo(() => {
+    const raw: string[] =
+      Array.isArray(user?.categories) && user.categories.length > 0
+        ? user.categories
+        : user?.category
+          ? [user.category]
+          : [];
+    return CATEGORIES.filter((c) => raw.includes(c));
+  }, [user]);
+
+  // If the selected category is no longer one of the supplier's own (e.g. it
+  // was removed in Settings), clear it so the form cannot submit it.
+  useEffect(() => {
+    if (category && !allowedCategories.includes(category)) setCategory('');
+  }, [allowedCategories, category]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -57,6 +80,10 @@ export default function SupplierAddProductPage() {
     const parsedStock = Number(stock);
     if (!name.trim()) { setFormError('Product name is required.'); return; }
     if (!category) { setFormError('Category is required.'); return; }
+    if (!allowedCategories.includes(category)) {
+      setFormError('Please choose one of your own categories (Settings → Specialisation).');
+      return;
+    }
     if (!packType) { setFormError('Pack type is required.'); return; }
     if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) { setFormError('Pack weight must be a positive number.'); return; }
     if (!description.trim()) { setFormError('Product description is required.'); return; }
@@ -110,13 +137,25 @@ export default function SupplierAddProductPage() {
           <p className="text-sm text-slate-500">Publish a listing to the marketplace</p>
         </div>
       </div>
+      {!authLoading && allowedCategories.length === 0 && (
+        <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 max-w-2xl">
+          You haven&apos;t selected your product categories yet.{' '}
+          <Link href="/supplier/settings" className="font-semibold underline">Choose them in Settings</Link>{' '}
+          before publishing a product — you can only list in your own categories.
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
         <Input label="Product Name" value={name} onChange={e => setName(e.target.value)} placeholder="Premium Basmati Rice" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <label className="block"><span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Category</span>
-            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20">
-              <option value="" disabled>Select category</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              disabled={authLoading || allowedCategories.length === 0}
+              className="w-full h-11 px-4 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm dark:text-white focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 disabled:opacity-60"
+            >
+              <option value="" disabled>{authLoading ? 'Loading…' : 'Select category'}</option>
+              {allowedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
           <Input label="Price per pack (PKR)" type="number" min={1} step={0.01} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="450" />
