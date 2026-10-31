@@ -6,7 +6,7 @@ import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Trash2, UserPlus } from 'lucide-react';
 import { api, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { formatDate } from '@/lib/utils';
@@ -29,6 +29,7 @@ export default function AdminSubadminsPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -73,6 +74,7 @@ export default function AdminSubadminsPage() {
       setEmail('');
       setPhone('');
       setPassword('');
+      setShowPassword(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create sub-admin');
@@ -110,7 +112,7 @@ export default function AdminSubadminsPage() {
     <div className="space-y-6">
       <PortalHeader
         title="Sub-Admins"
-        subtitle="KYC reviewers — they verify users and view KYC documents only."
+        subtitle="KYC reviewers — they verify users and view KYC documents only"
       />
 
       {error && (
@@ -153,13 +155,25 @@ export default function AdminSubadminsPage() {
             onChange={(e) => setPhone(e.target.value)}
             disabled={creating || subs.length >= max}
           />
-          <Input
-            placeholder="Password (min 8 characters)"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={creating || subs.length >= max}
-          />
+          <div className="relative w-full">
+            <input
+              placeholder="Password (min 8 characters)"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={creating || subs.length >= max}
+              className="w-full h-11 px-4 pr-11 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:border-asan-accent focus:outline-none focus:ring-2 focus:ring-asan-accent/20 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-asan-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              disabled={creating || subs.length >= max}
+              title={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
           <div className="sm:col-span-2">
             <Button type="submit" isLoading={creating} disabled={creating || subs.length >= max}>
               Create sub-admin account

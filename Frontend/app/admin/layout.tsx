@@ -17,14 +17,16 @@ function AdminGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
 
-  if (user?.role === 'subadmin' && pathname !== '/admin/users') {
+  // Sub-admins may use Users & KYC and Messages; everything else under /admin stays blocked.
+  const subadminAllowed = pathname === '/admin/users' || pathname === '/admin/messages';
+  if (user?.role === 'subadmin' && !subadminAllowed) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
         <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
           Not authorized
         </p>
         <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-          Your reviewer account can only verify users and view KYC documents.
+          Your support account can manage users, KYC and messages only.
         </p>
         <a
           href="/admin/users"

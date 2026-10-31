@@ -5,7 +5,8 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Ban, ChevronDown, Search, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
+import { Ban, ChevronDown, Search, ShieldCheck, Trash2, UserCheck, Users } from 'lucide-react';
+import Link from 'next/link';
 import { KycDocumentViewer } from '@/components/KycDocumentViewer';
 import { MapsLink } from '@/components/MapsLink';
 import { api, AdminUser } from '@/lib/api';
@@ -90,7 +91,9 @@ export default function AdminUsersPage() {
   const { user, loading: authLoading } = useAuth();
   // Sub-admins (KYC reviewers) may ONLY verify/unverify + view KYC docs.
   // Suspend / activate / reject / delete stay main-admin-only.
-  const isSubadmin = user?.role === 'subadmin';
+  // NOTE: sub-admins now share every action on this page with the main admin
+  // (verify/suspend/activate/reject/delete). Target guard below keeps
+  // admin + subadmin accounts themselves out of reach.
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roleFilter, setRoleFilter] = useState('all');
   const [verifiedFilter, setVerifiedFilter] = useState('all');
@@ -117,7 +120,8 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || user.role !== 'admin') {
+    // Sub-admins share this page (verify/unverify + KYC view only).
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
       setLoading(false);
       return;
     }
@@ -206,7 +210,13 @@ export default function AdminUsersPage() {
     );
   }
 
+  const isMainAdmin = user?.role === 'admin';
+  // Three separate boxes: admins, sub-admins, and regular users.
+  const adminUsers = users.filter((u) => u.role === 'admin');
+  const subadminUsers = users.filter((u) => u.role === 'subadmin');
+
   const filteredUsers = users.filter((u) => {
+    if (u.role === 'admin' || u.role === 'subadmin') return false; // own boxes above
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
     if (verifiedFilter === 'true' && !u.verified) return false;
     if (verifiedFilter === 'false' && u.verified) return false;
@@ -253,7 +263,6 @@ export default function AdminUsersPage() {
           <option value="all">All Roles</option>
           <option value="supplier">Suppliers</option>
           <option value="shopkeeper">Shopkeepers</option>
-          <option value="admin">Admins</option>
         </select>
         <select
           value={verifiedFilter}
@@ -267,6 +276,76 @@ export default function AdminUsersPage() {
         <Button type="button" variant="outline" onClick={() => void loadUsers()}>
           Apply
         </Button>
+      </div>
+      {/* ── Box 1: Administrators (main admin only) ── */}
+      {isMainAdmin && !loading && adminUsers.length > 0 && (
+        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldCheck className="w-5 h-5 text-asan-accent" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Administrators</h2>
+            <span className="text-xs text-slate-500">({adminUsers.length})</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {adminUsers.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 dark:border-slate-800 p-3">
+                <div className="w-10 h-10 shrink-0 rounded-full bg-asan-accent/15 text-asan-accent flex items-center justify-center font-bold text-sm">
+                  {(a.name || a.email || '?')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    {a.name}
+                    {a.id === user?.id && (
+                      <span className="ml-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-asan-accent/15 text-asan-accent">You</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">{a.email}</p>
+                  <p className="text-xs text-slate-400">Joined {a.createdAt ? formatDate(a.createdAt) : '—'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* ── Box 2: Sub-Admins (main admin only) ── */}
+      {isMainAdmin && !loading && (
+        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-asan-accent" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Sub-Admins</h2>
+              <span className="text-xs text-slate-500">({subadminUsers.length}/10)</span>
+            </div>
+            <Link href="/admin/subadmins" className="text-xs font-semibold text-asan-accent hover:underline">
+              Manage →
+            </Link>
+          </div>
+          {subadminUsers.length === 0 ? (
+            <p className="text-xs text-slate-500">No sub-admins yet — create them from the Sub-Admins page.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {subadminUsers.map((s) => (
+                <div key={s.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 dark:border-slate-800 p-3">
+                  <div className="w-10 h-10 shrink-0 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold text-sm">
+                    {(s.name || s.email || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{s.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{s.email}</p>
+                    <span className={`inline-block mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${s.twoFactorEnabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}`}>
+                      {s.twoFactorEnabled ? '2FA On' : '2FA Pending'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── Box 3: regular users (shopkeepers & suppliers) ── */}
+      <div className="flex items-center gap-2">
+        <UserCheck className="w-5 h-5 text-asan-accent" />
+        <h2 className="text-base font-bold text-slate-900 dark:text-white">Users</h2>
+        <span className="text-xs text-slate-500">Shopkeepers & Suppliers</span>
       </div>
       {loading ? (
         <Loader />
@@ -406,7 +485,7 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {u.role !== 'admin' && (
+                          {u.role !== 'admin' && u.role !== 'subadmin' && (
                             <Button
                               size="sm"
                               variant={u.verified ? 'outline' : 'primary'}
@@ -427,7 +506,7 @@ export default function AdminUsersPage() {
                               {u.verified ? 'Unverify' : 'Verify'}
                             </Button>
                           )}
-                          {!isSubadmin && u.role !== 'admin' && status !== 'suspended' && status !== 'rejected' && (
+                          {u.role !== 'admin' && u.role !== 'subadmin' && status !== 'suspended' && status !== 'rejected' && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -440,7 +519,7 @@ export default function AdminUsersPage() {
                               Suspend
                             </Button>
                           )}
-                          {!isSubadmin && u.role !== 'admin' && status === 'suspended' && (
+                          {u.role !== 'admin' && u.role !== 'subadmin' && status === 'suspended' && (
                             <Button
                               size="sm"
                               variant="primary"
@@ -453,7 +532,7 @@ export default function AdminUsersPage() {
                               Activate
                             </Button>
                           )}
-                          {!isSubadmin && u.role !== 'admin' && status === 'pending' && (
+                          {u.role !== 'admin' && u.role !== 'subadmin' && status === 'pending' && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -465,7 +544,7 @@ export default function AdminUsersPage() {
                               Reject
                             </Button>
                           )}
-                          {!isSubadmin && u.role !== 'admin' && (
+                          {u.role !== 'admin' && u.role !== 'subadmin' && (
                             <button
                               type="button"
                               title="Delete account"

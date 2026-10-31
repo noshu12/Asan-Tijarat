@@ -40,7 +40,8 @@ export default function AdminMessagesPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || user.role !== 'admin') {
+    // Sub-admins share the messages inbox with the main admin.
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
       setLoading(false);
       return;
     }
@@ -104,12 +105,13 @@ export default function AdminMessagesPage() {
     );
   }
 
-  if (!user || user.role !== 'admin') {
+  // Sub-admins share the messages inbox with the main admin.
+  if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
     return (
       <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
         <ShieldCheck className="w-10 h-10 text-red-400 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-slate-900 dark:text-white">Admins only</h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Sign in with an admin account to read contact messages.</p>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Sign in with an admin or support account to read contact messages.</p>
       </div>
     );
   }

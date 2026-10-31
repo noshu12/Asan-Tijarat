@@ -66,9 +66,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     { name: 'Sub-Admins', href: '/admin/subadmins', icon: UserCog },
   ];
 
-  // Sub-admins (KYC reviewers) see ONLY the Users & KYC page.
+  // Sub-admins see Users & KYC + Messages (full options on both).
   const subadminNav = [
     { name: 'Users & KYC', href: '/admin/users', icon: Users },
+    { name: 'Messages', href: '/admin/messages', icon: Mail },
   ];
 
   const isSubadmin = user?.role === 'subadmin';
@@ -128,7 +129,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <div className="truncate">
               <p className="text-xs font-bold text-white truncate">{displayName}</p>
               <p className="text-[11px] text-emerald-300/80 truncate capitalize">
-                {displayRole === 'admin' ? 'Administrator' : displayRole === 'supplier' ? 'Supplier' : 'Shopkeeper'}
+                {displayRole === 'admin' ? 'Administrator' : displayRole === 'supplier' ? 'Supplier' : displayRole === 'subadmin' ? 'Sub Admin' : 'Shopkeeper'}
               </p>
             </div>
           </div>
