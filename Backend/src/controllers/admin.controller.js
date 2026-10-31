@@ -104,7 +104,16 @@ async function listUsers(req, res, next) {
     }
 
     const users = await User.find(query).sort({ createdAt: -1 }).limit(300).lean();
-    res.json({ users: toClient(users), count: users.length });
+    const safe = toClient(users).map((u) => {
+      // Identity numbers are encrypted at rest — never send ciphertext to
+      // the list view. The admin reveals them per-user via
+      // GET /api/admin/users/:id/identity (audited).
+      delete u.cnic;
+      delete u.ntn;
+      delete u.utilityBillAccountNumber;
+      return u;
+    });
+    res.json({ users: safe, count: users.length });
   } catch (err) {
     next(err);
   }
@@ -525,6 +534,133 @@ async function replyContact(req, res, next) {
   }
 }
 
+/**
+ * GET /api/admin/users/:id/identity  (admin only)
+ * Decrypts the user's identity numbers (CNIC / NTN / utility bill account)
+ * for the admin KYC review. Every view is written to the audit log.
+ */
+async function getDecryptedIdentity(req, res, next) {
+  try {
+    const { decrypt } = require('../utils/encryption');
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        error: { code: 'USER_NOT_FOUND', message: 'No user matches that id.' },
+      });
+    }
+    const identity = {
+      cnic: user.cnic ? decrypt(user.cnic) : '',
+      ntn: user.ntn ? decrypt(user.ntn) : '',
+      utilityBillAccountNumber: user.utilityBillAccountNumber
+        ? decrypt(user.utilityBillAccountNumber)
+        : '',
+    };
+    await logAdminAction(req, 'IDENTITY_VIEWED', 'User', req.params.id, {
+      email: user.email || '',
+    });
+    res.json({ identity });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Sub-admin management — ADMIN ONLY.
+ * The main admin creates up to 10 sub-admin accounts (KYC reviewers).
+ * Sub-admins verify/unverify users and view KYC docs; they cannot delete
+ * users, touch settings, or read the audit log (enforced by route roles).
+ */
+const MAX_SUBADMINS = 10;
+
+/** GET /api/admin/subadmins — list all sub-admin accounts. */
+async function listSubadmins(req, res, next) {
+  try {
+    const subs = await User.find({ role: 'subadmin' }).sort({ createdAt: -1 }).lean();
+    res.json({ subadmins: toClient(subs), count: subs.length, max: MAX_SUBADMINS });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/admin/subadmins — create one sub-admin account.
+ * Body: { name, email, password }. The account is active immediately
+ * (verified + emailVerified, no OTP) because the admin creates it directly.
+ * 2FA stays OFF until the sub-admin finishes the mandatory first-time setup
+ * on their first sign-in — without it, no session is ever issued.
+ */
+async function createSubadmin(req, res, next) {
+  try {
+    const { name, email, password, phone } = req.body || {};
+    if (!name || !String(name).trim() || !email || !String(email).trim() || !password) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'name, email and password are required.' },
+      });
+    }
+    const cleanEmail = String(email).toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.' },
+      });
+    }
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        error: { code: 'WEAK_PASSWORD', message: 'Password must be at least 8 characters.' },
+      });
+    }
+    const existing = await User.findOne({ email: cleanEmail });
+    if (existing) {
+      return res.status(409).json({
+        error: { code: 'EMAIL_TAKEN', message: 'An account with this email already exists.' },
+      });
+    }
+    const count = await User.countDocuments({ role: 'subadmin' });
+    if (count >= MAX_SUBADMINS) {
+      return res.status(403).json({
+        error: {
+          code: 'SUBADMIN_LIMIT_REACHED',
+          message: `Maximum ${MAX_SUBADMINS} sub-admin accounts allowed.`,
+        },
+      });
+    }
+    const sub = new User({
+      name: String(name).trim(),
+      email: cleanEmail,
+      // Phone is optional for staff accounts ('-' placeholder keeps the
+      // model's required:true happy; email is the login identifier).
+      phone: phone && String(phone).trim() ? String(phone).trim() : '-',
+      password: String(password),
+      role: 'subadmin',
+      verified: true,
+      status: 'active',
+      emailVerified: true,
+    });
+    await sub.save();
+    await logAdminAction(req, 'SUBADMIN_CREATED', 'User', sub._id, { email: cleanEmail });
+    res.status(201).json({ subadmin: sub.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** DELETE /api/admin/subadmins/:id — remove one sub-admin account. */
+async function deleteSubadmin(req, res, next) {
+  try {
+    const sub = await User.findOne({ _id: req.params.id, role: 'subadmin' });
+    if (!sub) {
+      return res.status(404).json({
+        error: { code: 'SUBADMIN_NOT_FOUND', message: 'No sub-admin matches that id.' },
+      });
+    }
+    const email = sub.email;
+    await sub.deleteOne();
+    await logAdminAction(req, 'SUBADMIN_DELETED', 'User', req.params.id, { email });
+    res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getStats,
   listUsers,
@@ -534,6 +670,10 @@ module.exports = {
   rejectUser,
   deleteUser,
   getKycDocument,
+  getDecryptedIdentity,
+  listSubadmins,
+  createSubadmin,
+  deleteSubadmin,
   listProducts,
   deleteProduct,
   listOrders,
@@ -542,3 +682,4 @@ module.exports = {
   deleteContact,
   replyContact,
 };
+

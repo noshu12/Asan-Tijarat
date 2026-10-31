@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin } = require('../controllers/auth.controller');
+const { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
 const { protect, requireRole } = require('../middleware/auth');
 
 router.post('/register', register);
@@ -17,6 +17,11 @@ router.post('/2fa/setup', protect, requireRole('admin'), setupTwoFactor);
 router.post('/2fa/verify-setup', protect, requireRole('admin'), verifyTwoFactorSetup);
 router.post('/2fa/disable', protect, requireRole('admin'), disableTwoFactor);
 router.post('/2fa/login', verifyTwoFactorLogin);
+// Sub-admin FIRST-TIME 2FA setup — public, gated by the short-lived setup
+// tempToken login() issued with requires2FASetup:true (the sub-admin has no
+// session yet, so protect() cannot be used here).
+router.post('/2fa/setup-first', setupTwoFactorFirst);
+router.post('/2fa/verify-setup-first', verifyTwoFactorSetupFirst);
 router.post('/logout', protect, logout);
 router.get('/me', protect, me);
 // Self-service profile + password management (settings pages).

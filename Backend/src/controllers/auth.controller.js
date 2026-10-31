@@ -424,6 +424,19 @@ async function login(req, res, next) {
       });
     }
 
+    // Sub-admin 2FA is MANDATORY — a sub-admin who never finished the
+    // first-time setup cannot sign in at all. Hand back a short-lived setup
+    // token and let POST /api/auth/2fa/setup-first finish the job. There is
+    // no bypass: without 2FA enabled, no session is ever issued.
+    if (user.role === 'subadmin' && !user.twoFactorEnabled) {
+      const setupToken = jwt.sign(
+        { id: user._id, purpose: '2fa-setup' },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requires2FASetup: true, tempToken: setupToken });
+    }
+
     user.loginAttempts = 0;
     user.lockUntil = undefined;
     await user.save();
@@ -432,7 +445,7 @@ async function login(req, res, next) {
     // enabled TOTP, do NOT sign them in yet: hand back a short-lived 2FA
     // token and let POST /api/auth/2fa/login finish the job after the
     // 6-digit authenticator code is verified.
-    if (user.role === 'admin' && user.twoFactorEnabled) {
+    if ((user.role === 'admin' || user.role === 'subadmin') && user.twoFactorEnabled) {
       const tempToken = jwt.sign(
         { id: user._id, purpose: '2fa' },
         process.env.JWT_SECRET,
@@ -578,6 +591,108 @@ async function disableTwoFactor(req, res, next) {
 }
 
 /**
+ * POST /api/auth/2fa/setup-first  (public — carries the setup tempToken)
+ * First-time 2FA setup for SUB-ADMINS. Body: { tempToken } — the 5-minute
+ * JWT login() returned with requires2FASetup:true (purpose '2fa-setup').
+ * The sub-admin has no session yet, so this is gated by the tempToken, not
+ * by protect(). Generates a fresh TOTP secret, stores it as the PENDING
+ * secret and returns the otpauth URL + QR data URL. 2FA is NOT enabled until
+ * POST /api/auth/2fa/verify-setup-first confirms the first code.
+ */
+async function setupTwoFactorFirst(req, res, next) {
+  try {
+    const { tempToken } = req.body || {};
+    if (!tempToken) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'tempToken is required.' },
+      });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({
+        error: { code: 'TWO_FACTOR_TOKEN_EXPIRED', message: 'The setup session expired. Please sign in again.' },
+      });
+    }
+    if (!payload || payload.purpose !== '2fa-setup' || !payload.id) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid setup session. Please sign in again.' },
+      });
+    }
+    const user = await User.findById(payload.id);
+    if (!user || user.role !== 'subadmin') {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid setup session. Please sign in again.' },
+      });
+    }
+    if (user.twoFactorEnabled) {
+      return res.status(400).json({
+        error: { code: 'TWO_FACTOR_ALREADY_ENABLED', message: 'Two-factor authentication is already enabled. Please sign in.' },
+      });
+    }
+    const secret = authenticator.generateSecret();
+    user.twoFactorTempSecret = secret;
+    await user.save();
+    const otpauthUrl = authenticator.keyuri(user.email, 'Asan Tijarat', secret);
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
+    res.json({ otpauthUrl, qrDataUrl });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/verify-setup-first  (public — carries the setup tempToken)
+ * Body: { tempToken, token } — token is the 6-digit code from the
+ * authenticator app. Confirms the pending secret and enables 2FA for the
+ * sub-admin. After this, normal sign-in works: password → requires2FA →
+ * 6-digit code → session.
+ */
+async function verifyTwoFactorSetupFirst(req, res, next) {
+  try {
+    const { tempToken, token } = req.body || {};
+    if (!tempToken || !token) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'tempToken and token are required.' },
+      });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({
+        error: { code: 'TWO_FACTOR_TOKEN_EXPIRED', message: 'The setup session expired. Please sign in again.' },
+      });
+    }
+    if (!payload || payload.purpose !== '2fa-setup' || !payload.id) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid setup session. Please sign in again.' },
+      });
+    }
+    const user = await User.findById(payload.id).select('+twoFactorTempSecret');
+    if (!user || user.role !== 'subadmin' || !user.twoFactorTempSecret) {
+      return res.status(400).json({
+        error: { code: 'TWO_FACTOR_SETUP_NOT_STARTED', message: 'Start setup first to get a QR code.' },
+      });
+    }
+    const ok = authenticator.check(String(token).trim(), user.twoFactorTempSecret);
+    if (!ok) {
+      return res.status(400).json({
+        error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
+      });
+    }
+    user.twoFactorSecret = user.twoFactorTempSecret;
+    user.twoFactorTempSecret = undefined;
+    user.twoFactorEnabled = true;
+    await user.save();
+    res.json({ enabled: true, message: 'Two-factor authentication enabled. Please sign in.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/auth/2fa/login  (public — carries the tempToken from login)
  * Body: { tempToken, token } — tempToken is the 5-minute JWT login() returned
  * with requires2FA:true; token is the 6-digit authenticator code.
@@ -605,7 +720,7 @@ async function verifyTwoFactorLogin(req, res, next) {
       });
     }
     const user = await User.findById(payload.id).select('+twoFactorSecret');
-    if (!user || user.role !== 'admin' || !user.twoFactorEnabled || !user.twoFactorSecret) {
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin') || !user.twoFactorEnabled || !user.twoFactorSecret) {
       return res.status(401).json({
         error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid two-factor session. Please sign in again.' },
       });
@@ -882,4 +997,4 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin };
+module.exports = { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst };

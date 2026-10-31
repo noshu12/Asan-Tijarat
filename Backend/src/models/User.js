@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { CATEGORIES } = require('../constants/categories');
+const { encrypt, decrypt } = require('../utils/encryption');
 
 /**
  * Shop types for the shopkeeper form — a shopkeeper NEVER picks a product
@@ -61,6 +62,7 @@ const { deviceLocationSchema } = require('../utils/location');
 /**
  * User — mirrors Frontend/lib/types.ts `User` interface.
  * role: 'shopkeeper' (buyer) | 'supplier' (seller) | 'admin' (platform operator)
+ *       | 'subadmin' (KYC reviewer — verify/unverify users only, created by admin)
  *
  * categories: MULTI-SELECT list from the 14 master categories — this is what
  * the supplier dropdown at account creation stores. `category` is kept only
@@ -84,7 +86,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     phone: { type: String, required: true, trim: true },
     password: { type: String, required: true, select: false },
-    role: { type: String, enum: ['shopkeeper', 'supplier', 'admin'], required: true, index: true },
+    role: { type: String, enum: ['shopkeeper', 'supplier', 'admin', 'subadmin'], required: true, index: true },
     businessName: { type: String, trim: true },
     city: { type: String, trim: true },
     // Residential details collected at registration (shopkeepers & suppliers)
@@ -194,8 +196,19 @@ userSchema.pre('validate', async function () {
 
 // Hash the password before every save/create.
 // (Mongoose 9 dropped the `next` callback — async middleware only.)
+// Sensitive identity numbers are encrypted at rest (AES-256-GCM).
+// Only plaintext values are encrypted — encrypt() itself is idempotent,
+// and isModified() skips documents whose values did not change, so
+// already-encrypted values are never double-encrypted.
+const ENCRYPTED_FIELDS = ['cnic', 'ntn', 'utilityBillAccountNumber'];
+
 userSchema.pre('save', async function () {
   syncCategories(this);
+  for (const field of ENCRYPTED_FIELDS) {
+    if (this.isModified(field) && this[field]) {
+      this[field] = encrypt(this[field]);
+    }
+  }
   if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, 10);
 });
@@ -214,7 +227,13 @@ userSchema.methods.toSafeJSON = function () {
   delete doc.resetPasswordTokenHash;
   delete doc.twoFactorSecret;
   delete doc.twoFactorTempSecret;
+  // The user sees their own identity numbers in plaintext in their
+  // profile/settings. decrypt() returns legacy plaintext values as-is.
+  for (const field of ENCRYPTED_FIELDS) {
+    if (doc[field]) doc[field] = decrypt(doc[field]);
+  }
   return doc;
 };
 
 module.exports = mongoose.model('User', userSchema);
+

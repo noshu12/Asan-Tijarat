@@ -105,6 +105,9 @@ async function createOrder(req, res, next) {
           },
         });
       }
+      // Fast, friendly pre-check only — stock can change between this read
+      // and the write below, so the ATOMIC update further down is the real
+      // gate that prevents overselling.
       if (item.quantity > product.stock) {
         return res.status(409).json({
           error: {
@@ -142,6 +145,40 @@ async function createOrder(req, res, next) {
     const created = [];
 
     for (const group of groups.values()) {
+      // RACE-CONDITION FIX: reserve stock ATOMICALLY before creating the
+      // order. The filter itself demands enough stock
+      // ({ stock: { $gte: quantity } }), so two simultaneous checkouts can
+      // never oversell the same product — the loser gets modifiedCount 0.
+      // Previously this was read-then-write (check stock, create order,
+      // then $inc), which oversells under concurrent orders.
+      const reserved = [];
+      let failedLine = null;
+      for (const line of group.items) {
+        const r = await Product.updateOne(
+          { _id: line.productId, stock: { $gte: line.quantity } },
+          { $inc: { stock: -line.quantity } }
+        );
+        if (r.modifiedCount === 0) {
+          failedLine = line;
+          break;
+        }
+        reserved.push(line);
+      }
+      if (failedLine) {
+        // Another checkout grabbed the stock first — give back whatever
+        // this checkout reserved, then fail cleanly with 409.
+        for (const line of reserved) {
+          await Product.updateOne({ _id: line.productId }, { $inc: { stock: line.quantity } });
+        }
+        return res.status(409).json({
+          error: {
+            code: 'INSUFFICIENT_STOCK',
+            message: `"${failedLine.productName}" just ran low. Please lower the quantity and try again.`,
+          },
+        });
+      }
+
+      // Stock is reserved — now create the order.
       // Strip internal fields before persisting the item snapshots.
       const safeItems = group.items.map(({ _supplierId, _lineTotal, ...rest }) => rest);
 
@@ -163,14 +200,6 @@ async function createOrder(req, res, next) {
         buyerLocationLink,
       });
       created.push(order);
-
-      // Decrement stock on each purchased product.
-      for (const line of group.items) {
-        await Product.updateOne(
-          { _id: line.productId },
-          { $inc: { stock: -line.quantity } }
-        );
-      }
     }
 
     res.status(201).json({ orders: created, count: created.length });
