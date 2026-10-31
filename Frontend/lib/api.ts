@@ -261,7 +261,7 @@ export const api = {
    * Everyone else gets `{ user }` and the httpOnly session cookie as before.
    */
   login: (identifier: string, password: string) =>
-    request<{ user: User } | { requires2FA: true; tempToken: string }>('/api/auth/login', {
+    request<{ user: User } | { requires2FA: true; tempToken: string } | { requires2FASetup: true; tempToken: string }>('/api/auth/login', {
       method: 'POST',
       body: { identifier, password },
       auth: false,
@@ -305,6 +305,25 @@ export const api = {
    */
   verifyTwoFactorLogin: (tempToken: string, token: string) =>
     request<{ user: User }>('/api/auth/2fa/login', {
+      method: 'POST',
+      body: { tempToken, token },
+      auth: false,
+    }),
+
+  /**
+   * Sub-admin FIRST-TIME 2FA setup (mandatory — no session exists yet, so
+   * these are public and gated by the setup tempToken from login()).
+   */
+  setupTwoFactorFirst: (tempToken: string) =>
+    request<{ otpauthUrl: string; qrDataUrl: string }>('/api/auth/2fa/setup-first', {
+      method: 'POST',
+      body: { tempToken },
+      auth: false,
+    }),
+
+  /** Confirm the first 6-digit code to enable 2FA for the sub-admin. */
+  verifyTwoFactorSetupFirst: (tempToken: string, token: string) =>
+    request<{ enabled: boolean; message: string }>('/api/auth/2fa/verify-setup-first', {
       method: 'POST',
       body: { tempToken, token },
       auth: false,
@@ -465,6 +484,28 @@ export const api = {
 
     deleteUser: (id: string) =>
       request<{ deleted: boolean; id: string }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
+
+    /** Sub-admin accounts — main admin only (max 10). */
+    subadmins: () =>
+      request<{ subadmins: AdminUser[]; count: number; max: number }>('/api/admin/subadmins'),
+
+    createSubadmin: (name: string, email: string, password: string, phone?: string) =>
+      request<{ subadmin: AdminUser }>(`/api/admin/subadmins`, {
+        method: 'POST',
+        body: { name, email, password, phone },
+      }),
+
+    deleteSubadmin: (id: string) =>
+      request<{ deleted: boolean; id: string }>(`/api/admin/subadmins/${id}`, { method: 'DELETE' }),
+
+    /**
+     * Decrypt-and-view a user's identity numbers (CNIC / NTN / utility bill
+     * account). Admin only; every view is written to the audit log.
+     */
+    getDecryptedIdentity: (id: string) =>
+      request<{ identity: { cnic: string; ntn: string; utilityBillAccountNumber: string } }>(
+        `/api/admin/users/${id}/identity`
+      ),
 
     products: (query: { search?: string; status?: string } = {}) => {
       const params = new URLSearchParams();

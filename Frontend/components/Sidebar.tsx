@@ -16,6 +16,7 @@ import {
   Boxes,
   ShieldCheck,
   Mail,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthProvider';
@@ -27,7 +28,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   const isAdmin = pathname.startsWith('/admin');
   const isSupplier = pathname.startsWith('/supplier');
-  const fallbackName = isAdmin ? 'Platform Admin' : isSupplier ? 'Ahmed Khan' : 'M. Hassan';
+  const fallbackName = isAdmin ? (user?.role === 'subadmin' ? 'KYC Reviewer' : 'Platform Admin') : isSupplier ? 'Ahmed Khan' : 'M. Hassan';
   const displayName = authLoading
     ? 'Loading…'
     : (user?.businessName || user?.name || fallbackName);
@@ -62,9 +63,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     { name: 'Orders', href: '/admin/orders', icon: Package },
     { name: 'Security', href: '/admin/security', icon: ShieldCheck },
     { name: 'Messages', href: '/admin/messages', icon: Mail },
+    { name: 'Sub-Admins', href: '/admin/subadmins', icon: UserCog },
   ];
 
-  const links = isAdmin ? adminNav : isSupplier ? supplierNav : shopkeeperNav;
+  // Sub-admins (KYC reviewers) see ONLY the Users & KYC page.
+  const subadminNav = [
+    { name: 'Users & KYC', href: '/admin/users', icon: Users },
+  ];
+
+  const isSubadmin = user?.role === 'subadmin';
+  const links = isSubadmin ? subadminNav : isAdmin ? adminNav : isSupplier ? supplierNav : shopkeeperNav;
 
   return (
     <aside className="w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 bg-asan-dark text-white flex flex-col justify-between p-4 shadow-xl select-none overflow-y-auto">

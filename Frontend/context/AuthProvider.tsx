@@ -4,9 +4,11 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { api } from '@/lib/api';
 import type { User } from '@/lib/types';
 
-/** What login() hands back — either a signed-in session or a 2FA challenge. */
+/** What login() hands back — a signed-in session, a 2FA challenge, or a
+ *  mandatory first-time 2FA setup (sub-admins). */
 export interface LoginResult {
   requires2FA: boolean;
+  requires2FASetup?: boolean;
   tempToken?: string;
 }
 
@@ -71,6 +73,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (identifier: string, password: string): Promise<LoginResult> => {
     const res = await api.login(identifier.trim(), password);
+    if ('requires2FASetup' in res) {
+      // Sub-admin first sign-in — 2FA setup is mandatory before any session.
+      // The caller redirects to the setup page with the tempToken.
+      return { requires2FA: false, requires2FASetup: true, tempToken: res.tempToken };
+    }
     if ('requires2FA' in res) {
       // Admin with 2FA enabled — the password was correct but there is no
       // session yet (no cookie was issued). The caller shows the 6-digit

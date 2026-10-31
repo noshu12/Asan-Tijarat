@@ -30,8 +30,67 @@ function statusLabel(status: string): string {
   return 'Pending';
 }
 
+// Identity numbers are encrypted at rest — the users list API never sends
+// them. The admin reveals one user's numbers per click; every view is
+// written to the audit log on the backend.
+function SensitiveValue({
+  userId,
+  field,
+}: {
+  userId: string;
+  field: 'cnic' | 'ntn' | 'utilityBillAccountNumber';
+}) {
+  const [value, setValue] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reveal = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.admin.getDecryptedIdentity(userId);
+      setValue(res.identity[field] || '—');
+    } catch {
+      setError('Could not load.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (value !== null) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span className="font-mono">{value}</span>
+        <button
+          type="button"
+          onClick={() => setValue(null)}
+          className="text-xs text-slate-500 underline hover:text-slate-700"
+        >
+          Hide
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="font-mono">••••••</span>
+      <button
+        type="button"
+        onClick={reveal}
+        disabled={loading}
+        className="text-xs text-emerald-700 underline hover:text-emerald-900 disabled:opacity-50"
+      >
+        {loading ? 'Loading…' : error ?? 'View'}
+      </button>
+    </span>
+  );
+}
+
 export default function AdminUsersPage() {
   const { user, loading: authLoading } = useAuth();
+  // Sub-admins (KYC reviewers) may ONLY verify/unverify + view KYC docs.
+  // Suspend / activate / reject / delete stay main-admin-only.
+  const isSubadmin = user?.role === 'subadmin';
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roleFilter, setRoleFilter] = useState('all');
   const [verifiedFilter, setVerifiedFilter] = useState('all');
@@ -135,12 +194,14 @@ export default function AdminUsersPage() {
     );
   }
 
-  if (!user || user.role !== 'admin') {
+  // Sub-admins (KYC reviewers) share this page with the main admin —
+  // their action buttons are limited separately (verify only).
+  if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
     return (
       <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
         <ShieldCheck className="w-10 h-10 text-red-400 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-slate-900 dark:text-white">Admins only</h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Sign in with an admin account to manage users and KYC.</p>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Sign in with an admin or reviewer account to manage users and KYC.</p>
       </div>
     );
   }
@@ -252,8 +313,16 @@ export default function AdminUsersPage() {
                     : { label: 'Warehouse Location', value: u.currentHouseLocation || '—' },
                   { label: 'Live Location', value: <MapsLink key={u.id} user={u} /> },
                   shopkeeperView
-                    ? { label: 'Utility Bill Account Number', value: u.utilityBillAccountNumber || '—' }
-                    : { label: 'NTN Number', value: u.ntn || '—' },
+                    ? {
+                        label: 'Utility Bill Account Number',
+                        value: (
+                          <SensitiveValue key={`bill-${u.id}`} userId={u.id} field="utilityBillAccountNumber" />
+                        ),
+                      }
+                    : {
+                        label: 'NTN Number',
+                        value: <SensitiveValue key={`ntn-${u.id}`} userId={u.id} field="ntn" />,
+                      },
                   {
                     label: 'Account Type',
                     value: u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin',
@@ -358,7 +427,7 @@ export default function AdminUsersPage() {
                               {u.verified ? 'Unverify' : 'Verify'}
                             </Button>
                           )}
-                          {u.role !== 'admin' && status !== 'suspended' && status !== 'rejected' && (
+                          {!isSubadmin && u.role !== 'admin' && status !== 'suspended' && status !== 'rejected' && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -371,7 +440,7 @@ export default function AdminUsersPage() {
                               Suspend
                             </Button>
                           )}
-                          {u.role !== 'admin' && status === 'suspended' && (
+                          {!isSubadmin && u.role !== 'admin' && status === 'suspended' && (
                             <Button
                               size="sm"
                               variant="primary"
@@ -384,7 +453,7 @@ export default function AdminUsersPage() {
                               Activate
                             </Button>
                           )}
-                          {u.role !== 'admin' && status === 'pending' && (
+                          {!isSubadmin && u.role !== 'admin' && status === 'pending' && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -396,7 +465,7 @@ export default function AdminUsersPage() {
                               Reject
                             </Button>
                           )}
-                          {u.role !== 'admin' && (
+                          {!isSubadmin && u.role !== 'admin' && (
                             <button
                               type="button"
                               title="Delete account"
@@ -448,3 +517,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+

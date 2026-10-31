@@ -22,11 +22,13 @@ export const ROLE_HOME: Record<UserRole, string> = {
   shopkeeper: '/shopkeeper/dashboard',
   supplier: '/supplier/dashboard',
   admin: '/admin/dashboard',
+  // Sub-admins have no dashboard — their home is the Users & KYC review page.
+  subadmin: '/admin/users',
 };
 
 interface RequireAuthProps {
-  /** The one role allowed to see the wrapped subtree. */
-  role: UserRole;
+  /** The role(s) allowed to see the wrapped subtree. */
+  role: UserRole | UserRole[];
   children: React.ReactNode;
 }
 
@@ -55,10 +57,12 @@ export function RequireAuth({ role, children }: RequireAuthProps) {
   }
 
   // Wrong role → bounce to the user's own dashboard.
-  if (user.role !== role) {
+  const allowed = Array.isArray(role) ? role : [role];
+  if (!allowed.includes(user.role)) {
     router.replace(ROLE_HOME[user.role] || '/');
     return null;
   }
 
   return <>{children}</>;
 }
+

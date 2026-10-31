@@ -1,4 +1,4 @@
-﻿﻿"use client";
+﻿﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -21,6 +21,7 @@ const ROLE_HOME: Record<UserRole, string> = {
   shopkeeper: '/shopkeeper/dashboard',
   supplier: '/supplier/dashboard',
   admin: '/admin/dashboard',
+  subadmin: '/admin/users',
 };
 
 export default function SignInPage() {
@@ -77,6 +78,13 @@ export default function SignInPage() {
 
     try {
       const result = await authLogin(identifier.trim(), password);
+      if (result.requires2FASetup) {
+        // Sub-admin first sign-in — 2FA setup is mandatory. The setup page
+        // picks the short-lived token up from sessionStorage (never the URL).
+        sessionStorage.setItem('subadmin_setup_token', result.tempToken || '');
+        router.push('/subadmin-setup');
+        return;
+      }
       if (result.requires2FA) {
         setTempToken(result.tempToken || '');
         setTwoFactorCode('');

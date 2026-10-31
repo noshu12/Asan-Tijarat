@@ -1,4 +1,4 @@
-export type UserRole = 'shopkeeper' | 'supplier' | 'admin';
+export type UserRole = 'shopkeeper' | 'supplier' | 'admin' | 'subadmin';
 
 /**
  * One file stored by the API's upload helpers (KYC documents, product photos).
