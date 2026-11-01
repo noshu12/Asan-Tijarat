@@ -1,13 +1,14 @@
 const router = require('express').Router();
 const { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
 const { protect, requireRole } = require('../middleware/auth');
+const { requireTurnstile } = require('../utils/turnstile');
 
-router.post('/register', register);
-router.post('/login', login);
+router.post('/register', requireTurnstile, register);
+router.post('/login', requireTurnstile, login);
 router.post('/check-availability', checkAvailability);
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
-router.post('/forgot-password', forgotPassword);
+router.post('/forgot-password', requireTurnstile, forgotPassword);
 router.post('/reset-password', resetPassword);
 // Admin 2FA (TOTP authenticator app) — setup / verify-setup / disable need a
 // signed-in admin; the final login step is public and gated by the

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
+import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -13,6 +14,8 @@ export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const [tsKey, setTsKey] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +24,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const res = await api.forgotPassword(email.trim());
+      const res = await api.forgotPassword(email.trim(), tsToken || undefined);
       setSuccessMessage(res.message || 'If an account exists for this email, a password reset link has been sent.');
       // Email wale flow mein reset page par NAHI jana — user email se link
       // kholega. Pehle "email check karo" message dikhao, phir Sign In par
@@ -35,6 +38,9 @@ export default function ForgotPasswordPage() {
       } else {
         setErrorMessage('Unexpected error. Please try again.');
       }
+      // Token is single-use — reset the widget so the retry gets a fresh one.
+      setTsToken(null);
+      setTsKey((k) => k + 1);
     } finally {
       setIsLoading(false);
     }
@@ -68,6 +74,10 @@ export default function ForgotPasswordPage() {
             <p role="alert" className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5">
               {errorMessage}
             </p>
+          )}
+
+          {isTurnstileConfigured() && (
+            <TurnstileWidget key={tsKey} onVerify={setTsToken} onExpire={() => setTsToken(null)} />
           )}
 
           <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">

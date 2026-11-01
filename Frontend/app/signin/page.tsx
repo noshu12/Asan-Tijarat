@@ -1,4 +1,4 @@
-﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
+import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import {
   ShieldCheck,
   Store,
@@ -27,6 +28,8 @@ const ROLE_HOME: Record<UserRole, string> = {
 export default function SignInPage() {
   const router = useRouter();
   const { user, loading: authLoading, login: authLogin, verifyTwoFactorLogin: authVerify2FA } = useAuth();
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const [tsKey, setTsKey] = useState(0);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -77,7 +80,7 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      const result = await authLogin(identifier.trim(), password);
+      const result = await authLogin(identifier.trim(), password, tsToken || undefined);
       if (result.requires2FASetup) {
         // Sub-admin first sign-in — 2FA setup is mandatory. The setup page
         // picks the short-lived token up from sessionStorage (never the URL).
@@ -102,6 +105,8 @@ export default function SignInPage() {
         setErrorMessage('Unexpected error while signing in. Please try again.');
       }
       setIsLoading(false);
+      setTsToken(null);
+      setTsKey((k) => k + 1);
     }
   };
 
@@ -288,6 +293,10 @@ export default function SignInPage() {
               >
                 {errorMessage}
               </p>
+            )}
+
+            {isTurnstileConfigured() && (
+              <TurnstileWidget key={tsKey} onVerify={setTsToken} onExpire={() => setTsToken(null)} />
             )}
 
             <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">

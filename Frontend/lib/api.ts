@@ -260,10 +260,10 @@ export const api = {
    * instead of a session — the signin page must then call verifyTwoFactorLogin().
    * Everyone else gets `{ user }` and the httpOnly session cookie as before.
    */
-  login: (identifier: string, password: string) =>
+  login: (identifier: string, password: string, turnstileToken?: string) =>
     request<{ user: User } | { requires2FA: true; tempToken: string } | { requires2FASetup: true; tempToken: string }>('/api/auth/login', {
       method: 'POST',
-      body: { identifier, password },
+      body: { identifier, password, turnstileToken },
       auth: false,
     }),
 
@@ -333,7 +333,7 @@ export const api = {
    * Creates a PENDING account (no JWT returned). The shopkeeper/supplier must
    * be verified by an admin before they can sign in.
    */
-  register: (payload: RegisterPayload) =>
+  register: (payload: RegisterPayload & { turnstileToken?: string }) =>
     request<{ user: User; verified: boolean; message: string; documents?: KycDocuments }>('/api/auth/register', {
       method: 'POST',
       body: payload,
@@ -357,10 +357,10 @@ export const api = {
     }),
 
   /** Sends a password-reset request — token is emailed, never returned here. */
-  forgotPassword: (email: string) =>
+  forgotPassword: (email: string, turnstileToken?: string) =>
     request<{ message: string }>('/api/auth/forgot-password', {
       method: 'POST',
-      body: { email },
+      body: { email, turnstileToken },
       auth: false,
     }),
 

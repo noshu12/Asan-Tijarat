@@ -15,7 +15,7 @@ export interface LoginResult {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (identifier: string, password: string) => Promise<LoginResult>;
+  login: (identifier: string, password: string, turnstileToken?: string) => Promise<LoginResult>;
   /** Completes an admin 2FA sign-in (tempToken + 6-digit code → session). */
   verifyTwoFactorLogin: (tempToken: string, token: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -71,8 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { mounted = false; };
   }, []);
 
-  const login = useCallback(async (identifier: string, password: string): Promise<LoginResult> => {
-    const res = await api.login(identifier.trim(), password);
+  const login = useCallback(async (identifier: string, password: string, turnstileToken?: string): Promise<LoginResult> => {
+    const res = await api.login(identifier.trim(), password, turnstileToken);
     if ('requires2FASetup' in res) {
       // Sub-admin first sign-in — 2FA setup is mandatory before any session.
       // The caller redirects to the setup page with the tempToken.

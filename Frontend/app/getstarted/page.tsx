@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api, ApiError, RegisterPayload, KycDocumentPayload } from '@/lib/api';
+import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
 
 /**
@@ -272,6 +273,8 @@ export default function GetStartedPage() {
   // Set once OTP is verified — swaps the wizard for the pending-KYC
   // confirmation and starts the Home-page redirect (no auto sign-in).
   const [submitted, setSubmitted] = useState(false);
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const [tsKey, setTsKey] = useState(0);
   const [notice, setNotice] = useState(PENDING_VERIFICATION_NOTICE);
 
   // Preselect account type from CTAs like /getstarted?role=shopkeeper
@@ -421,7 +424,7 @@ export default function GetStartedPage() {
             }),
       };
 
-      await api.register(payload);
+      await api.register({ ...payload, turnstileToken: tsToken || undefined });
 
       // No session is created here — an unverified account must not be signed in.
       // Move to the OTP step; the pending notice shows only after OTP is verified.
@@ -436,6 +439,8 @@ export default function GetStartedPage() {
         setErrorMessage('Unexpected error while creating your account. Please try again.');
       }
       setIsSubmitting(false);
+      setTsToken(null);
+      setTsKey((k) => k + 1);
     }
   };
 
@@ -1051,6 +1056,10 @@ export default function GetStartedPage() {
                     </button>
                   </p>
                 </div>
+
+                {isTurnstileConfigured() && (
+                  <TurnstileWidget key={tsKey} onVerify={setTsToken} onExpire={() => setTsToken(null)} />
+                )}
 
                 <div className="flex gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-1/3">

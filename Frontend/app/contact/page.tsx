@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
+import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import { MapPin, Send } from 'lucide-react';
 
 const SUBJECTS = [
@@ -42,6 +43,8 @@ export default function ContactPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const [tsKey, setTsKey] = useState(0);
 
   // Logged-in user ka naam/email/phone auto-fill karo, lekin jo user
   // khud type kar chuka ho usko overwrite mat karo.
@@ -123,6 +126,7 @@ export default function ContactPage() {
           // Honeypot: hamesha khali bhejna hai. Backend bhara hua
           // aaye to spam samajh kar bina save kiye 201 de deta hai.
           website: '',
+          turnstileToken: tsToken || undefined,
         }),
       });
       if (!response.ok) {
@@ -131,6 +135,8 @@ export default function ContactPage() {
         throw new Error(message || 'Could not send your message. Please try again.');
       }
       setSubmitSuccess('Message sent and saved. Thank you for contacting us.');
+      setTsToken(null);
+      setTsKey((k) => k + 1);
       // Naam/email/phone/role rakho taake logged-in user dobara
       // message bhej sake, sirf message wala hissa reset karo.
       setFormData((prev) => ({
@@ -143,6 +149,9 @@ export default function ContactPage() {
       setErrors({});
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not send your message. Please try again.');
+      // Token is single-use — reset the widget so the retry gets a fresh one.
+      setTsToken(null);
+      setTsKey((k) => k + 1);
     } finally {
       setIsSubmitting(false);
     }
@@ -316,6 +325,10 @@ export default function ContactPage() {
                 aria-hidden="true"
                 style={{ display: 'none' }}
               />
+
+              {isTurnstileConfigured() && (
+                <TurnstileWidget key={tsKey} onVerify={setTsToken} onExpire={() => setTsToken(null)} />
+              )}
 
               <Button type="submit" isLoading={isSubmitting} className="w-full h-12 text-sm font-bold">
                 <Send className="w-4 h-4 mr-2" />
