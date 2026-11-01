@@ -45,6 +45,12 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  // The login page must NOT sit inside RequireAuth — otherwise an
+  // unauthenticated visit to /admin/login redirects to itself in a loop.
+  if (pathname === '/admin/login') {
+    return <>{children}</>;
+  }
   return (
     <RequireAuth role={['admin', 'subadmin']}>
       <div className="flex min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-950">

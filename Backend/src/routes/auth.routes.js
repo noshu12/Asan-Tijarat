@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
+const { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
 const { protect, requireRole } = require('../middleware/auth');
 const { requireTurnstile } = require('../utils/turnstile');
 
@@ -18,6 +18,11 @@ router.post('/2fa/setup', protect, requireRole('admin'), setupTwoFactor);
 router.post('/2fa/verify-setup', protect, requireRole('admin'), verifyTwoFactorSetup);
 router.post('/2fa/disable', protect, requireRole('admin'), disableTwoFactor);
 router.post('/2fa/login', verifyTwoFactorLogin);
+// Dedicated ADMIN login (admin subdomain) — issues the host-only
+// asan_admin_token cookie. Turnstile-protected like the regular login.
+// The regular /login above now rejects admin/subadmin roles.
+router.post('/admin/login', requireTurnstile, adminLogin);
+router.post('/admin/2fa/login', adminVerifyTwoFactorLogin);
 // Sub-admin FIRST-TIME 2FA setup — public, gated by the short-lived setup
 // tempToken login() issued with requires2FASetup:true (the sub-admin has no
 // session yet, so protect() cannot be used here).

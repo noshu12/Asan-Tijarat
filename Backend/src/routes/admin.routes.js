@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { protect, requireRole } = require('../middleware/auth');
+const { protectAdmin, requireRole } = require('../middleware/auth');
 const admin = require('../controllers/admin.controller');
 
 // Every /api/admin/* route needs a signed-in session; each route then
@@ -12,7 +12,9 @@ const admin = require('../controllers/admin.controller');
 // They CANNOT touch products/orders, read the audit log, see dashboard
 // stats, or manage sub-admin accounts — those stay main-admin-only.
 // They also cannot act on admin/subadmin accounts (user page hides those).
-router.use(protect);
+// Admin APIs accept ONLY the host-only asan_admin_token cookie (see
+// protectAdmin) — a regular asan_token can never open these routes.
+router.use(protectAdmin);
 
 router.get('/stats', requireRole('admin'), admin.getStats);
 

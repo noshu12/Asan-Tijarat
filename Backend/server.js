@@ -25,6 +25,7 @@ const { checkDb } = require('./src/middleware/auth');
 const { notFound, errorHandler } = require('./src/middleware/errorHandler');
 
 const app = express();
+app.set('trust proxy', 'loopback');
 
 // Helmet: security headers. cross-origin isliye rakha hai taake
 // frontend (localhost:3000) se product images (localhost:5000)

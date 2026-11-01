@@ -16,6 +16,19 @@ export const API_URL: string =
   (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:5000';
 
 /**
+ * True when this page is served from the admin subdomain
+ * (NEXT_PUBLIC_ADMIN_HOST, e.g. admin.asantijarat.com).
+ * On the admin host every API call is routed through the same-origin
+ * /backend-api/* proxy (Next.js rewrites) so the host-only asan_admin_token
+ * cookie is sent. Anywhere else the backend is called directly.
+ */
+export function isAdminHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const adminHost = process.env.NEXT_PUBLIC_ADMIN_HOST || '';
+  return Boolean(adminHost) && window.location.host === adminHost;
+}
+
+/**
  * Turns a stored document path (`/uploads/kyc/cnicFront-…jpg`) into the URL an
  * <img>/<iframe> can load. Absolute URLs and data URLs pass through untouched.
  */
@@ -48,9 +61,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
+  // Admin host: same-origin proxy so the host-only admin cookie is sent.
+  // path is always /api/... here → /backend-api/... (see next.config.js).
+  const url = isAdminHost() ? `/backend-api${path.replace(/^\/api/, '')}` : `${API_URL}${path}`;
+
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await fetch(url, {
       method,
       headers,
       credentials: 'include',
@@ -305,6 +322,33 @@ export const api = {
    */
   verifyTwoFactorLogin: (tempToken: string, token: string) =>
     request<{ user: User }>('/api/auth/2fa/login', {
+      method: 'POST',
+      body: { tempToken, token },
+      auth: false,
+    }),
+
+  /* ── Admin subdomain login (host-only asan_admin_token cookie) ────── */
+
+  /**
+   * Admin sign-in step 1 — on the admin host this goes through the
+   * same-origin proxy so the Set-Cookie comes from the admin host
+   * (host-only cookie). Admins with 2FA get
+   * `{ requires2FA: true, tempToken }`; sub-admins without 2FA get
+   * `{ requires2FASetup: true, tempToken }`; everyone else gets `{ user }`.
+   */
+  adminLogin: (identifier: string, password: string, turnstileToken?: string) =>
+    request<{ user: User } | { requires2FA: true; tempToken: string } | { requires2FASetup: true; tempToken: string }>('/api/auth/admin/login', {
+      method: 'POST',
+      body: { identifier, password, turnstileToken },
+      auth: false,
+    }),
+
+  /**
+   * Admin sign-in step 2: exchanges the tempToken + 6-digit authenticator
+   * code for the host-only asan_admin_token session cookie.
+   */
+  adminVerifyTwoFactorLogin: (tempToken: string, token: string) =>
+    request<{ user: User }>('/api/auth/admin/2fa/login', {
       method: 'POST',
       body: { tempToken, token },
       auth: false,

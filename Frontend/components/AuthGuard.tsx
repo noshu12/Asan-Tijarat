@@ -50,9 +50,18 @@ export function RequireAuth({ role, children }: RequireAuthProps) {
   }
 
   // No session → send to sign-in with the attempted URL preserved.
+  // On the admin host, admins go straight to /admin/login (the middleware
+  // would bounce /signin there anyway — skip the double redirect).
   if (!user) {
     const here = `${window.location.pathname}${window.location.search}`;
-    router.replace(`/signin?role=${role}&redirect=${encodeURIComponent(here)}`);
+    const allowed = Array.isArray(role) ? role : [role];
+    const isAdminRoute = allowed.includes('admin') || allowed.includes('subadmin');
+    const adminHost = process.env.NEXT_PUBLIC_ADMIN_HOST || '';
+    if (isAdminRoute && adminHost && window.location.host === adminHost) {
+      router.replace(`/admin/login?redirect=${encodeURIComponent(here)}`);
+    } else {
+      router.replace(`/signin?role=${role}&redirect=${encodeURIComponent(here)}`);
+    }
     return null;
   }
 

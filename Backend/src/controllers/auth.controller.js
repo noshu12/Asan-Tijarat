@@ -43,6 +43,30 @@ function issueAuthCookie(res, user) {
   });
 }
 
+/**
+ * Issues the ADMIN session cookie (asan_admin_token).
+ *
+ * Host-only by design: NO `Domain` attribute is set, so the browser binds
+ * the cookie to the exact host that served the login response. The admin
+ * frontend calls the backend through same-origin /backend-api/* (Next.js
+ * rewrites), so on production the cookie is host-only for
+ * admin.asantijarat.com — it is never sent to the main site, and a regular
+ * asan_token can never open /api/admin/* (see protectAdmin).
+ */
+function issueAdminAuthCookie(res, user) {
+  const token = signToken(user);
+  const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days, matching JWT_EXPIRES_IN
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('asan_admin_token', token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax',
+    secure: isProduction,
+    maxAge,
+    // NOTE: no `domain` here — that is what makes it host-only.
+  });
+}
+
 function hashValue(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
@@ -416,6 +440,19 @@ async function login(req, res, next) {
       });
     }
 
+    // Admins and sub-admins must use the dedicated admin portal login
+    // (POST /api/auth/admin/login on the admin subdomain). The regular
+    // login never issues them a session — this keeps the admin cookie
+    // strictly separated from regular user sessions.
+    if (user.role === 'admin' || user.role === 'subadmin') {
+      return res.status(403).json({
+        error: {
+          code: 'USE_ADMIN_PORTAL',
+          message: 'Admin accounts sign in via the admin portal only.',
+        },
+      });
+    }
+
     // Self-registered accounts stay dormant until an admin approves their KYC
     // details — credentials alone are not enough to sign in.
     if (user.role !== 'admin' && !user.verified) {
@@ -469,12 +506,171 @@ async function login(req, res, next) {
 }
 
 /**
+ * POST /api/auth/admin/login  (public, admin subdomain only)
+ * Dedicated sign-in for admin + subadmin accounts. Mirrors login() but:
+ *  - rejects every non-admin role (suppliers/shopkeepers use /login),
+ *  - issues the host-only `asan_admin_token` cookie instead of asan_token.
+ * Turnstile-protected like the regular login (see auth.routes.js).
+ * 2FA flow is identical: { requires2FA:true, tempToken } →
+ * POST /api/auth/admin/2fa/login.
+ */
+async function adminLogin(req, res, next) {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'identifier (email or phone) and password are required.' },
+      });
+    }
+
+    const user = await User.findOne({
+      $or: [{ email: identifier.toLowerCase() }, { phone: identifier }],
+    }).select('+password');
+
+    if (user && user.lockUntil && user.lockUntil.getTime() > Date.now()) {
+      const mins = Math.ceil((user.lockUntil.getTime() - Date.now()) / 60000);
+      return res.status(403).json({
+        error: { code: 'ACCOUNT_LOCKED', message: `Too many failed attempts. Try again in ${mins} minute(s).` },
+      });
+    }
+
+    if (!user || !(await user.matchPassword(password))) {
+      if (user) {
+        user.loginAttempts += 1;
+        if (user.loginAttempts >= 5) user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+        await user.save();
+      }
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid identifier or password.' },
+      });
+    }
+
+    // Only admin + subadmin may use this endpoint.
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
+      return res.status(403).json({
+        error: { code: 'NOT_AN_ADMIN_ACCOUNT', message: 'This sign-in is for admin accounts only.' },
+      });
+    }
+
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        error: {
+          code: 'ACCOUNT_SUSPENDED',
+          message: user.suspensionReason
+            ? `Your account is suspended. Reason: ${user.suspensionReason}`
+            : 'Your account is suspended. Please contact support.',
+        },
+      });
+    }
+
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    await user.save();
+
+    // Sub-admin 2FA is MANDATORY — first-time setup via the tempToken.
+    if (user.role === 'subadmin' && !user.twoFactorEnabled) {
+      const setupToken = jwt.sign(
+        { id: user._id, purpose: '2fa-setup' },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requires2FASetup: true, tempToken: setupToken });
+    }
+
+    if (user.twoFactorEnabled) {
+      const tempToken = jwt.sign(
+        { id: user._id, purpose: '2fa' },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requires2FA: true, tempToken });
+    }
+
+    // Single-session: a fresh login kills the previous session.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    issueAdminAuthCookie(res, user);
+
+    res.json({ user: user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/admin/2fa/login  (public — carries the tempToken)
+ * Body: { tempToken, token } — tempToken is the 5-minute JWT adminLogin()
+ * returned with requires2FA:true; token is the 6-digit authenticator code.
+ * On success issues the host-only asan_admin_token cookie.
+ */
+async function adminVerifyTwoFactorLogin(req, res, next) {
+  try {
+    const { tempToken, token } = req.body || {};
+    if (!tempToken || !token) {
+      return res.status(400).json({
+        error: { code: 'MISSING_FIELDS', message: 'tempToken and token are required.' },
+      });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({
+        error: { code: 'TWO_FACTOR_TOKEN_EXPIRED', message: 'The two-factor session expired. Please sign in again.' },
+      });
+    }
+    if (!payload || payload.purpose !== '2fa' || !payload.id) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid two-factor session. Please sign in again.' },
+      });
+    }
+    const user = await User.findById(payload.id).select('+twoFactorSecret');
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin') || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid two-factor session. Please sign in again.' },
+      });
+    }
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        error: {
+          code: 'ACCOUNT_SUSPENDED',
+          message: user.suspensionReason
+            ? `Your account is suspended. Reason: ${user.suspensionReason}`
+            : 'Your account is suspended. Please contact support.',
+        },
+      });
+    }
+    const ok = authenticator.check(String(token).trim(), user.twoFactorSecret);
+    if (!ok) {
+      return res.status(401).json({
+        error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
+      });
+    }
+    // Single-session: this verified login kills any older session.
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    issueAdminAuthCookie(res, user);
+    res.json({ user: user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/auth/logout  (protected)
  * Clears the asan_token httpOnly cookie.
  */
 async function logout(req, res, next) {
   try {
     res.clearCookie('asan_token', {
+      httpOnly: true,
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+    res.clearCookie('asan_admin_token', {
       httpOnly: true,
       path: '/',
       sameSite: 'lax',
@@ -997,4 +1193,4 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst };
+module.exports = { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst };
