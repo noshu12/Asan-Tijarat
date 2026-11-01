@@ -2,7 +2,7 @@
   "name": "asan-tijarat-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Express + MongoDB backend for Asan Tijarat — Pakistan's B2B Wholesale Marketplace",
+  "description": "Express + MongoDB backend for Asan Tijarat \u2014 Pakistan's B2B Wholesale Marketplace",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -19,6 +19,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
+    "cloudinary": "^2.7.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

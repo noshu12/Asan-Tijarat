@@ -12,6 +12,7 @@ const AuditLog = require('../models/AuditLog');
 const ContactMessage = require('../models/ContactMessage');
 const { toClient } = require('../utils/serialize');
 const { UPLOAD_ROOT } = require('../utils/kycStorage');
+const { getPrivateSignedUrl } = require('../utils/cloudinary');
 const { sendEmail } = require('../utils/sendEmail');
 const {
   accountVerifiedEmail,
@@ -347,10 +348,20 @@ async function getKycDocument(req, res, next) {
     }
 
     const doc = user.documents && user.documents[field];
-    if (!doc || !doc.url) {
+    if (!doc || (!doc.url && doc.storage !== 'cloudinary')) {
       return res.status(404).json({ error: { code: 'KYC_NOT_FOUND', message: 'No document uploaded for this field.' } });
     }
 
+    // Cloudinary PRIVATE document → mint a 10-minute signed URL and redirect.
+    // The file never has a public URL; only this admin route can grant access.
+    if (doc.storage === 'cloudinary' && doc.publicId) {
+      const signedUrl = getPrivateSignedUrl(doc.publicId, {
+        resourceType: doc.resourceType || 'image',
+      });
+      return res.redirect(signedUrl);
+    }
+
+    // Local-disk document (dev mode).
     const filePath = path.join(UPLOAD_ROOT, 'kyc', path.basename(doc.url));
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: { code: 'KYC_NOT_FOUND', message: 'Document file not found on disk.' } });

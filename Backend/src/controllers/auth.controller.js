@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { CATEGORIES } = require('../constants/categories');
-const { saveKycDocuments, deleteStoredFiles, KycUploadError } = require('../utils/kycStorage');
+const { saveKycDocuments, deleteStoredFiles, deleteStoredUploads, KycUploadError } = require('../utils/kycStorage');
 const { sanitizeLocation } = require('../utils/location');
 const { sendEmail } = require('../utils/sendEmail');
 const { otpEmail, pendingVerificationEmail } = require('../utils/emailTemplates');
@@ -194,7 +194,7 @@ async function register(req, res, next) {
     // Supplier → CNIC front/back + NTN; shopkeeper → CNIC front/back + utility bill.
     let stored;
     try {
-      stored = saveKycDocuments(documents);
+      stored = await saveKycDocuments(documents);
     } catch (err) {
       if (err instanceof KycUploadError) {
         return res.status(400).json({ error: { code: err.code, message: err.message } });
@@ -231,7 +231,7 @@ async function register(req, res, next) {
       });
     } catch (err) {
       // Roll the written files back — nothing should point at a ghost account.
-      deleteStoredFiles(stored.files);
+      await deleteStoredUploads(stored);
       throw err;
     }
 

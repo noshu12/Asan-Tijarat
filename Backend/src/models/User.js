@@ -28,6 +28,12 @@ const SHOP_TYPES = [
 const kycDocumentSchema = new mongoose.Schema(
   {
     url: { type: String, required: true, trim: true },
+    // Cloudinary mode: 'local' | 'cloudinary'. Private docs live on Cloudinary
+    // with no public URL — publicId + resourceType let the admin route mint
+    // signed URLs. Local mode keeps url as the /uploads path.
+    storage: { type: String, enum: ['local', 'cloudinary'], default: 'local' },
+    publicId: { type: String, trim: true, default: '' },
+    resourceType: { type: String, trim: true, default: 'image' },
     originalName: { type: String, trim: true },
     mimeType: { type: String, trim: true },
     size: { type: Number, default: 0 },

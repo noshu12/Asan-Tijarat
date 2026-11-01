@@ -9,6 +9,10 @@ const { CATEGORIES } = require('../constants/categories');
 const productImageSchema = new mongoose.Schema(
   {
     url: { type: String, required: true, trim: true },
+    // Cloudinary mode: 'local' | 'cloudinary'. publicId lets future cleanup
+    // delete the asset; local mode keeps url as the /uploads path.
+    storage: { type: String, enum: ['local', 'cloudinary'], default: 'local' },
+    publicId: { type: String, trim: true, default: '' },
     originalName: { type: String, trim: true },
     mimeType: { type: String, trim: true },
     size: { type: Number, default: 0 },

@@ -19,6 +19,11 @@ const {
   writeUploadedFile,
   deleteStoredFiles,
 } = require('./uploadStorage');
+const {
+  isCloudinaryEnabled,
+  uploadProductImage,
+  deleteCloudinaryAsset,
+} = require('./cloudinary');
 
 const FOLDER = 'products';
 /** Public URL prefix stored in MongoDB (frontend prepends the API origin). */
@@ -67,9 +72,9 @@ function normalizeInput({ images, image } = {}) {
   return entries;
 }
 
-/** Validates + writes one photo. */
-function saveOneImage(entry) {
-  if (typeof entry === 'string') return { url: entry.trim(), meta: null, file: null };
+/** Validates + writes one photo (disk or Cloudinary — see USE_CLOUDINARY). */
+async function saveOneImage(entry) {
+  if (typeof entry === 'string') return { url: entry.trim(), meta: null, file: null, cloudinaryId: null };
 
   const parsed = parseDataUrl(entry && entry.dataUrl);
   if (!parsed) {
@@ -89,6 +94,30 @@ function saveOneImage(entry) {
     throw new ProductImageError('Product photo content does not match its claimed image type.');
   }
 
+  // Cloudinary mode (production): public listing photo → Cloudinary.
+  if (isCloudinaryEnabled()) {
+    const publicId = `product_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const { secureUrl, publicId: storedId } = await uploadProductImage(parsed.buffer, {
+      publicId,
+      format: extension.replace('.', ''),
+    });
+    return {
+      url: secureUrl,
+      file: null,
+      cloudinaryId: storedId,
+      meta: {
+        url: secureUrl,
+        storage: 'cloudinary',
+        publicId: storedId,
+        originalName: sanitizeOriginalName(entry && entry.name, `${publicId}${extension}`),
+        mimeType: parsed.mimeType,
+        size: parsed.buffer.length,
+        uploadedAt: new Date(),
+      },
+    };
+  }
+
+  // Local-disk mode (dev).
   const { file, url } = writeUploadedFile({
     buffer: parsed.buffer,
     extension,
@@ -99,8 +128,10 @@ function saveOneImage(entry) {
   return {
     url,
     file,
+    cloudinaryId: null,
     meta: {
       url,
+      storage: 'local',
       originalName: sanitizeOriginalName(entry && entry.name, file.split(/[\\/]/).pop()),
       mimeType: parsed.mimeType,
       size: parsed.buffer.length,
@@ -118,31 +149,49 @@ function saveOneImage(entry) {
  *          their absolute paths (for cleanup after a failed DB write).
  * @throws {ProductImageError} on an invalid or missing-exceeding upload.
  */
-function saveProductImages(payload) {
+async function saveProductImages(payload) {
   const entries = normalizeInput(payload);
   const urls = [];
   const uploads = [];
   const files = [];
+  const cloudinaryIds = [];
 
   if (entries.length > MAX_PRODUCT_IMAGES) {
     throw new ProductImageError(`A listing can have at most ${MAX_PRODUCT_IMAGES} photos.`);
   }
 
   for (const entry of entries) {
-    const saved = saveOneImage(entry);
+    const saved = await saveOneImage(entry);
     if (!saved.url) continue;
 
     urls.push(saved.url);
     if (saved.meta) uploads.push(saved.meta);
     if (saved.file) files.push(saved.file);
+    if (saved.cloudinaryId) cloudinaryIds.push(saved.cloudinaryId);
   }
 
-  return { urls, uploads, files };
+  return { urls, uploads, files, cloudinaryIds };
+}
+
+/**
+ * Rollback helper — deletes disk files AND Cloudinary assets written for a
+ * listing whose DB write failed. Call with the object saveProductImages
+ * returned (or { files, cloudinaryIds }).
+ */
+async function deleteStoredUploads(stored) {
+  const files = (stored && stored.files) || [];
+  const cloudinaryIds = (stored && stored.cloudinaryIds) || [];
+  if (files.length) deleteStoredFiles(files);
+  for (const publicId of cloudinaryIds) {
+    // eslint-disable-next-line no-await-in-loop
+    await deleteCloudinaryAsset(publicId, { resourceType: 'image', type: 'upload' });
+  }
 }
 
 module.exports = {
   saveProductImages,
   deleteStoredFiles,
+  deleteStoredUploads,
   ProductImageError,
   PUBLIC_PREFIX,
   MAX_IMAGE_BYTES,

@@ -2,7 +2,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { CATEGORIES } = require('../constants/categories');
 const { toClient } = require('../utils/serialize');
-const { saveProductImages, deleteStoredFiles, ProductImageError } = require('../utils/productImageStorage');
+const { saveProductImages, deleteStoredFiles, deleteStoredUploads, ProductImageError } = require('../utils/productImageStorage');
 
 /** Auto-derive listing status from stock & MOQ (matches frontend behaviour). */
 function deriveStatus(stock, moq) {
@@ -132,10 +132,10 @@ function checkCategoryOwnership(user, category) {
  * first photo = cover, the rest = gallery.
  * Re-throws validation failures as a 400 envelope so the caller can `return`.
  */
-function storePhotos(req, res) {
+async function storePhotos(req, res) {
   let stored;
   try {
-    stored = saveProductImages({ images: req.body.images, image: req.body.image });
+    stored = await saveProductImages({ images: req.body.images, image: req.body.image });
   } catch (err) {
     if (err instanceof ProductImageError) {
       res.status(400).json({ error: { code: err.code, message: err.message } });
@@ -149,6 +149,7 @@ function storePhotos(req, res) {
     additionalImages: stored.urls.slice(1),
     imageUploads: stored.uploads,
     files: stored.files,
+    cloudinaryIds: stored.cloudinaryIds,
   };
 }
 
@@ -375,7 +376,7 @@ async function createProduct(req, res, next) {
 
     // Write the photos BEFORE creating the listing, so a rejected upload never
     // leaves a dangling product behind.
-    const photos = storePhotos(req, res);
+    const photos = await storePhotos(req, res);
     if (!photos) return undefined;
     if (!photos.image) {
       return res.status(400).json({
@@ -405,7 +406,7 @@ async function createProduct(req, res, next) {
       });
     } catch (err) {
       // Roll the written photos back — nothing should point at a ghost listing.
-      deleteStoredFiles(photos.files);
+      await deleteStoredUploads(photos);
       throw err;
     }
 
@@ -479,9 +480,9 @@ async function updateProduct(req, res, next) {
       product.description = req.body.description === null ? '' : String(req.body.description);
     }
 
-    let pendingFiles = [];
+    let pendingUploads = { files: [], cloudinaryIds: [] };
     if (req.body.images !== undefined || req.body.image !== undefined) {
-      const photos = storePhotos(req, res);
+      const photos = await storePhotos(req, res);
       if (!photos) return undefined;
       if (!photos.image) {
         return res.status(400).json({
@@ -491,7 +492,7 @@ async function updateProduct(req, res, next) {
       product.image = photos.image;
       product.additionalImages = photos.additionalImages;
       product.imageUploads = photos.imageUploads;
-      pendingFiles = photos.files;
+      pendingUploads = photos;
     }
 
     // Re-opening stock flips status back automatically; zeroing marks it Out of Stock.
@@ -500,7 +501,7 @@ async function updateProduct(req, res, next) {
     try {
       await product.save();
     } catch (err) {
-      deleteStoredFiles(pendingFiles);
+      await deleteStoredUploads(pendingUploads);
       throw err;
     }
 

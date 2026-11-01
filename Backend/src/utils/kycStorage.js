@@ -25,6 +25,11 @@ const {
   writeUploadedFile,
   deleteStoredFiles,
 } = require('./uploadStorage');
+const {
+  isCloudinaryEnabled,
+  uploadPrivateDocument,
+  deleteCloudinaryAsset,
+} = require('./cloudinary');
 
 const FOLDER = 'kyc';
 /** Public URL prefix stored in MongoDB (frontend prepends the API origin). */
@@ -60,11 +65,12 @@ class KycUploadError extends UploadError {
 }
 
 /**
- * Validates + writes one document to disk.
- * @returns {{ doc: object, file: string }} metadata for MongoDB and the path
- *          written (kept so a failed registration can clean up after itself).
+ * Validates + writes one document (disk or Cloudinary private — see
+ * USE_CLOUDINARY). Cloudinary docs are PRIVATE: no public URL exists, the
+ * admin route mints short-lived signed URLs from the stored publicId.
+ * @returns {{ doc: object, file: string|null, cloudinaryId: string|null }}
  */
-function saveOneDocument(field, value) {
+async function saveOneDocument(field, value) {
   const label = DOCUMENT_LABELS[field] || field;
   const parsed = parseDataUrl(value && value.dataUrl);
 
@@ -84,6 +90,30 @@ function saveOneDocument(field, value) {
     throw new KycUploadError(`${label} content does not match its claimed file type.`);
   }
 
+  // Cloudinary mode (production): PRIVATE document → Cloudinary.
+  if (isCloudinaryEnabled()) {
+    const publicId = `${field}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const { publicId: storedId } = await uploadPrivateDocument(parsed.buffer, {
+      publicId,
+      format: extension.replace('.', ''),
+    });
+    return {
+      file: null,
+      cloudinaryId: storedId,
+      doc: {
+        url: 'cloudinary:${storedId}',
+        storage: 'cloudinary',
+        publicId: storedId,
+        resourceType: parsed.mimeType === 'application/pdf' ? 'raw' : 'image',
+        originalName: sanitizeOriginalName(value && value.name, `${publicId}${extension}`),
+        mimeType: parsed.mimeType,
+        size: parsed.buffer.length,
+        uploadedAt: new Date(),
+      },
+    };
+  }
+
+  // Local-disk mode (dev).
   const { file, url } = writeUploadedFile({
     buffer: parsed.buffer,
     extension,
@@ -93,8 +123,10 @@ function saveOneDocument(field, value) {
 
   return {
     file,
+    cloudinaryId: null,
     doc: {
       url,
+      storage: 'local',
       originalName: sanitizeOriginalName(value && value.name, file.split(/[\\/]/).pop()),
       mimeType: parsed.mimeType,
       size: parsed.buffer.length,
@@ -115,28 +147,45 @@ function saveOneDocument(field, value) {
  *          the User document plus the absolute paths written (for cleanup).
  * @throws {KycUploadError} on an invalid file.
  */
-function saveKycDocuments(input) {
+async function saveKycDocuments(input) {
   const documents = {};
   const files = [];
+  const cloudinaryIds = [];
 
-  if (!input || typeof input !== 'object') return { documents, files };
+  if (!input || typeof input !== 'object') return { documents, files, cloudinaryIds };
 
   for (const field of DOCUMENT_FIELDS) {
     const value = input[field];
     if (!value || (typeof value === 'object' && !value.dataUrl)) continue;
 
-    const saved = saveOneDocument(field, value);
+    const saved = await saveOneDocument(field, value);
     documents[field] = saved.doc;
-    files.push(saved.file);
+    if (saved.file) files.push(saved.file);
+    if (saved.cloudinaryId) cloudinaryIds.push({ publicId: saved.cloudinaryId, resourceType: saved.doc.resourceType || 'image' });
   }
 
-  return { documents, files };
+  return { documents, files, cloudinaryIds };
+}
+
+/**
+ * Rollback helper — deletes disk files AND private Cloudinary documents
+ * written for a registration whose DB write failed.
+ */
+async function deleteStoredUploads(stored) {
+  const files = (stored && stored.files) || [];
+  const cloudinaryIds = (stored && stored.cloudinaryIds) || [];
+  if (files.length) deleteStoredFiles(files);
+  for (const { publicId, resourceType } of cloudinaryIds) {
+    // eslint-disable-next-line no-await-in-loop
+    await deleteCloudinaryAsset(publicId, { resourceType, type: 'private' });
+  }
 }
 
 module.exports = {
   saveKycDocuments,
   // Re-exported from uploadStorage so callers keep one import for KYC storage.
   deleteStoredFiles,
+  deleteStoredUploads,
   KycUploadError,
   DOCUMENT_FIELDS,
   MAX_FILE_BYTES,
