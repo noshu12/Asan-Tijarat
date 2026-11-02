@@ -101,7 +101,7 @@ async function saveOneDocument(field, value) {
       file: null,
       cloudinaryId: storedId,
       doc: {
-        url: 'cloudinary:${storedId}',
+        url: `cloudinary:${storedId}`,
         storage: 'cloudinary',
         publicId: storedId,
         resourceType: parsed.mimeType === 'application/pdf' ? 'raw' : 'image',

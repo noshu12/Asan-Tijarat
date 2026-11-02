@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, FileText, ImageOff, ZoomIn } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
-import { API_URL } from '@/lib/api';
+import { API_URL, isAdminHost } from '@/lib/api';
 import type { KycDocument, KycDocuments, UserRole } from '@/lib/types';
 import { cn, formatDate, formatFileSize } from '@/lib/utils';
 
@@ -87,8 +87,11 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
     void Promise.all(
       activeSlots.map(async (slot) => {
         try {
+          // On the admin subdomain the admin cookie is host-only, so KYC
+          // previews must go through the same-origin /backend-api proxy.
+          const kycBase = isAdminHost() ? '/backend-api' : `${API_URL}/api`;
           const response = await fetch(
-            `${API_URL}/api/admin/users/${userId}/kyc/${slot.key}`,
+            `${kycBase}/admin/users/${userId}/kyc/${slot.key}`,
             { credentials: 'include' }
           );
           if (!response.ok) throw new Error('KYC document could not be loaded.');

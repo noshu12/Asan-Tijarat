@@ -142,17 +142,21 @@ async function createOrder(req, res, next) {
     }
 
     const buyer = req.user;
-    const created = [];
 
+    // C3 fix — TWO-PHASE checkout. Phase 1 reserves stock for EVERY line in
+    // EVERY supplier group before ANY order is created. If any single line
+    // fails, every reservation rolls back and zero orders exist, so a buyer
+    // retry can never duplicate an already-created order. (Previously each
+    // group reserved+created in turn, so a later group's 409 left earlier
+    // groups' orders orphaned in the DB.)
+    //
+    // RACE-CONDITION FIX (kept): reserve stock ATOMICALLY. The filter itself
+    // demands enough stock ({ stock: { $gte: quantity } }), so two simultaneous
+    // checkouts can never oversell the same product — the loser gets
+    // modifiedCount 0.
+    const allReserved = [];
+    let failedLine = null;
     for (const group of groups.values()) {
-      // RACE-CONDITION FIX: reserve stock ATOMICALLY before creating the
-      // order. The filter itself demands enough stock
-      // ({ stock: { $gte: quantity } }), so two simultaneous checkouts can
-      // never oversell the same product — the loser gets modifiedCount 0.
-      // Previously this was read-then-write (check stock, create order,
-      // then $inc), which oversells under concurrent orders.
-      const reserved = [];
-      let failedLine = null;
       for (const line of group.items) {
         const r = await Product.updateOne(
           { _id: line.productId, stock: { $gte: line.quantity } },
@@ -162,22 +166,27 @@ async function createOrder(req, res, next) {
           failedLine = line;
           break;
         }
-        reserved.push(line);
+        allReserved.push(line);
       }
-      if (failedLine) {
-        // Another checkout grabbed the stock first — give back whatever
-        // this checkout reserved, then fail cleanly with 409.
-        for (const line of reserved) {
-          await Product.updateOne({ _id: line.productId }, { $inc: { stock: line.quantity } });
-        }
-        return res.status(409).json({
-          error: {
-            code: 'INSUFFICIENT_STOCK',
-            message: `"${failedLine.productName}" just ran low. Please lower the quantity and try again.`,
-          },
-        });
+      if (failedLine) break;
+    }
+    if (failedLine) {
+      // Another checkout grabbed the stock first — give back everything
+      // reserved so far, then fail cleanly with 409. No orders were created.
+      for (const line of allReserved) {
+        await Product.updateOne({ _id: line.productId }, { $inc: { stock: line.quantity } });
       }
+      return res.status(409).json({
+        error: {
+          code: 'INSUFFICIENT_STOCK',
+          message: `"${failedLine.productName}" just ran low. Please lower the quantity and try again.`,
+        },
+      });
+    }
 
+    // Phase 2: all stock reserved — now create one order per supplier group.
+    const created = [];
+    for (const group of groups.values()) {
       // Stock is reserved — now create the order.
       // Strip internal fields before persisting the item snapshots.
       const safeItems = group.items.map(({ _supplierId, _lineTotal, ...rest }) => rest);

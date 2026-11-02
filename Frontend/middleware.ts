@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Paths the admin subdomain may serve besides /admin/*.
-const ADMIN_EXTRA_PATHS = ['/subadmin/setup'];
+const ADMIN_EXTRA_PATHS = ['/subadmin-setup'];
 
 export function middleware(request: NextRequest) {
   const host = (request.headers.get('host') || '').toLowerCase();

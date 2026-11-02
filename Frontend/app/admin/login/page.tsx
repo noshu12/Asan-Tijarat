@@ -58,7 +58,6 @@ export default function AdminLoginPage() {
       }
       // Signed in — the host-only admin cookie is set. Go to the dashboard.
       window.location.assign('/admin/users');
-      router.refresh();
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);

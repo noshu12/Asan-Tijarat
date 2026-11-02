@@ -146,6 +146,9 @@ async function verifyUser(req, res, next) {
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be verified or unverified.' } });
     }
+    if (req.user.role === 'subadmin' && (user.role === 'admin' || user.role === 'subadmin')) {
+      return res.status(403).json({ error: { code: 'SUBADMIN_IMMUTABLE', message: 'Sub-admins cannot modify admin or sub-admin accounts.' } });
+    }
     if (user.status === 'suspended' || user.status === 'rejected') {
       return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'Suspended or rejected accounts cannot be verified or unverified. Use Activate for a suspended account.' } });
     }
@@ -189,6 +192,9 @@ async function suspendUser(req, res, next) {
     }
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be suspended.' } });
+    }
+    if (req.user.role === 'subadmin' && (user.role === 'admin' || user.role === 'subadmin')) {
+      return res.status(403).json({ error: { code: 'SUBADMIN_IMMUTABLE', message: 'Sub-admins cannot modify admin or sub-admin accounts.' } });
     }
     if (user.status === 'suspended') {
       return res.status(400).json({ error: { code: 'ALREADY_SUSPENDED', message: 'This account is already suspended.' } });
@@ -236,6 +242,9 @@ async function activateUser(req, res, next) {
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be activated.' } });
     }
+    if (req.user.role === 'subadmin' && (user.role === 'admin' || user.role === 'subadmin')) {
+      return res.status(403).json({ error: { code: 'SUBADMIN_IMMUTABLE', message: 'Sub-admins cannot modify admin or sub-admin accounts.' } });
+    }
     if (user.status !== 'suspended') {
       return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'Only suspended accounts can be activated.' } });
     }
@@ -271,6 +280,9 @@ async function rejectUser(req, res, next) {
     }
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be rejected.' } });
+    }
+    if (req.user.role === 'subadmin' && (user.role === 'admin' || user.role === 'subadmin')) {
+      return res.status(403).json({ error: { code: 'SUBADMIN_IMMUTABLE', message: 'Sub-admins cannot modify admin or sub-admin accounts.' } });
     }
     if (user.status !== 'pending') {
       return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'Only pending accounts can be rejected. Suspend an active account instead.' } });
@@ -312,6 +324,9 @@ async function deleteUser(req, res, next) {
     if (user.role === 'admin') {
       return res.status(400).json({ error: { code: 'ADMIN_IMMUTABLE', message: 'Admin accounts cannot be deleted.' } });
     }
+    if (req.user.role === 'subadmin' && (user.role === 'admin' || user.role === 'subadmin')) {
+      return res.status(403).json({ error: { code: 'SUBADMIN_IMMUTABLE', message: 'Sub-admins cannot modify admin or sub-admin accounts.' } });
+    }
     const deletedInfo = { email: user.email, businessName: user.businessName || '', role: user.role };
     await Product.deleteMany({ supplierId: user._id });
     await User.deleteOne({ _id: user._id });
@@ -352,13 +367,23 @@ async function getKycDocument(req, res, next) {
       return res.status(404).json({ error: { code: 'KYC_NOT_FOUND', message: 'No document uploaded for this field.' } });
     }
 
-    // Cloudinary PRIVATE document → mint a 10-minute signed URL and redirect.
-    // The file never has a public URL; only this admin route can grant access.
+    // Cloudinary PRIVATE document → mint a 10-minute signed URL and STREAM
+    // the file through the backend. We pipe bytes instead of redirecting so
+    // the admin-subdomain proxy and the frontend's blob fetch never hit CORS
+    // or cross-origin redirect issues. The signed URL never reaches the browser.
     if (doc.storage === 'cloudinary' && doc.publicId) {
       const signedUrl = getPrivateSignedUrl(doc.publicId, {
         resourceType: doc.resourceType || 'image',
       });
-      return res.redirect(signedUrl);
+      const upstream = await fetch(signedUrl);
+      if (!upstream.ok) {
+        return res.status(502).json({ error: { code: 'KYC_FETCH_FAILED', message: 'Could not fetch document from storage.' } });
+      }
+      const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      return res.send(buf);
     }
 
     // Local-disk document (dev mode).

@@ -1059,7 +1059,15 @@ async function resetPassword(req, res, next) {
  */
 async function updateMe(req, res, next) {
   try {
-    const EDITABLE = ['name', 'businessName', 'email', 'phone', 'city', 'ntn', 'cnic', 'category', 'categories', 'avatar', 'houseAddress', 'currentHouseLocation', 'currentLocation', 'shopType', 'shopLocation', 'utilityBillAccountNumber'];
+    // C5 fix: fields are role-scoped — a shopkeeper cannot set supplier-only
+    // fields (ntn/categories) and a supplier cannot set shopkeeper-only fields.
+    const COMMON_EDITABLE = ['name', 'businessName', 'email', 'phone', 'city', 'cnic', 'avatar', 'houseAddress', 'currentHouseLocation', 'currentLocation'];
+    const SUPPLIER_EDITABLE = ['ntn', 'category', 'categories'];
+    const SHOPKEEPER_EDITABLE = ['shopType', 'shopLocation', 'utilityBillAccountNumber'];
+    let EDITABLE = [...COMMON_EDITABLE];
+    if (req.user.role === 'supplier') EDITABLE.push(...SUPPLIER_EDITABLE);
+    else if (req.user.role === 'shopkeeper') EDITABLE.push(...SHOPKEEPER_EDITABLE);
+    // Admin/subadmin use the admin panel, not self-service; keep common fields only.
 
     const updates = {};
     for (const field of EDITABLE) {
@@ -1121,6 +1129,8 @@ async function updateMe(req, res, next) {
         });
       }
       updates.email = email;
+      // C4 fix: a new email address must re-verify via OTP.
+      if (email !== req.user.email) updates.emailVerified = false;
     }
 
     // Phone is used as a login identifier too, so it must also stay unique.
