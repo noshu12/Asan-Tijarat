@@ -1,45 +1,53 @@
-const nodemailer = require('nodemailer');
-
+/**
+ * sendEmail.js — Brevo HTTP API version.
+ *
+ * WHY: Render's network blocks outbound SMTP (Gmail 587/465 and Brevo SMTP
+ * all timed out with "Connection timeout"). So we send via Brevo's HTTPS
+ * API (port 443) instead of SMTP. No nodemailer, no SMTP ports.
+ *
+ * Env needed:
+ *   BREVO_API_KEY   — Brevo dashboard → SMTP & API → API Keys → Generate
+ *   EMAIL_FROM      — sender address (must be verified in Brevo → Senders)
+ *   EMAIL_FROM_NAME — sender name, default "Asan Tijarat"
+ *
+ * Interface is UNCHANGED: sendEmail({ to, subject, text, html }) → true/false.
+ * Never throws — callers fall back to the terminal dev log on failure.
+ */
 function isEmailConfigured() {
-  return Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
+  return Boolean(process.env.BREVO_API_KEY);
 }
 
-/**
- * Sends one email — plain text, HTML, or both, with optional attachments.
- * - Old callers that pass only { to, subject, text } keep working exactly as before.
- * - New branded templates pass { html } too; it is forwarded to nodemailer
- *   unchanged. (v5 templates load the logo from LOGO_URL — no attachments.)
- * - Sender name is ALWAYS the brand: "Asan Tijarat" (overridable with
- *   EMAIL_FROM_NAME in .env). The address is EMAIL_FROM, else EMAIL_USER.
- * Returns true if the email was sent, false if SMTP is not configured
- * or sending failed. Never throws, so callers can fall back to the
- * terminal dev log instead of crashing the request.
- */
-async function sendEmail({ to, subject, text, html, attachments }) {
+async function sendEmail({ to, subject, text, html }) {
   if (!isEmailConfigured()) {
     return false;
   }
   try {
-    const port = Number(process.env.EMAIL_PORT || 587);
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port,
-      secure: port === 465,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
     const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER;
     const fromName = process.env.EMAIL_FROM_NAME || 'Asan Tijarat';
-    await transporter.sendMail({
-      from: { name: fromName, address: fromAddress },
-      to,
-      subject,
-      text,
-      ...(html ? { html } : {}),
-      ...(attachments && attachments.length ? { attachments } : {}),
+    if (!fromAddress) {
+      console.error('[email] Missing EMAIL_FROM (sender address).');
+      return false;
+    }
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: fromName, email: fromAddress },
+        to: [{ email: to }],
+        subject,
+        ...(html ? { htmlContent: html } : {}),
+        ...(text ? { textContent: text } : {}),
+      }),
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[email] Brevo API failed (${res.status}): ${errText}`);
+      return false;
+    }
     console.log(`[email] Sent to ${to}: ${subject}`);
     return true;
   } catch (err) {
