@@ -270,6 +270,13 @@ export default function SupplierMyProductsPage() {
               </tr>
               );
             })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-5 py-12 text-center text-sm text-slate-400">
+                  No products yet. Add your first product to start selling.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

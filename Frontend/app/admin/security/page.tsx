@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, ShieldOff } from 'lucide-react';
+import { ShieldCheck, ShieldOff, Eye, EyeOff } from 'lucide-react';
 
 type Phase = 'loading' | 'disabled' | 'setup' | 'enabled' | 'disabling';
 
@@ -20,6 +20,7 @@ export default function AdminSecurityPage() {
   const [manualKey, setManualKey] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -216,14 +217,24 @@ export default function AdminSecurityPage() {
             <p className="text-xs text-slate-500 leading-relaxed">
               Enter your current password to confirm. Your account will then sign in with password only.
             </p>
-            <Input
-              label="Current password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="space-y-1.5 relative">
+              <Input
+                label="Current password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
             <div className="flex gap-3">
               <Button type="submit" isLoading={busy} className="h-11 text-sm font-bold">
                 Disable 2FA
