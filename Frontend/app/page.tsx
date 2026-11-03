@@ -254,28 +254,28 @@ export default function HomePage() {
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-bold text-sm">Accounts reviewed before trading</h4>
+                    <h3 className="font-bold text-sm">Accounts reviewed before trading</h3>
                     <p className="text-xs text-emerald-200/70">Business accounts are reviewed before trading</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Building2 className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-bold text-sm">Bulk orders with MOQ</h4>
+                    <h3 className="font-bold text-sm">Bulk orders with MOQ</h3>
                     <p className="text-xs text-emerald-200/70">Order in bulk with minimum order quantity</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Package className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-bold text-sm">Price per pack, clearly shown</h4>
+                    <h3 className="font-bold text-sm">Price per pack, clearly shown</h3>
                     <p className="text-xs text-emerald-200/70">Prices shown per pack, with pack size and stock</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Store className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-bold text-sm">Separate portals</h4>
+                    <h3 className="font-bold text-sm">Separate portals</h3>
                     <p className="text-xs text-emerald-200/70">Separate shopkeeper and supplier portals</p>
                   </div>
                 </div>
