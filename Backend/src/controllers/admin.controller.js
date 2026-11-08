@@ -1,7 +1,10 @@
 // ────────────────────────────────────────────────────────────
 //  Admin controllers — platform management over MongoDB.
-//  Every route here is guarded by requireRole('admin') in the
-//  router, so only admin JWTs can reach these handlers.
+//  REVISED (Batch 02, 2026-11-09): Noushad ka faisla — sub-admin ko FULL
+//  access hai (admin.routes.js dekho). Is liye suspend/activate/reject/
+//  delete pe koi sub-admin rok nahi hai. Sirf admin accounts khud
+//  immutable hain (neeche ADMIN_IMMUTABLE checks) — koi sub-admin main
+//  admin ko chher nahi sakta.
 // ────────────────────────────────────────────────────────────
 const fs = require('fs');
 const path = require('path');
@@ -367,6 +370,9 @@ async function getKycDocument(req, res, next) {
       return res.status(404).json({ error: { code: 'KYC_NOT_FOUND', message: 'No document uploaded for this field.' } });
     }
 
+    // FIX (Batch 02) — KYC view ko audit karo. Pehle KYC file views ka
+    // koi record nahi banta tha (jabke identity-number views audited thay).
+    await logAdminAction(req, 'KYC_VIEWED', 'User', id, { field });
     // Cloudinary PRIVATE document → mint a 10-minute signed URL and STREAM
     // the file through the backend. We pipe bytes instead of redirecting so
     // the admin-subdomain proxy and the frontend's blob fetch never hit CORS

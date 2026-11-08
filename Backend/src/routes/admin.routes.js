@@ -5,10 +5,16 @@ const admin = require('../controllers/admin.controller');
 // Every /api/admin/* route needs a signed-in session; each route then
 // declares which roles may use it.
 //
-// Sub-admins get the FULL user-management + messages surface:
-// list users, decrypt identity numbers, view KYC documents,
-// verify/unverify/suspend/activate/reject/delete users,
-// and list/read/reply/delete contact messages.
+// REVISED (Batch 02, 2026-11-09) — Noushad ka faisla: sub-admin ko FULL
+// access hai, jo kuch main admin kar sakta hai wohi sub-admin bhi kar
+// sakta hai, kyunke wo akele sab kuch handle nahi kar sakta — isi liye
+// sub-admin banaya hai. Is liye suspend/activate/reject/delete, products,
+// orders, stats aur audit log — sab sub-admin ke liye bhi khule hain.
+// SIRF 2 cheezein main-admin-only rehti hain: (1) sub-admin accounts
+// banana/hatana, (2) admin accounts ko chherna (wo controller me
+// ADMIN_IMMUTABLE se pehle se blocked hai). Agar sub-admin account
+// management bhi sub-admin ko dena ho to neeche subadmins wali 3 routes
+// me 'subadmin' add karna hoga — pehle Noushad se poochna.
 // They CANNOT touch products/orders, read the audit log, see dashboard
 // stats, or manage sub-admin accounts — those stay main-admin-only.
 // They also cannot act on admin/subadmin accounts (user page hides those).
@@ -16,7 +22,7 @@ const admin = require('../controllers/admin.controller');
 // protectAdmin) — a regular asan_token can never open these routes.
 router.use(protectAdmin);
 
-router.get('/stats', requireRole('admin'), admin.getStats);
+router.get('/stats', requireRole('admin', 'subadmin'), admin.getStats);
 
 router.get('/users', requireRole('admin', 'subadmin'), admin.listUsers);
 router.get('/users/:id/identity', requireRole('admin', 'subadmin'), admin.getDecryptedIdentity);
@@ -32,11 +38,11 @@ router.get('/subadmins', requireRole('admin'), admin.listSubadmins);
 router.post('/subadmins', requireRole('admin'), admin.createSubadmin);
 router.delete('/subadmins/:id', requireRole('admin'), admin.deleteSubadmin);
 
-router.get('/products', requireRole('admin'), admin.listProducts);
-router.delete('/products/:id', requireRole('admin'), admin.deleteProduct);
+router.get('/products', requireRole('admin', 'subadmin'), admin.listProducts);
+router.delete('/products/:id', requireRole('admin', 'subadmin'), admin.deleteProduct);
 
-router.get('/orders', requireRole('admin'), admin.listOrders);
-router.get('/audit-log', requireRole('admin'), admin.listAuditLog);
+router.get('/orders', requireRole('admin', 'subadmin'), admin.listOrders);
+router.get('/audit-log', requireRole('admin', 'subadmin'), admin.listAuditLog);
 
 router.get('/contacts', requireRole('admin', 'subadmin'), admin.listContacts);
 router.delete('/contacts/:id', requireRole('admin', 'subadmin'), admin.deleteContact);

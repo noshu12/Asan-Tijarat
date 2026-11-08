@@ -89,11 +89,11 @@ function SensitiveValue({
 
 export default function AdminUsersPage() {
   const { user, loading: authLoading } = useAuth();
-  // Sub-admins (KYC reviewers) may ONLY verify/unverify + view KYC docs.
-  // Suspend / activate / reject / delete stay main-admin-only.
-  // NOTE: sub-admins now share every action on this page with the main admin
-  // (verify/suspend/activate/reject/delete). Target guard below keeps
-  // admin + subadmin accounts themselves out of reach.
+  // REVISED (Batch 02, 2026-11-09) — Noushad ka faisla: sub-admin ko FULL
+  // access hai, jo kuch main admin kar sakta hai wohi sub-admin bhi kar
+  // sakta hai. Is liye Suspend / Activate / Reject / Delete buttons
+  // sub-admin ko bhi dikhte hain (pehle wali Batch 02 me chhupaye thay,
+  // wo faisla badal gaya hai).
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roleFilter, setRoleFilter] = useState('all');
   const [verifiedFilter, setVerifiedFilter] = useState('all');
@@ -198,8 +198,8 @@ export default function AdminUsersPage() {
     );
   }
 
-  // Sub-admins (KYC reviewers) share this page with the main admin —
-  // their action buttons are limited separately (verify only).
+  // Sub-admins share this page with the main admin — full access,
+  // same buttons as the main admin (Noushad ka faisla, 2026-11-09).
   if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
     return (
       <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
