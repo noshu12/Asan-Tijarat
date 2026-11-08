@@ -134,6 +134,19 @@ async function register(req, res, next) {
         error: { code: 'MISSING_FIELDS', message: 'name, email, phone, password and role are required.' },
       });
     }
+    // FIX (Batch 02) — register pe password/email validation (pehle nahi thi:
+    // 1-character password se bhi register ho jata tha, aur galat email bhi).
+    // Yehi rule reset/change pe pehle se tha (>= 8 chars) — ab register pe bhi.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+      return res.status(400).json({
+        error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.' },
+      });
+    }
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        error: { code: 'WEAK_PASSWORD', message: 'Password must be at least 8 characters.' },
+      });
+    }
     // Self-registration is limited to marketplace accounts; admins are
     // provisioned directly in the database by an existing admin.
     if (!['shopkeeper', 'supplier'].includes(role)) {
@@ -274,8 +287,8 @@ async function register(req, res, next) {
  * POST /api/auth/send-otp
  * Body: { email }
  * Sends a 6-digit OTP, hashed, 5-min expiry, 60-sec resend limit.
- * Sends a real email when SMTP is configured; otherwise the OTP is
- * logged server-side (dev only) — same fallback as before.
+ * FIX (Batch 02): email fail ho to OTP KABHI log nahi hota — pehle
+ * plaintext OTP server console (Render logs) me chhapta tha.
  * Returns a generic message whether or not the account exists.
  */
 async function sendOtp(req, res, next) {
@@ -305,7 +318,9 @@ async function sendOtp(req, res, next) {
         ...emailContent,
       });
       if (!emailSent) {
-        console.log(`[auth] OTP (dev only, no SMTP configured or email failed) for ${user.email}: ${otp}`);
+        // FIX (Batch 02) — OTP kabhi log nahi karna, na dev me na prod me.
+        // Sirf ye batate hain ke email nahi gayi (Brevo key check karo).
+        console.warn(`[auth] OTP email NOT sent for ${user.email} — check BREVO_API_KEY. OTP is never logged.`);
       }
     }
     res.json({ message: 'If an account exists for this email, an OTP has been sent.' });
@@ -461,36 +476,17 @@ async function login(req, res, next) {
       });
     }
 
-    // Sub-admin 2FA is MANDATORY — a sub-admin who never finished the
-    // first-time setup cannot sign in at all. Hand back a short-lived setup
-    // token and let POST /api/auth/2fa/setup-first finish the job. There is
-    // no bypass: without 2FA enabled, no session is ever issued.
-    if (user.role === 'subadmin' && !user.twoFactorEnabled) {
-      const setupToken = jwt.sign(
-        { id: user._id, purpose: '2fa-setup' },
-        process.env.JWT_SECRET,
-        { expiresIn: '5m' }
-      );
-      return res.json({ requires2FASetup: true, tempToken: setupToken });
-    }
-
+    // FIX (Batch 02) — yahan sub-admin 2FA setup ka block DEAD CODE tha:
+    // upar USE_ADMIN_PORTAL return ke baad user.role kabhi admin/subadmin
+    // nahi hota, is liye ye block kabhi chalta hi nahi tha. Sub-admin 2FA
+    // setup sirf adminLogin() se hota hai (POST /api/auth/admin/login).
     user.loginAttempts = 0;
     user.lockUntil = undefined;
     await user.save();
 
-    // Admin 2FA — the password is correct at this point. If this admin
-    // enabled TOTP, do NOT sign them in yet: hand back a short-lived 2FA
-    // token and let POST /api/auth/2fa/login finish the job after the
-    // 6-digit authenticator code is verified.
-    if ((user.role === 'admin' || user.role === 'subadmin') && user.twoFactorEnabled) {
-      const tempToken = jwt.sign(
-        { id: user._id, purpose: '2fa' },
-        process.env.JWT_SECRET,
-        { expiresIn: '5m' }
-      );
-      return res.json({ requires2FA: true, tempToken });
-    }
-
+    // FIX (Batch 02) — yahan admin 2FA ka block bhi DEAD CODE tha (upar
+    // USE_ADMIN_PORTAL return ki wajah se). Admin 2FA sirf adminLogin()
+    // me hota hai, jo { requires2FA: true, tempToken } deta hai.
     // Single-session: a fresh login kills the previous session on any other
     // device/browser. The bump sits here (not above) so a password-only
     // attempt never logs the real user out before the 2FA code is verified.
@@ -963,8 +959,8 @@ async function me(req, res) {
  * Body: { email }
  * Hashed single-use token, 15-min expiry. Same generic message whether
  * or not the email exists, so accounts cannot be enumerated.
- * Sends a real reset-link email when SMTP is configured; otherwise the
- * token is logged server-side (dev only).
+ * Sends a real reset-link email when Brevo is configured; otherwise
+ * nothing secret is logged (FIX Batch 02 — token kabhi log nahi hota).
  */
 async function forgotPassword(req, res, next) {
   try {
@@ -988,7 +984,8 @@ async function forgotPassword(req, res, next) {
         text: `You requested a password reset for Asan Tijarat.\n\nClick this link to reset your password (valid for 15 minutes):\n${resetLink}\n\nIf you did not request this, ignore this email.`,
       });
       if (!emailSent) {
-        console.log(`[auth] Password reset token (dev only, no SMTP configured or email failed) for ${user.email}: ${token}`);
+        // FIX (Batch 02) — reset token kabhi log nahi karna. Sirf warning.
+        console.warn(`[auth] Password-reset email NOT sent for ${user.email} — check BREVO_API_KEY. Reset token is never logged.`);
       }
     }
     res.json({ message: 'If an account exists for this email, reset instructions have been sent.' });
