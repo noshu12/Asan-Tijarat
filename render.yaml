@@ -1,0 +1,58 @@
+# render.yaml — Asan Tijarat Backend on Render (NEW, Batch 01)
+# Isko repo ke ROOT me rakho (Asan-Tijarat/render.yaml).
+# Render dashboard > New > Blueprint se is file se service ban jayegi.
+# IMPORTANT: is file me koi secret NAHI likhna — secrets Render dashboard
+# me Environment Variables me set karo (neeche list hai).
+# Ye file sirf structure batati hai; env var VALUES dashboard se aayengi.
+
+services:
+  - type: web
+    name: asan-tijarat-backend
+    runtime: node
+    # Repo ka Backend folder hi service ka root hai:
+    rootDir: Backend
+    buildCommand: npm install
+    startCommand: npm start
+    # Health check — FIXED server.js me /api/health ab checkDb se pehle hai,
+    # is liye DB down hone pe bhi ye jawab dega (db: disconnected).
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Neeche wali values Render dashboard me set karo (sync: false matlab
+      # Blueprint inko overwrite nahi karega):
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: Asan Tijarat
+      - key: CONTACT_NOTIFY_EMAIL
+        sync: false
+      - key: USE_CLOUDINARY
+        value: "true"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: LOGO_URL
+        sync: false

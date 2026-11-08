@@ -13,6 +13,33 @@ if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
   process.exit(1);
 }
 
+// FIX (Batch 01) — Production me chup-chap fail hona band karo.
+// Pehle Cloudinary / Brevo / NODE_ENV missing hone pe server chalta rehta
+// tha, lekin uploads wipe ho jate thay aur OTP emails kabhi nahi jati thi.
+// Ab production me zaroori vars missing hon to server start hi nahi hoga,
+// aur saaf batayega ke kya missing hai. Local dev me sirf warning milegi.
+if (process.env.NODE_ENV === 'production') {
+  const missingProdVars = [];
+  if (!process.env.BREVO_API_KEY) missingProdVars.push('BREVO_API_KEY (warna OTP/reset/approval emails kabhi nahi jayengi)');
+  if (!process.env.ENCRYPTION_KEY) missingProdVars.push('ENCRYPTION_KEY (warna CNIC/NTN encrypt nahi hoga, register fail hoga)');
+  if (process.env.USE_CLOUDINARY !== 'true') missingProdVars.push('USE_CLOUDINARY=true (warna uploads Render ki ephemeral disk pe jayenge aur wipe ho jayenge)');
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    missingProdVars.push('CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET (Cloudinary on karne ke liye)');
+  }
+  if (!process.env.MONGO_URI) missingProdVars.push('MONGO_URI (Atlas connection string)');
+  if (missingProdVars.length > 0) {
+    console.error('[server] ❌ Production config incomplete — server will not start:');
+    missingProdVars.forEach((v) => console.error(`[server]   - ${v}`));
+    console.error('[server]   → Render dashboard > Environment me ye vars set karo, phir redeploy karo.');
+    process.exit(1);
+  }
+} else {
+  // Dev me sirf warn karo, rokna nahi — local kaam chalta rehna chahiye.
+  if (!process.env.BREVO_API_KEY) console.warn('[server] ⚠️  BREVO_API_KEY missing — emails nahi jayengi (dev only).');
+  if (process.env.USE_CLOUDINARY !== 'true') console.warn('[server] ⚠️  USE_CLOUDINARY != true — uploads local disk pe jayenge (dev only).');
+  if (!process.env.NODE_ENV) console.warn('[server] ⚠️  NODE_ENV unset — Render pe isko "production" set karna lazmi hai.');
+}
+
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
@@ -25,7 +52,10 @@ const { checkDb } = require('./src/middleware/auth');
 const { notFound, errorHandler } = require('./src/middleware/errorHandler');
 
 const app = express();
-app.set('trust proxy', 'loopback');
+// FIX (Batch 01) — Render ke proxy ke peeche 'loopback' se real client IP
+// nahi milta tha, is liye rate-limit aur Turnstile galat IP pe lagte thay.
+// Render 1 proxy hop peeche hai, is liye trust proxy = 1.
+app.set('trust proxy', 1);
 
 // Helmet: security headers. cross-origin isliye rakha hai taake
 // frontend (localhost:3000) se product images (localhost:5000)
@@ -125,6 +155,20 @@ app.use('/api/auth', authLimiter);
 // aayega — tab tak admin mein KYC image ka 404 aana normal hai, bug nahi.
 app.use('/uploads/products', express.static(path.join(__dirname, 'uploads', 'products')));
 
+// FIX (Batch 01) — Health check ko checkDb se PEHLE rakho.
+// Pehle checkDb /api/health se pehle chalta tha, to DB down ho to health
+// endpoint khud 503 deta tha — Render ke health check ke liye bekaar tha.
+// Ab /api/health hamesha jawab dega (db: connected/disconnected batayega),
+// aur baaki /api/* routes pehle ki tarah DB down hone pe 503 denge.
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'asan-tijarat-backend',
+    time: new Date().toISOString(),
+    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+  });
+});
+
 // Fast 503 while the DB is down — no slow mongoose timeouts.
 app.use(checkDb);
 
@@ -137,16 +181,8 @@ app.use('/api/public', require('./src/routes/public.routes'));
 app.use('/api/analytics', require('./src/routes/analytics.routes'));
 
 
-// Health check: `GET /api/health` -> { status, db }
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'asan-tijarat-backend',
-    time: new Date().toISOString(),
-    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-  });
-});
-
+// (Health check upar move kar diya hai — checkDb se pehle — taake Render
+// ka health check DB down hone pe bhi kaam kare.)
 app.use(notFound);
 app.use(errorHandler);
 
@@ -157,8 +193,8 @@ async function start() {
   try {
     await connectDB();
     app.listen(PORT, () => {
-      console.log(`[server] ✅ http://localhost:${PORT}`);
-      console.log(`[server] health → http://localhost:${PORT}/api/health`);
+      console.log(`[server] ✅ listening on port ${PORT} (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
+      console.log(`[server] health → /api/health`);
     });
   } catch (err) {
     console.error(`[server] ❌ Could not connect to MongoDB: ${err.message}`);
