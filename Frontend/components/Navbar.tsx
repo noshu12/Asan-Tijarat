@@ -7,7 +7,7 @@ import { Search, Menu, X, LayoutDashboard, ShieldCheck, ShoppingCart, LogOut } f
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthProvider';
-import { cartCount } from '@/lib/cart';
+import { cartCount, CART_UPDATED_EVENT } from '@/lib/cart';
 
 /**
  * Session-aware navigation — guests see Sign In / Get Started; logged-in users
@@ -21,15 +21,38 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // FIX (Batch 03) — cart badge reactive nahi tha: cartCount() render ke
+  // waqt localStorage parhta tha, is liye cart add karne pe badge tab tak
+  // update nahi hota tha jab tak Navbar kisi aur wajah se re-render na ho.
+  // Ab count state me hai aur cart.ts ke 'asan-cart-updated' event + dusre
+  // tab ke 'storage' event pe update hota hai. SSR-safe hai: pehle render
+  // pe 0, mount ke baad asal count.
+  const [cartItemCount, setCartItemCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = () => setCartItemCount(cartCount());
+    updateCount();
+    window.addEventListener(CART_UPDATED_EVENT, updateCount);
+    window.addEventListener('storage', updateCount);
+    return () => {
+      window.removeEventListener(CART_UPDATED_EVENT, updateCount);
+      window.removeEventListener('storage', updateCount);
+    };
+  }, []);
   const mobileButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLElement>(null);
 
+  // FIX (Batch 03) — sub-admin ka Dashboard link /shopkeeper/dashboard pe
+  // jata tha aur wahan AuthGuard usko bounce kar deta tha. Sub-admin ka
+  // dashboard /admin/users hai.
   const userHome =
     user?.role === 'admin'
       ? '/admin/dashboard'
       : user?.role === 'supplier'
         ? '/supplier/dashboard'
-        : '/shopkeeper/dashboard';
+        : user?.role === 'subadmin'
+          ? '/admin/users'
+          : '/shopkeeper/dashboard';
 
   const navLinks = [
     { name: 'Home', href: '/' },
@@ -67,6 +90,20 @@ export function Navbar() {
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [mobileMenuOpen]);
+
+  // FIX (Batch 03) — search modal pe "ESC to close" likha tha, lekin Escape
+  // ka koi handler tha hi nahi — sirf overlay click se band hota tha. Ab
+  // Escape dabane se search modal waqai band ho jata hai.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSearchOpen(false);
+    };
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [searchOpen]);
 
   return (
     <>
@@ -120,7 +157,13 @@ export function Navbar() {
               <Search className="w-5 h-5" />
             </button>
 
-            {loading ? null : !user && (
+            {/* FIX (Batch 03) — guest Sign In / Get Started pehle `loading`
+                khatam hone ka wait karte thay (loading tab tak rehta hai jab
+                tak Render backend se session check na ho jaye, aur cold start
+                pe usme der lagti hai). Ab ye foran dikhte hain jab user nahi
+                hai — bilkul mobile menu ki tarah. Logged-in branch waisa hi
+                hai jaisa tha. */}
+            {!user && (
               <>
                 <Link
                   href="/signin"
@@ -147,9 +190,9 @@ export function Navbar() {
                     title="Shopping Cart"
                   >
                     <ShoppingCart className="w-5 h-5" />
-                    {cartCount() > 0 && (
+                    {cartItemCount > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-asan-accent text-[10px] font-bold text-white flex items-center justify-center">
-                        {cartCount()}
+                        {cartItemCount}
                       </span>
                     )}
                   </Link>
@@ -256,7 +299,7 @@ export function Navbar() {
                           onClick={() => setMobileMenuOpen(false)}
                           className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-slate-800 transition"
                         >
-                          🛒 My Cart ({cartCount()})
+                          🛒 My Cart ({cartItemCount})
                         </Link>
                       )}
                       <Link

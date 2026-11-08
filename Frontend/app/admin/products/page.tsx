@@ -18,12 +18,21 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+  // FIX (Batch 03) — search typing refetch nahi karta tha: fetch effect ki
+  // deps me `search` tha hi nahi. Ab search 400ms debounce hoke
+  // `debouncedSearch` me jata hai, aur fetch effect usi pe chalta hai.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   // The listing whose uploaded photo is open in the full-size viewer.
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
@@ -39,12 +48,14 @@ export default function AdminProductsPage() {
     setLoading(true);
     setError(null);
     api.admin
-      .products({ status: statusFilter, search: search.trim() || undefined })
+      .products({ status: statusFilter, search: debouncedSearch || undefined })
       .then((res) => { if (mounted) setProducts(res.products); })
       .catch((err) => { if (mounted) setError(err instanceof Error ? err.message : 'Failed to load products.'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
-  }, [user, statusFilter]);
+    // FIX (Batch 03) — deps me debouncedSearch add kiya, taake typing se
+    // refetch ho. Pehle deps sirf [user, statusFilter] thay.
+  }, [user, statusFilter, debouncedSearch]);
 
   const removeProduct = (p: Product) => {
     if (!window.confirm(`Delete "${p.name}" from the marketplace?`)) return;
@@ -106,8 +117,13 @@ export default function AdminProductsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
+              // FIX (Batch 03) — Enter dabane se pehle statusFilter 'all' pe
+              // reset ho jata tha, is liye search + status filter ek saath
+              // kabhi nahi chalte thay. Ab Enter sirf debounce ko foran flush
+              // karta hai (turant search), filter waisa hi rehta hai jaisa
+              // user ne lagaya tha.
               if (e.key === 'Enter') {
-                setStatusFilter('all');
+                setDebouncedSearch(search.trim());
               }
             }}
             className="pl-9 pr-4 py-2 w-full rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"

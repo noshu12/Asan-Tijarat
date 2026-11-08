@@ -2,14 +2,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 
 export default function ForgotPasswordPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -26,12 +24,10 @@ export default function ForgotPasswordPage() {
     try {
       const res = await api.forgotPassword(email.trim(), tsToken || undefined);
       setSuccessMessage(res.message || 'If an account exists for this email, a password reset link has been sent.');
-      // Email wale flow mein reset page par NAHI jana — user email se link
-      // kholega. Pehle "email check karo" message dikhao, phir Sign In par
-      // wapas bhej do, taake wahan se reset ke baad login kar sake.
-      window.setTimeout(() => {
-        router.push('/signin');
-      }, 2500);
+      // FIX (Batch 03) — pehle success message dikhate hi 2.5 second me
+      // /signin pe redirect ho jata tha, is liye user message parh hi nahi
+      // pata tha. Ab koi auto-redirect nahi hai: message screen pe rehta
+      // hai aur neeche "Go to Sign In" button hai — user jab chahe jaye.
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -54,6 +50,22 @@ export default function ForgotPasswordPage() {
           Enter your account email. If an account exists, you will receive reset instructions.
         </p>
 
+        {successMessage ? (
+          <div className="space-y-4 mt-6">
+            <p role="alert" className="text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2.5">
+              {successMessage}
+            </p>
+            <p className="text-xs text-slate-500">
+              Apna email inbox check karo — reset link wahan aayega. Link se naya password set karne ke baad yahin se sign in kar sakte ho.
+            </p>
+            <Link
+              href="/signin"
+              className="flex items-center justify-center w-full h-12 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold transition"
+            >
+              Go to Sign In
+            </Link>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
           <Input
             label="Email"
@@ -63,12 +75,6 @@ export default function ForgotPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-
-          {successMessage && (
-            <p role="alert" className="text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2.5">
-              {successMessage}
-            </p>
-          )}
 
           {errorMessage && (
             <p role="alert" className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5">
@@ -84,6 +90,7 @@ export default function ForgotPasswordPage() {
             Send Reset Instructions
           </Button>
         </form>
+        )}
 
         <p className="text-center text-xs text-slate-500 mt-6">
           <Link href="/signin" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">

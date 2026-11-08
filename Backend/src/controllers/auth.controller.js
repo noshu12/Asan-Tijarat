@@ -5,7 +5,7 @@ const { CATEGORIES } = require('../constants/categories');
 const { saveKycDocuments, deleteStoredFiles, deleteStoredUploads, KycUploadError } = require('../utils/kycStorage');
 const { sanitizeLocation } = require('../utils/location');
 const { sendEmail } = require('../utils/sendEmail');
-const { otpEmail, pendingVerificationEmail } = require('../utils/emailTemplates');
+const { otpEmail, pendingVerificationEmail, resetPasswordEmail } = require('../utils/emailTemplates');
 const { authenticator } = require('otplib');
 const QRCode = require('qrcode');
 
@@ -978,10 +978,12 @@ async function forgotPassword(req, res, next) {
       await user.save();
       const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
       const resetLink = `${baseUrl}/reset-password?token=${token}`;
+      const resetEmail = resetPasswordEmail({ name: user.name, resetLink });
       const emailSent = await sendEmail({
         to: user.email,
-        subject: 'Asan Tijarat - Reset your password',
-        text: `You requested a password reset for Asan Tijarat.\n\nClick this link to reset your password (valid for 15 minutes):\n${resetLink}\n\nIf you did not request this, ignore this email.`,
+        subject: resetEmail.subject,
+        html: resetEmail.html,
+        text: resetEmail.text,
       });
       if (!emailSent) {
         // FIX (Batch 02) — reset token kabhi log nahi karna. Sirf warning.

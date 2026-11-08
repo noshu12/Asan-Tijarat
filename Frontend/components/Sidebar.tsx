@@ -28,7 +28,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   const isAdmin = pathname.startsWith('/admin');
   const isSupplier = pathname.startsWith('/supplier');
-  const fallbackName = isAdmin ? (user?.role === 'subadmin' ? 'KYC Reviewer' : 'Platform Admin') : isSupplier ? 'Ahmed Khan' : 'M. Hassan';
+  // FIX (Batch 03) — demo naam hata diye: user load na ho to production
+  // UI me kisi aur ka naam dikhna galat tha. Ab: user hi nahi hai to
+  // "Guest", warna role ka label dikhega.
+  const fallbackName = !user
+    ? 'Guest'
+    : isAdmin
+      ? (user.role === 'subadmin' ? 'KYC Reviewer' : 'Platform Admin')
+      : isSupplier
+        ? 'Supplier'
+        : 'Shopkeeper';
   const displayName = authLoading
     ? 'Loading…'
     : (user?.businessName || user?.name || fallbackName);
