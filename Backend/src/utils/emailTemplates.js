@@ -163,6 +163,32 @@ function accountVerifiedEmail({ name, businessName }) {
 }
 
 /**
+ * Reset-password email — sent when the trader requests a password reset.
+ * Same branded layout as the OTP email (wrap() header/footer + green
+ * button). Previously forgotPassword sent this inline as plain text
+ * only, so it arrived unbranded while every other email was branded.
+ */
+function resetPasswordEmail({ name, resetLink }) {
+  const safeName = escapeHtml(name);
+  const safeLink = escapeHtml(resetLink);
+  const html = wrap(
+    'Reset your password',
+    `<p>Hello ${safeName},</p>` +
+      '<p>You requested a password reset for Asan Tijarat.</p>' +
+      `<div style="text-align:center;margin:24px 0;"><a href="${safeLink}" style="display:inline-block;background:#27AE7A;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Reset Password</a></div>` +
+      `<p style="font-size:13px;color:#718096;">If the button does not work, open this link in your browser:<br />${safeLink}</p>` +
+      '<p>This link is <strong>valid for 15 minutes</strong>.</p>' +
+      '<p>If you did not request this, please ignore this email.</p>'
+  );
+  const text =
+    `Hello ${name},\n\n` +
+    'You requested a password reset for Asan Tijarat.\n\n' +
+    `Click this link to reset your password (valid for 15 minutes):\n${resetLink}\n\n` +
+    'If you did not request this, ignore this email.';
+  return { subject: 'Asan Tijarat - Reset your password', html, text };
+}
+
+/**
  * Contact admin notification — branded version of the plain-text email
  * the contact form used to send. Uses the same logo/header as the other
  * branded emails, but a custom footer WITHOUT the do-not-reply line,
@@ -331,4 +357,4 @@ function contactReplyEmail({ name, subject, message }) {
   return { subject: `Asan Tijarat - ${subject}`, html, text };
 }
 
-module.exports = { otpEmail, pendingVerificationEmail, accountVerifiedEmail, contactAdminNotificationEmail, contactAutoReplyEmail, accountSuspendedEmail, accountRejectedEmail, accountReactivatedEmail, contactReplyEmail };
+module.exports = { otpEmail, pendingVerificationEmail, accountVerifiedEmail, resetPasswordEmail, contactAdminNotificationEmail, contactAutoReplyEmail, accountSuspendedEmail, accountRejectedEmail, accountReactivatedEmail, contactReplyEmail };

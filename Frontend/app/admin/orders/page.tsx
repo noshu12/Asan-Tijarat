@@ -19,8 +19,17 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'All' | OrderStatus>('All');
   const [search, setSearch] = useState('');
+  // FIX (Batch 03) — search typing refetch nahi karta tha: fetch effect ki
+  // deps me `search` tha hi nahi. Ab search 400ms debounce hoke
+  // `debouncedSearch` me jata hai, aur fetch effect usi pe chalta hai.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
 
   useEffect(() => {
@@ -37,12 +46,14 @@ export default function AdminOrdersPage() {
     setLoading(true);
     setError(null);
     api.admin
-      .orders({ status: activeTab === 'All' ? undefined : activeTab, search: search.trim() || undefined })
+      .orders({ status: activeTab === 'All' ? undefined : activeTab, search: debouncedSearch || undefined })
       .then((res) => { if (mounted) setOrders(res.orders); })
       .catch((err) => { if (mounted) setError(err instanceof Error ? err.message : 'Failed to load orders.'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
-  }, [user, activeTab]);
+    // FIX (Batch 03) — deps me debouncedSearch add kiya, taake typing se
+    // refetch ho. Pehle deps sirf [user, activeTab] thay.
+  }, [user, activeTab, debouncedSearch]);
 
   const getVariant = (s: OrderStatus) => {
     switch (s) {
@@ -94,9 +105,12 @@ export default function AdminOrdersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
+              // FIX (Batch 03) — Enter dabane se pehle activeTab 'All' pe reset
+              // ho jata tha, is liye search + status filter ek saath kabhi
+              // nahi chalte thay. Ab Enter sirf debounce ko foran flush karta
+              // hai (turant search), tab jaisa hai waisa hi rehta hai.
               if (e.key === 'Enter') {
-                setActiveTab('All');
-                setSearch((e.currentTarget as HTMLInputElement).value);
+                setDebouncedSearch(search.trim());
               }
             }}
             className="pl-9 pr-4 py-2 w-full rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"

@@ -45,7 +45,13 @@ export default function ShopkeeperDashboardPage() {
         const myOrders = ordersRes.orders ?? [];
         setStats({
           totalOrders: myOrders.length,
-          totalSpent: myOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0),
+          // FIX (Batch 03) — "Total Spent" me cancelled orders bhi count ho
+          // rahe thay, jabke supplier revenue aur analytics cancelled ko
+          // exclude karte hain. Ab cancelled orders yahan bhi nahi gine jate,
+          // taake teeno jagah ek hi definition ho.
+          totalSpent: myOrders
+            .filter((o) => o.status !== 'cancelled')
+            .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
           pendingOrders: myOrders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length,
         });
         setRecentOrders(myOrders.slice(0, 3));

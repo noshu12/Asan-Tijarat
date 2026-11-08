@@ -1,6 +1,7 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Bell } from 'lucide-react';
 
 interface PortalHeaderProps {
@@ -9,6 +10,19 @@ interface PortalHeaderProps {
 }
 
 export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
+  const router = useRouter();
+  // FIX (Batch 03) — search box pehle decorative tha: na state thi, na
+  // onChange, na submit — type karne se kuch hota hi nahi tha. Ab ye
+  // marketplace search se wired hai: Enter ya search dabane pe
+  // /marketplace?search=... pe le jata hai.
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    router.push(`/marketplace?search=${encodeURIComponent(searchQuery.trim())}`);
+  };
+
   const today = new Date().toLocaleDateString('en-PK', {
     weekday: 'long',
     day: 'numeric',
@@ -28,22 +42,32 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="relative">
+        <form onSubmit={handleSearchSubmit} className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search here..."
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search products"
             className="pl-9 pr-4 py-2 w-48 sm:w-64 rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
           />
-        </div>
+        </form>
 
         <div className="relative">
-          <button className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 transition">
+          {/* FIX (Batch 03) — bell pe pehle hardcoded badge "2" tha, jabke
+              asal me koi notification system hai hi nahi (Batch 05 me aayega).
+              Badge hata diya hai: ab koi fake count nahi dikhega. Button
+              abhi ke liye disabled hai, taake click karke khaali lage. */}
+          <button
+            type="button"
+            disabled
+            aria-label="Notifications — not available yet"
+            title="Notifications coming soon"
+            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500 cursor-not-allowed transition"
+          >
             <Bell className="w-4 h-4" />
           </button>
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-asan-error text-[10px] font-bold text-white flex items-center justify-center">
-            2
-          </span>
         </div>
       </div>
     </div>

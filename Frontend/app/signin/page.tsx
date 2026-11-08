@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -25,6 +25,16 @@ const ROLE_HOME: Record<UserRole, string> = {
   subadmin: '/admin/users',
 };
 
+// FIX (Batch 03) — ?redirect= sirf tab use karo jab wo safe same-site path
+// ho: '/' se shuru ho, '//' se nahi (warna external site pe redirect ho
+// jata — open-redirect attack), aur /signin pe wapas na le jaye (loop).
+function safeRedirectTarget(value: string | null): string {
+  if (!value) return '';
+  if (!value.startsWith('/') || value.startsWith('//')) return '';
+  if (value === '/signin' || value.startsWith('/signin?') || value.startsWith('/signin#')) return '';
+  return value;
+}
+
 export default function SignInPage() {
   const router = useRouter();
   const { user, loading: authLoading, login: authLogin, verifyTwoFactorLogin: authVerify2FA } = useAuth();
@@ -37,28 +47,27 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorCode, setErrorCode] = useState('');
-  const [redirectTarget, setRedirectTarget] = useState('');
   // Admin 2FA step 2 — set when login() answers { requires2FA: true }.
   const [needs2FA, setNeeds2FA] = useState(false);
   const [tempToken, setTempToken] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
 
-  // Already signed in: send the user straight to their dashboard by
-  // server role, instead of showing the sign-in form again.
+  // Already signed in: send the user to their destination, instead of
+  // showing the sign-in form again.
+  // FIX (Batch 03) — ?redirect= pehle parha jata tha phir ignore kar diya
+  // jata tha (cart se login karke aaya banda dashboard pe phenk diya jata
+  // tha). Ab safe ?redirect= ho to wahin jao, warna role ke dashboard pe.
+  // URL se seedha parha jata hai (state pe bharosa nahi), taake pehli
+  // render pe hi sahi jagah jaye — chahe login abhi hua ho ya 2FA ke baad.
   useEffect(() => {
     if (authLoading) return;
     if (user) {
-      router.push(ROLE_HOME[user.role] || '/');
+      const redirect = safeRedirectTarget(
+        new URLSearchParams(window.location.search).get('redirect')
+      );
+      router.push(redirect || ROLE_HOME[user.role] || '/');
     }
   }, [authLoading, user, router]);
-
-  // Deep-link hydration: only the ?redirect= param is kept.
-  // There is no role tab any more, so ?role= is ignored on purpose.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const redirect = params.get('redirect');
-    if (redirect) setRedirectTarget(redirect);
-  }, []);
 
   // Warm up likely destinations in the background so post-login navigation
   // feels instant (Next.js compiles routes lazily in dev mode).

@@ -2,13 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 
 export default function ResetPasswordPage() {
-  const router = useRouter();
   // Token sirf andar hi andar rakha jayega — ye kabhi screen par
   // render nahi hoga, na kisi Input mein, na kisi text mein.
   const [token, setToken] = useState('');
@@ -50,8 +48,10 @@ export default function ResetPasswordPage() {
     try {
       const res = await api.resetPassword(token.trim(), newPassword);
       setSuccessMessage(res.message || 'Password reset. You can now sign in with the new password.');
-      // Reset ho gaya to seedha Sign In par bhej do
-      router.push('/signin');
+      // FIX (Batch 03) — pehle success message set karte hi foran
+      // /signin pe redirect ho jata tha, is liye user message kabhi dekh
+      // hi nahi pata tha. Ab koi auto-redirect nahi hai: success panel
+      // dikhta hai aur neeche "Go to Sign In" button hai.
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -90,6 +90,18 @@ export default function ResetPasswordPage() {
                 Back to Sign In
               </Link>
             </p>
+          </div>
+        ) : successMessage ? (
+          <div className="space-y-4 mt-6">
+            <p role="alert" className="text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2.5">
+              {successMessage}
+            </p>
+            <Link
+              href="/signin"
+              className="flex items-center justify-center w-full h-12 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold transition"
+            >
+              Go to Sign In
+            </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-6">
@@ -143,12 +155,8 @@ export default function ResetPasswordPage() {
               </div>
             </div>
 
-            {successMessage && (
-              <p role="alert" className="text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2.5">
-                {successMessage}
-              </p>
-            )}
-
+            {/* FIX (Batch 03) — success message ab form ke bahar success
+                panel me dikhta hai (upar), is liye yahan se hata diya hai. */}
             {errorMessage && (
               <p role="alert" className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5">
                 {errorMessage}
