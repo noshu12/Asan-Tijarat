@@ -15,7 +15,11 @@ export default function SupplierOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Session user id comes from the AuthProvider (see useAuth below).
+  // Batch 04 — GET /api/orders is paginated (50/page); older orders load
+  // via the "Load more" button below instead of one giant response.
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -32,7 +36,8 @@ export default function SupplierOrdersPage() {
 
     setLoading(true);
     setError(null);
-    api.orders()
+    setPage(1);
+    api.orders({ limit: 50 })
       .then((res) => {
         if (!mounted) return;
         // A buyer-cancelled pending order never reaches the supplier —
@@ -42,6 +47,7 @@ export default function SupplierOrdersPage() {
         // Loose (string) id comparison + server-list fallback: if the id shapes
         // ever diverge we still show the supplier's orders instead of nothing.
         setOrders(mine.length > 0 ? mine : res.orders.filter(notCancelled));
+        setTotalPages(res.totalPages ?? 1);
       })
       .catch((err) => {
         if (mounted) setError(err instanceof Error ? err.message : 'Failed to load orders');
@@ -56,12 +62,35 @@ export default function SupplierOrdersPage() {
     try {
       await api.updateOrderStatus(orderId, newStatus);
       // Refresh orders
-      const res = await api.orders();
+      const res = await api.orders({ limit: 50 });
       const mine = res.orders.filter((o: Order) => String(o.supplierId) === String(user?.id));
       setOrders(mine.length > 0 ? mine : res.orders);
+      setPage(1);
+      setTotalPages(res.totalPages ?? 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update order status');
     }
+  };
+
+  // Batch 04 — appends the next page of orders (oldest first is impossible
+  // here: the list is newest-first, so "more" means older orders).
+  const loadMore = () => {
+    const nextPage = page + 1;
+    if (nextPage > totalPages || loadingMore) return;
+    setLoadingMore(true);
+    api.orders({ limit: 50, page: nextPage })
+      .then((res) => {
+        const notCancelled = (o: Order) => o.status !== 'cancelled';
+        const mine = res.orders.filter((o: Order) => String(o.supplierId) === String(user?.id) && notCancelled(o));
+        const list = mine.length > 0 ? mine : res.orders.filter(notCancelled);
+        setOrders((prev) => [...prev, ...list]);
+        setPage(nextPage);
+        setTotalPages(res.totalPages ?? 1);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load more orders');
+      })
+      .finally(() => setLoadingMore(false));
   };
 
   const filteredOrders = activeTab === 'All' ? orders : orders.filter((o) => o.status === activeTab);
@@ -177,6 +206,14 @@ export default function SupplierOrdersPage() {
                 </div>
               </div>
             ))}
+        </div>
+      )}
+
+      {page < totalPages && (
+        <div className="flex justify-center pt-2">
+          <Button onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load more orders'}
+          </Button>
         </div>
       )}
     </div>

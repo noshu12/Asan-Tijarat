@@ -11,7 +11,9 @@
 //
 //  Order matters: the FIRST photo is the listing's cover image.
 // ────────────────────────────────────────────────────────────
+const path = require('path');
 const {
+  UPLOAD_ROOT,
   UploadError,
   parseDataUrl,
   fileSignatureMatches,
@@ -188,10 +190,48 @@ async function deleteStoredUploads(stored) {
   }
 }
 
+/**
+ * Deletes every stored photo of a product document — Cloudinary assets AND
+ * local-disk files (Batch 04). Used when a listing is deleted, and when its
+ * photos are replaced on edit (the old ones would otherwise stay orphaned).
+ * Reads `product.imageUploads` (the audit metadata written by
+ * saveProductImages); listings that predate that metadata fall back to the
+ * image/additionalImages URLs. Never throws: a missing file or a failed
+ * Cloudinary delete is swallowed by the helpers below, so cleanup can never
+ * block the delete/edit itself.
+ */
+async function deleteProductStoredFiles(product) {
+  if (!product) return;
+  const uploads = Array.isArray(product.imageUploads) ? product.imageUploads : [];
+  const files = [];
+  const cloudinaryIds = [];
+  for (const up of uploads) {
+    if (!up) continue;
+    if (up.storage === 'cloudinary' && up.publicId) cloudinaryIds.push(up.publicId);
+    else if (up.storage === 'local' && up.url) {
+      files.push(path.join(UPLOAD_ROOT, FOLDER, path.basename(up.url)));
+    }
+  }
+  // Listings older than the imageUploads metadata: derive local files from
+  // the stored URLs (Cloudinary secure URLs never start with PUBLIC_PREFIX,
+  // so they are skipped here — only their publicId in imageUploads can
+  // delete them, which the loop above already handled).
+  if (uploads.length === 0) {
+    const urls = [product.image, ...(product.additionalImages || [])].filter(Boolean);
+    for (const url of urls) {
+      if (typeof url === 'string' && url.startsWith(PUBLIC_PREFIX)) {
+        files.push(path.join(UPLOAD_ROOT, FOLDER, path.basename(url)));
+      }
+    }
+  }
+  await deleteStoredUploads({ files, cloudinaryIds });
+}
+
 module.exports = {
   saveProductImages,
   deleteStoredFiles,
   deleteStoredUploads,
+  deleteProductStoredFiles,
   ProductImageError,
   PUBLIC_PREFIX,
   MAX_IMAGE_BYTES,

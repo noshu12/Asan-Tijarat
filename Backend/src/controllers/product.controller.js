@@ -2,7 +2,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { CATEGORIES } = require('../constants/categories');
 const { toClient } = require('../utils/serialize');
-const { saveProductImages, deleteStoredFiles, deleteStoredUploads, ProductImageError } = require('../utils/productImageStorage');
+const { saveProductImages, deleteStoredFiles, deleteStoredUploads, deleteProductStoredFiles, ProductImageError } = require('../utils/productImageStorage');
 
 /** Auto-derive listing status from stock & MOQ (matches frontend behaviour). */
 function deriveStatus(stock, moq) {
@@ -213,30 +213,24 @@ async function getProducts(req, res, next) {
       default: break;
     }
 
-    // Server-side pagination — only when the client asks for a page. Older
-    // callers that pass no page/limit keep getting the full list as before.
-    const wantsPages = req.query.page !== undefined || req.query.limit !== undefined;
-    let page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
-
+    // Server-side pagination — ALWAYS on now (Batch 04): the full catalogue
+    // used to come back in one response. Default 50, max 100. Callers that
+    // need a different page pass ?page=&limit= (the marketplace already does).
     const total = await Product.countDocuments(query);
-    if (!wantsPages) {
-      const products = await Product.find(query).sort(sortClause).lean();
-      return res.json({ products: toClient(products), count: products.length });
-    }
-
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
     const totalPages = Math.max(1, Math.ceil(total / limit));
-    if (page > totalPages) page = totalPages;
+    const safePage = Math.min(page, totalPages);
     const products = await Product.find(query)
       .sort(sortClause)
-      .skip((page - 1) * limit)
+      .skip((safePage - 1) * limit)
       .limit(limit)
       .lean();
     res.json({
       products: toClient(products),
       count: products.length,
       total,
-      page,
+      page: safePage,
       limit,
       totalPages,
     });
@@ -481,6 +475,10 @@ async function updateProduct(req, res, next) {
     }
 
     let pendingUploads = { files: [], cloudinaryIds: [] };
+    // Batch 04 — photos replaced on edit: keep the OLD upload metadata so
+    // the old files can be deleted after the save succeeds (otherwise every
+    // photo change leaves orphan files behind).
+    let replacedUploads = null;
     if (req.body.images !== undefined || req.body.image !== undefined) {
       const photos = await storePhotos(req, res);
       if (!photos) return undefined;
@@ -489,6 +487,11 @@ async function updateProduct(req, res, next) {
           error: { code: 'PHOTO_REQUIRED', message: 'A listing must keep at least one photo.' },
         });
       }
+      replacedUploads = (product.imageUploads || []).map((u) => ({
+        storage: u.storage,
+        publicId: u.publicId,
+        url: u.url,
+      }));
       product.image = photos.image;
       product.additionalImages = photos.additionalImages;
       product.imageUploads = photos.imageUploads;
@@ -503,6 +506,11 @@ async function updateProduct(req, res, next) {
     } catch (err) {
       await deleteStoredUploads(pendingUploads);
       throw err;
+    }
+
+    // Photos replaced successfully — the old ones are orphans now.
+    if (replacedUploads) {
+      await deleteProductStoredFiles({ imageUploads: replacedUploads });
     }
 
     res.json({ product });
@@ -527,6 +535,11 @@ async function deleteProduct(req, res, next) {
         error: { code: 'NOT_YOUR_PRODUCT', message: 'You can only delete your own product listings.' },
       });
     }
+
+    // Batch 04 — delete the listing's stored photos too (Cloudinary assets
+    // + local files), otherwise every deleted listing leaves orphan files.
+    // Cleanup never blocks the delete (see deleteProductStoredFiles).
+    await deleteProductStoredFiles(product);
 
     await Product.deleteOne({ _id: product._id });
     res.json({ deleted: true, id: req.params.id });

@@ -14,11 +14,15 @@ import { Order, Product, User } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 
 export default function SupplierDashboardPage() {
-  // Live rows for this supplier. GET /api/orders + GET /api/products are
-  // filtered by the JWT server-side, so these arrays only ever contain the
-  // signed-in supplier's own records.
+  // Recent received orders (latest 3) + own listings. GET /api/orders and
+  // GET /api/products are paginated, so the dashboard only fetches the rows
+  // it renders; the KPIs come from the analytics API (see below).
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // Batch 04 — KPI numbers from the analytics API (single source of truth:
+  // non-cancelled orders only), so they stay correct no matter how many
+  // orders the supplier has.
+  const [analytics, setAnalytics] = useState<{ totalOrders: number; revenueTotal: number; pendingOrders: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
@@ -38,7 +42,21 @@ export default function SupplierDashboardPage() {
     setLoading(true);
     setError(null);
 
-    api.orders()
+    api.supplierAnalytics()
+      .then((data) => {
+        if (!mounted) return;
+        setAnalytics({
+          totalOrders: data.totalOrders,
+          revenueTotal: data.revenueTotal,
+          pendingOrders: data.ordersByStatus.pending || 0,
+        });
+      })
+      .catch(() => {
+        /* KPIs stay at 0 — the orders and listings below still load */
+      });
+
+    // Recent orders only — the full list lives on the Received Orders page.
+    api.orders({ limit: 3 })
       .then((ordersRes) => {
         if (!mounted) return;
         const mine = ordersRes.orders.filter((o: Order) => String(o.supplierId) === String(user.id));
@@ -53,12 +71,12 @@ export default function SupplierDashboardPage() {
         if (mounted) setLoading(false);
       });
 
-    api.products()
+    // Own listings only — the backend filters by supplierId, so a supplier
+    // with many listings is no longer cut off by the catalogue page size.
+    api.products({ supplierId: user.id, limit: 100 })
       .then((productsRes) => {
         if (!mounted) return;
-        setProducts(
-          productsRes.products.filter((p: Product) => String(p.supplierId) === String(user.id))
-        );
+        setProducts(productsRes.products);
       })
       .catch(() => {
         /* listings are secondary — never hide the orders because of this */
@@ -67,12 +85,12 @@ export default function SupplierDashboardPage() {
     return () => { mounted = false; };
   }, [user, refreshKey]);
 
-  // KPI values are derived from the same rows the table below renders, so the
-  // numbers can never drift from the order list (no more hardcoded 4.8M/342).
-  const totalRevenue = orders
-    .filter((o) => o.status !== 'cancelled')
-    .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  const pendingOrders = orders.filter((o) => o.status === 'pending').length;
+  // KPI values come from the analytics API (non-cancelled orders only) —
+  // the same definition as the shopkeeper dashboard and the admin Trade
+  // Volume, so the numbers can never drift between pages.
+  const totalRevenue = analytics?.revenueTotal ?? 0;
+  const totalOrders = analytics?.totalOrders ?? 0;
+  const pendingOrders = analytics?.pendingOrders ?? 0;
   const activeListings = products.filter((p) => p.status === 'Active').length;
   const recentOrders = orders.slice(0, 3);
 
@@ -96,8 +114,8 @@ export default function SupplierDashboardPage() {
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {user.businessName || user.name}
-            {user.city ? ` • ${user.city}` : ''} • {orders.length} order
-            {orders.length === 1 ? '' : 's'} received
+            {user.city ? ` • ${user.city}` : ''} • {totalOrders} order
+            {totalOrders === 1 ? '' : 's'} received
           </p>
         </div>
 
@@ -126,11 +144,11 @@ export default function SupplierDashboardPage() {
         </div>
       )}
 
-      {/* Quick KPI Stats — live values derived from the orders table below */}
+      {/* Quick KPI Stats — live values from the analytics API */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard title="Total Revenue" value={formatPKR(totalRevenue)} icon={DollarSign} />
         <StatsCard title="Active Listings" value={String(activeListings)} icon={Package} />
-        <StatsCard title="Total Orders" value={String(orders.length)} icon={ShoppingCart} />
+        <StatsCard title="Total Orders" value={String(totalOrders)} icon={ShoppingCart} />
         <StatsCard title="Pending Orders" value={String(pendingOrders)} icon={Clock} />
       </div>
 

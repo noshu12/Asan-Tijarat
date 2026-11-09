@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const Counter = require('../models/Counter');
 const { toClient } = require('../utils/serialize');
 const { sanitizeLocation, googleMapsLink } = require('../utils/location');
 
@@ -18,12 +19,49 @@ const TRANSITIONS = {
   cancelled: [],
 };
 
-/** Next order number, e.g. AT-2026-004 (per calendar year). */
+/**
+ * Next order number, e.g. AT-2026-004 (per calendar year).
+ *
+ * ATOMIC (Batch 04) — the old countDocuments()+1 raced: two simultaneous
+ * checkouts could read the same count and issue the SAME order number (the
+ * unique index then failed the second order AFTER its stock was reserved,
+ * so the order was lost). Now a Counter document is incremented with a
+ * single findOneAndUpdate($inc), which MongoDB executes atomically — two
+ * callers can never receive the same seq.
+ *
+ * The counter is seeded ONCE from the highest number already issued this
+ * year, so numbers from before the atomic counter never get reused.
+ * $setOnInsert only writes when the document is created, so two
+ * simultaneous first calls can't seed twice.
+ */
 async function nextOrderNumber() {
   const year = new Date().getFullYear();
   const prefix = `AT-${year}-`;
-  const count = await Order.countDocuments({ orderNumber: new RegExp(`^${prefix}`) });
-  return `${prefix}${String(count + 1).padStart(3, '0')}`;
+  const key = `order-${year}`;
+
+  if (!(await Counter.exists({ _id: key }))) {
+    const existing = await Order.find(
+      { orderNumber: new RegExp(`^${prefix}`) },
+      { orderNumber: 1 }
+    ).lean();
+    let maxSeq = 0;
+    for (const o of existing) {
+      const n = parseInt(String(o.orderNumber).slice(prefix.length), 10);
+      if (Number.isFinite(n) && n > maxSeq) maxSeq = n;
+    }
+    await Counter.findOneAndUpdate(
+      { _id: key },
+      { $setOnInsert: { seq: maxSeq } },
+      { upsert: true, new: true }
+    );
+  }
+
+  const counter = await Counter.findOneAndUpdate(
+    { _id: key },
+    { $inc: { seq: 1 } },
+    { new: true }
+  );
+  return `${prefix}${String(counter.seq).padStart(3, '0')}`;
 }
 
 /**
@@ -244,8 +282,19 @@ async function getOrders(req, res, next) {
       query.status = s;
     }
 
-    const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
-    res.json({ orders: toClient(orders), count: orders.length });
+    // Paginated (Batch 04) — the full order history used to come back in
+    // one response. Default 50, max 100; callers pass ?page=&limit=.
+    const total = await Order.countDocuments(query);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .skip((safePage - 1) * limit)
+      .limit(limit)
+      .lean();
+    res.json({ orders: toClient(orders), count: orders.length, total, page: safePage, limit, totalPages });
   } catch (err) {
     next(err);
   }
@@ -309,7 +358,11 @@ async function updateOrderStatus(req, res, next) {
 
     const allowed = TRANSITIONS[order.status] || [];
     const buyerAllowed = isBuyer && toStatus === 'cancelled' && allowed.includes('cancelled');
-    const supplierAllowed = isSupplier && allowed.includes(toStatus);
+    // Batch 04 — a supplier may NEVER cancel: cancelling a pending order is
+    // the buyer's right only (see the TRANSITIONS comment at the top of this
+    // file). The old check let a supplier cancel too, because 'cancelled'
+    // sits in TRANSITIONS.pending alongside 'confirmed'.
+    const supplierAllowed = isSupplier && toStatus !== 'cancelled' && allowed.includes(toStatus);
 
     if (!buyerAllowed && !supplierAllowed) {
       return res.status(403).json({

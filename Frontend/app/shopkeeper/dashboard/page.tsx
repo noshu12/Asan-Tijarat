@@ -36,25 +36,28 @@ export default function ShopkeeperDashboardPage() {
     setLoading(true);
     setError(null);
 
-    // The backend already scopes GET /api/orders to the signed-in user
-    // (buyerId for shopkeepers), so use the returned list as-is — no
-    // client-side id filter that could hide real orders.
-    api.orders()
+    // Batch 04 — KPIs come from the analytics API now (the single source of
+    // truth: non-cancelled orders only — same definition as the supplier
+    // side and the admin Trade Volume). GET /api/orders is paginated, so the
+    // dashboard no longer fetches the full order history for its stats.
+    api.shopkeeperAnalytics()
+      .then((data) => {
+        if (!mounted) return;
+        setStats({
+          totalOrders: data.totalOrders,
+          totalSpent: data.spentTotal,
+          pendingOrders: (data.ordersByStatus.pending || 0) + (data.ordersByStatus.confirmed || 0),
+        });
+      })
+      .catch(() => {
+        /* stats stay at 0 — the recent orders below still load */
+      });
+
+    // Recent orders only — the full list lives on the My Orders page.
+    api.orders({ limit: 3 })
       .then((ordersRes) => {
         if (!mounted) return;
-        const myOrders = ordersRes.orders ?? [];
-        setStats({
-          totalOrders: myOrders.length,
-          // FIX (Batch 03) — "Total Spent" me cancelled orders bhi count ho
-          // rahe thay, jabke supplier revenue aur analytics cancelled ko
-          // exclude karte hain. Ab cancelled orders yahan bhi nahi gine jate,
-          // taake teeno jagah ek hi definition ho.
-          totalSpent: myOrders
-            .filter((o) => o.status !== 'cancelled')
-            .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
-          pendingOrders: myOrders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length,
-        });
-        setRecentOrders(myOrders.slice(0, 3));
+        setRecentOrders(ordersRes.orders ?? []);
       })
       .catch((err) => {
         if (mounted) setError(err instanceof Error ? err.message : 'Failed to load dashboard');
@@ -144,7 +147,7 @@ export default function ShopkeeperDashboardPage() {
         </Link>
       </div>
 
-      {/* Quick KPI Stats — live counts from the same orders list rendered below */}
+      {/* Quick KPI Stats — live counts from the analytics API (non-cancelled orders only) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatsCard
           title="Total Wholesale Orders"

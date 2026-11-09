@@ -186,6 +186,10 @@ export interface ProductQuery {
   inStock?: boolean;
   page?: number;
   limit?: number;
+  // Batch 04 — the backend filters by supplierId (own listings incl. Out of
+  // Stock); the supplier dashboard / my-products pages use it so their lists
+  // are never cut off by the catalogue page size.
+  supplierId?: string;
 }
 
 /**
@@ -452,7 +456,9 @@ export const api = {
     if (query.inStock) params.set('inStock', 'true');
     if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
     if (query.limit !== undefined)
-      params.set('limit', String(Math.min(50, Math.max(1, Math.floor(query.limit)))));
+      params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
+    // Batch 04 — supplier's own listings (see ProductQuery.supplierId).
+    if (query.supplierId) params.set('supplierId', query.supplierId);
     const suffix = params.toString() ? `?${params.toString()}` : '';
     return request<{
       products: Product[];
@@ -480,7 +486,18 @@ export const api = {
   deleteProduct: (id: string) =>
     request<{ deleted: boolean; id: string }>(`/api/products/${id}`, { method: 'DELETE' }),
 
-  orders: () => request<{ orders: Order[]; count: number }>('/api/orders'),
+  // Batch 04 — GET /api/orders is paginated now (default 50, max 100), so
+  // callers pass the page they need. The response carries total / page /
+  // limit / totalPages next to the page of orders.
+  orders: (query: { limit?: number; page?: number; status?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined)
+      params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
+    if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+    if (query.status) params.set('status', query.status);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return request<{ orders: Order[]; count: number; total?: number; page?: number; limit?: number; totalPages?: number }>(`/api/orders${suffix}`);
+  },
 
   createOrder: (payload: CreateOrderPayload) =>
     request<{ orders: Order[]; count: number }>('/api/orders', { method: 'POST', body: payload }),
