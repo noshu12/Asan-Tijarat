@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const Counter = require('../models/Counter');
 const { toClient } = require('../utils/serialize');
 const { sanitizeLocation, googleMapsLink } = require('../utils/location');
+const { notifyUser, notifyOrderParties } = require('../utils/notify');
 
 /**
  * Legal order-state transitions, lowercase only.
@@ -64,9 +65,15 @@ async function nextOrderNumber() {
   return `${prefix}${String(counter.seq).padStart(3, '0')}`;
 }
 
+// Batch 05 — the two payment methods (COD was dropped). Anything else is
+// rejected so a stale client can never store an unknown method.
+const PAYMENT_METHODS = ['online_advance', 'online_at_delivery'];
+const PAYMENT_CHANNELS = ['bank', 'raast', 'jazzcash'];
+
 /**
  * POST /api/orders  (shopkeeper only)
- * Body: { items: [{ productId, quantity }], shippingAddress, currentLocation? }
+ * Body: { items: [{ productId, quantity }], shippingAddress, currentLocation?,
+ *         paymentMethod?, paymentChannel? }
  *
  * Validates stock + MOQ, groups items per supplier, and creates ONE
  * order per supplier. totalAmount is just the items subtotal — no
@@ -79,10 +86,16 @@ async function nextOrderNumber() {
  * fall back to the GPS saved on the shopkeeper's profile (currentLocation on
  * the account), so an order almost always reaches the supplier with a
  * working location link.
+ *
+ * Batch 05 — the checkout also picks the payment method (online_advance =
+ * pay now via the shopkeeper's own bank/JazzCash/Raast app, held in escrow;
+ * online_at_delivery = pay online when the goods arrive). No money moves
+ * through an API — the order only records the choice; the reference is
+ * submitted later (see payment.controller.js).
  */
 async function createOrder(req, res, next) {
   try {
-    const { items, shippingAddress, currentLocation } = req.body;
+    const { items, shippingAddress, currentLocation, paymentMethod, paymentChannel } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -92,6 +105,19 @@ async function createOrder(req, res, next) {
     if (!shippingAddress || !String(shippingAddress).trim()) {
       return res.status(400).json({
         error: { code: 'MISSING_FIELDS', message: 'shippingAddress is required.' },
+      });
+    }
+    // Batch 05 — unknown methods/channels are rejected, not stored.
+    const method = paymentMethod === undefined ? 'online_advance' : String(paymentMethod).trim();
+    if (!PAYMENT_METHODS.includes(method)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_PAYMENT_METHOD', message: 'Payment method must be online_advance or online_at_delivery.' },
+      });
+    }
+    const channel = paymentChannel === undefined ? 'bank' : String(paymentChannel).trim().toLowerCase();
+    if (!PAYMENT_CHANNELS.includes(channel)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_CHANNEL', message: 'Payment channel must be bank, raast or jazzcash.' },
       });
     }
 
@@ -239,6 +265,10 @@ async function createOrder(req, res, next) {
         items: safeItems,
         subtotal: group.subtotal,
         totalAmount: group.subtotal,
+        // Batch 05 — payment choice recorded at checkout (no money moves).
+        paymentMethod: method,
+        paymentChannel: channel,
+        paymentStatus: 'unpaid',
         status: 'pending',
         shippingAddress: String(shippingAddress).trim(),
         // Sent WITH the order: the supplier clicks this link to open Google
@@ -247,6 +277,15 @@ async function createOrder(req, res, next) {
         buyerLocationLink,
       });
       created.push(order);
+
+      // Batch 05 — the supplier learns about the new order in-app.
+      await notifyUser(group.supplierId, {
+        type: 'order_placed',
+        title: `New order ${order.orderNumber}`,
+        message: `${order.buyerName} placed an order (${order.items.length} item${order.items.length > 1 ? 's' : ''}, ${order.totalAmount} PKR).`,
+        link: `/supplier/orders/${order._id}`,
+        orderId: order._id,
+      });
     }
 
     res.status(201).json({ orders: created, count: created.length });
@@ -331,6 +370,11 @@ async function getOrder(req, res, next) {
  * Body: { status }
  * Supplier: pending→confirmed→processing→shipped→delivered
  * Buyer:    pending→cancelled (only before the supplier confirms)
+ *
+ * Batch 05 — every move notifies the other party. Cancelling a pending
+ * order whose advance payment is already held in escrow refunds it in full
+ * (no platform fee on a refunded order). Marking an order delivered asks
+ * the shopkeeper to confirm receipt so the escrow can release.
  */
 async function updateOrderStatus(req, res, next) {
   try {
@@ -383,9 +427,45 @@ async function updateOrderStatus(req, res, next) {
       for (const item of order.items) {
         await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.quantity } });
       }
+      // Batch 05 — an advance payment already held in escrow goes straight
+      // back to the shopkeeper in full (a cancelled order takes no fee).
+      // A merely submitted (unconfirmed) reference just goes back to
+      // 'unpaid' — the money was never confirmed in.
+      if (order.paymentStatus === 'held_in_escrow') {
+        order.refundAmount = order.totalAmount;
+        order.platformFee = 0;
+        order.payoutAmount = 0;
+        order.amountHeld = 0;
+        order.paymentStatus = 'refunded';
+      } else if (order.paymentStatus === 'payment_submitted') {
+        order.paymentStatus = 'unpaid';
+      }
     }
 
     await order.save();
+
+    // Batch 05 — the other party learns about the move in-app.
+    const typeMap = {
+      confirmed: 'order_confirmed',
+      processing: 'order_confirmed',
+      shipped: 'order_shipped',
+      delivered: 'order_delivered',
+      cancelled: 'order_cancelled',
+    };
+    const messageMap = {
+      confirmed: `The supplier confirmed order ${order.orderNumber}.`,
+      processing: `The supplier started processing order ${order.orderNumber}.`,
+      shipped: `Order ${order.orderNumber} is on its way.`,
+      delivered: `Order ${order.orderNumber} was marked delivered. Please confirm receipt so the escrowed payment can release.`,
+      cancelled: `Order ${order.orderNumber} was cancelled by the shopkeeper.`,
+    };
+    await notifyOrderParties(order, {
+      type: typeMap[toStatus] || 'order_confirmed',
+      title: `Order ${order.orderNumber} — ${toStatus}`,
+      message: messageMap[toStatus] || `Order ${order.orderNumber} moved to ${toStatus}.`,
+      excludeUserId: req.user._id,
+    });
+
     res.json({ order });
   } catch (err) {
     next(err);

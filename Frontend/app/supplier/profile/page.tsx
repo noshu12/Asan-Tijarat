@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { PortalHeader } from '@/components/PortalHeader';
 import { ProfileView } from '@/components/ProfileView';
 
 /**
@@ -11,5 +12,12 @@ import { ProfileView } from '@/components/ProfileView';
  * the signed-in session (GET /api/auth/me) and the account's own listings.
  */
 export default function SupplierProfilePage() {
-  return <ProfileView role="supplier" />;
+  return (
+    <div className="space-y-8">
+      {/* Bell fix — the bell lives in PortalHeader; ProfileView no longer
+          renders its own title block (see components/ProfileView.tsx). */}
+      <PortalHeader title="Business Profile" subtitle="Supplier Portal" />
+      <ProfileView role="supplier" />
+    </div>
+  );
 }

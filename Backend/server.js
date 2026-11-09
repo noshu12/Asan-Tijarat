@@ -154,6 +154,9 @@ app.use('/api/auth', authLimiter);
 // Admin ke liye KYC preview baad mein ek authenticated route se wapas
 // aayega — tab tak admin mein KYC image ka 404 aana normal hai, bug nahi.
 app.use('/uploads/products', express.static(path.join(__dirname, 'uploads', 'products')));
+// Batch 05 — delivery-proof photos (supplier uploads at delivery). Public
+// like product photos: both trading parties + admin must open them.
+app.use('/uploads/delivery', express.static(path.join(__dirname, 'uploads', 'delivery')));
 
 // FIX (Batch 01) — Health check ko checkDb se PEHLE rakho.
 // Pehle checkDb /api/health se pehle chalta tha, to DB down ho to health
@@ -179,6 +182,10 @@ app.use('/api/orders', require('./src/routes/order.routes'));
 app.use('/api/admin', require('./src/routes/admin.routes'));
 app.use('/api/public', require('./src/routes/public.routes'));
 app.use('/api/analytics', require('./src/routes/analytics.routes'));
+// Batch 05 — real notifications, disputes, ratings.
+app.use('/api/notifications', require('./src/routes/notification.routes'));
+app.use('/api/disputes', require('./src/routes/dispute.routes'));
+app.use('/api/ratings', require('./src/routes/rating.routes'));
 
 
 // (Health check upar move kar diya hai — checkDb se pehle — taake Render

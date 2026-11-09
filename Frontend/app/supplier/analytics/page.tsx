@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StatsCard } from '@/components/StatsCard';
+import { PortalHeader } from '@/components/PortalHeader';
 import { DollarSign, ShoppingCart, Clock, TrendingUp, Package } from 'lucide-react';
 import { formatPKR } from '@/lib/utils';
 import { api, SupplierAnalytics } from '@/lib/api';
@@ -42,14 +43,8 @@ export default function SupplierAnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="pb-4 border-b border-slate-200 dark:border-slate-800">
-        <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
-          Analytics
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Your sales and demand summary from real orders.
-        </p>
-      </div>
+      {/* Bell fix — heading block replaced by the header (same title). */}
+      <PortalHeader title="Analytics" subtitle="Supplier Portal" />
 
       {error && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4 text-sm text-red-700 dark:text-red-300">

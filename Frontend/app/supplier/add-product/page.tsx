@@ -8,6 +8,7 @@ import { ProductImageUpload, ProductImageDraft } from '@/components/ProductImage
 import { toProductImagePayload } from '@/lib/uploads';
 import { Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { PortalHeader } from '@/components/PortalHeader';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 
@@ -130,13 +131,8 @@ export default function SupplierAddProductPage() {
           <ArrowLeft className="w-4 h-4" /> Back to list
         </Link>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="p-3 bg-violet-100 dark:bg-violet-900/30 rounded-2xl"><Sparkles className="w-6 h-6 text-violet-600 dark:text-violet-400" /></div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Add New Product</h1>
-          <p className="text-sm text-slate-500">Publish a listing to the marketplace</p>
-        </div>
-      </div>
+      {/* Bell fix — heading block replaced by the header (same title). */}
+      <PortalHeader title="Add New Product" subtitle="Supplier Portal" />
       {!authLoading && allowedCategories.length === 0 && (
         <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 max-w-2xl">
           You haven&apos;t selected your product categories yet.{' '}

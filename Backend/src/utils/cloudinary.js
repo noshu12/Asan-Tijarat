@@ -61,6 +61,32 @@ function uploadProductImage(buffer, { publicId, format }) {
 }
 
 /**
+ * Uploads a PUBLIC image to a given Cloudinary folder. Generic version of
+ * uploadProductImage — Batch 05 uses it for delivery-proof photos
+ * (folder 'asan-tijarat/delivery'). Returns { secureUrl, publicId }.
+ */
+function uploadPublicImage(buffer, { publicId, format, folder }) {
+  ensureConfigured();
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        public_id: publicId,
+        format,
+        resource_type: 'image',
+        // Public photo — both trading parties + admin can open it.
+        type: 'upload',
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        resolve({ secureUrl: result.secure_url, publicId: result.public_id });
+      }
+    );
+    stream.end(buffer);
+  });
+}
+
+/**
  * Uploads a PRIVATE KYC document. Returns { publicId }.
  * `type: 'private'` (authenticated) means no public URL exists — access
  * only via signed URLs minted by the backend admin route.
@@ -114,6 +140,7 @@ async function deleteCloudinaryAsset(publicId, { resourceType = 'image', type = 
 module.exports = {
   isCloudinaryEnabled,
   uploadProductImage,
+  uploadPublicImage,
   uploadPrivateDocument,
   getPrivateSignedUrl,
   deleteCloudinaryAsset,

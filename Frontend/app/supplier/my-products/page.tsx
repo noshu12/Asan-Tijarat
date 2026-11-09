@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { ProductImage } from '@/components/ProductImage';
+import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Product } from '@/lib/types';
 import { PlusCircle, Edit, Trash2, Search, Save } from 'lucide-react';
@@ -180,15 +181,11 @@ export default function SupplierMyProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
-            My Product Listings
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage your active inventory, wholesale rates, and lot quantities
-          </p>
-        </div>
+      {/* Bell fix — heading block replaced by the header (same title);
+          the Add New Product button stays, in its own row below. */}
+      <PortalHeader title="My Product Listings" subtitle="Supplier Portal" />
+
+      <div className="flex justify-end">
         <Link
           href="/supplier/add-product"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition self-start sm:self-auto"

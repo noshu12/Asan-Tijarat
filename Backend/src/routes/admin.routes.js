@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const { protectAdmin, requireRole } = require('../middleware/auth');
 const admin = require('../controllers/admin.controller');
+// Batch 05 — dispute decisions + payment confirmation (admin side).
+const { listDisputesAdmin, decideDispute } = require('../controllers/dispute.controller');
+const { confirmPayment } = require('../controllers/payment.controller');
 
 // Every /api/admin/* route needs a signed-in session; each route then
 // declares which roles may use it.
@@ -42,6 +45,14 @@ router.get('/products', requireRole('admin', 'subadmin'), admin.listProducts);
 router.delete('/products/:id', requireRole('admin', 'subadmin'), admin.deleteProduct);
 
 router.get('/orders', requireRole('admin', 'subadmin'), admin.listOrders);
+
+// Batch 05 — dispute queue + decisions, and confirming a submitted
+// payment (money into escrow, or paid at delivery). Sub-admins have full
+// access like the main admin (Batch 02 decision).
+router.get('/disputes', requireRole('admin', 'subadmin'), listDisputesAdmin);
+router.post('/disputes/:id/decide', requireRole('admin', 'subadmin'), decideDispute);
+router.post('/orders/:id/confirm-payment', requireRole('admin', 'subadmin'), confirmPayment);
+
 router.get('/audit-log', requireRole('admin', 'subadmin'), admin.listAuditLog);
 
 router.get('/contacts', requireRole('admin', 'subadmin'), admin.listContacts);

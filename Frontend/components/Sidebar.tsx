@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Mail,
   UserCog,
+  Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthProvider';
@@ -70,6 +71,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     { name: 'Users & KYC', href: '/admin/users', icon: Users },
     { name: 'Products', href: '/admin/products', icon: Boxes },
     { name: 'Orders', href: '/admin/orders', icon: Package },
+    // Batch 05 — dispute queue + decisions.
+    { name: 'Disputes', href: '/admin/disputes', icon: Scale },
     { name: 'Security', href: '/admin/security', icon: ShieldCheck },
     { name: 'Messages', href: '/admin/messages', icon: Mail },
     { name: 'Sub-Admins', href: '/admin/subadmins', icon: UserCog },
@@ -79,6 +82,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const subadminNav = [
     { name: 'Users & KYC', href: '/admin/users', icon: Users },
     { name: 'Messages', href: '/admin/messages', icon: Mail },
+    // Batch 05 — sub-admins have full access (Batch 02 decision).
+    { name: 'Disputes', href: '/admin/disputes', icon: Scale },
   ];
 
   const isSubadmin = user?.role === 'subadmin';

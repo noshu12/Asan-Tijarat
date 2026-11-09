@@ -18,6 +18,7 @@ const { UPLOAD_ROOT, deleteStoredUploads: deleteKycStoredUploads } = require('..
 const { deleteProductStoredFiles } = require('../utils/productImageStorage');
 const { getPrivateSignedUrl } = require('../utils/cloudinary');
 const { sendEmail } = require('../utils/sendEmail');
+const { notifyUser } = require('../utils/notify');
 const {
   accountVerifiedEmail,
   accountSuspendedEmail,
@@ -175,6 +176,15 @@ async function verifyUser(req, res, next) {
         console.log(`[admin] Approval email not sent (no SMTP configured or email failed) for ${user.email}`);
       }
     }
+    // Batch 05 — the user learns about the KYC approval in-app too.
+    if (verified && !wasVerified) {
+      await notifyUser(user._id, {
+        type: 'account_verified',
+        title: 'KYC approved — you can now sign in',
+        message: `Your ${user.businessName || user.name || 'account'} was verified by the admin.`,
+        link: '/signin',
+      });
+    }
     await logAdminAction(req, verified ? 'USER_VERIFIED' : 'USER_UNVERIFIED', 'User', user._id, {
       email: user.email,
       businessName: user.businessName || '',
@@ -226,6 +236,13 @@ async function suspendUser(req, res, next) {
     if (!emailSent) {
       console.log(`[admin] Suspension email not sent (no SMTP configured or email failed) for ${user.email}`);
     }
+    // Batch 05 — in-app notice next to the suspension email.
+    await notifyUser(user._id, {
+      type: 'account_suspended',
+      title: 'Your account was suspended',
+      message: `Reason: ${reason}`,
+      link: '/signin',
+    });
     await logAdminAction(req, 'USER_SUSPENDED', 'User', user._id, { email: user.email, reason });
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
@@ -265,6 +282,15 @@ async function activateUser(req, res, next) {
       if (!emailSent) {
         console.log(`[admin] Reactivation email not sent (no SMTP configured or email failed) for ${user.email}`);
       }
+    }
+    // Batch 05 — in-app notice (only when the account is active again).
+    if (user.status === 'active') {
+      await notifyUser(user._id, {
+        type: 'account_reactivated',
+        title: 'Your account is active again',
+        message: 'Your suspension was lifted. You can sign in now.',
+        link: '/signin',
+      });
     }
     await logAdminAction(req, 'USER_ACTIVATED', 'User', user._id, { email: user.email });
     res.json({ user: user.toSafeJSON() });
@@ -312,6 +338,13 @@ async function rejectUser(req, res, next) {
     if (!emailSent) {
       console.log(`[admin] Rejection email not sent (no SMTP configured or email failed) for ${user.email}`);
     }
+    // Batch 05 — in-app notice next to the rejection email.
+    await notifyUser(user._id, {
+      type: 'account_rejected',
+      title: 'Your registration was rejected',
+      message: `Reason: ${reason}`,
+      link: '/signin',
+    });
     await logAdminAction(req, 'USER_REJECTED', 'User', user._id, { email: user.email, reason });
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
