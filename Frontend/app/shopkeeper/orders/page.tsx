@@ -184,7 +184,7 @@ export default function ShopkeeperOrdersPage() {
         </div>
       )}
 
-      {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} onCancel={handleCancelOrder} />}
+      {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} onCancel={handleCancelOrder} detailsHref={(o) => `/shopkeeper/orders/${o.id}`} />}
 
       {page < totalPages && (
         <div className="flex justify-center pt-2">

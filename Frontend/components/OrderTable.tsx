@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Order, OrderStatus } from '@/lib/types';
 import { formatPKR, formatDate, orderGoogleMapsUrl } from '@/lib/utils';
 import { printInvoice } from '@/lib/invoice';
@@ -8,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { ProductImage } from '@/components/ProductImage';
-import { Eye, Truck, Download, MapPin, Navigation, X } from 'lucide-react';
+import { Eye, Truck, Download, MapPin, Navigation, X, ExternalLink } from 'lucide-react';
 
 const statusLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function OrderTable({ orders, onCancel }: { orders: Order[]; onCancel?: (order: Order) => void }) {
+// Batch 05 — detailsHref opens the full order page (payment, chat, dispute,
+// rating). When it is not passed (admin lists) the table keeps its old shape.
+export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[]; onCancel?: (order: Order) => void; detailsHref?: (order: Order) => string }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const getStatusVariant = (status: OrderStatus) => {
@@ -82,6 +85,15 @@ export function OrderTable({ orders, onCancel }: { orders: Order[]; onCancel?: (
                     >
                       <Eye className="w-4 h-4" />
                     </button>
+                    {detailsHref && (
+                      <Link
+                        href={detailsHref(order)}
+                        className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                        title="Open order page — payment, chat, dispute, rating"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </Link>
+                    )}
                   </div>
                 </td>
               </tr>

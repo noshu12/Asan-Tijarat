@@ -6,7 +6,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Store, ArrowRight, Trash2, Minus, Plus, Check, MapPin, Crosshair } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
-import { Order } from '@/lib/types';
+import { Order, PaymentChannel, PaymentMethod } from '@/lib/types';
 import { formatPKR } from '@/lib/utils';
 import { getCart, setQuantity, removeFromCart, clearCart } from '@/lib/cart';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
@@ -24,6 +24,11 @@ export default function ShopkeeperCartPage() {
   const [shippingAddress, setShippingAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [createdOrders, setCreatedOrders] = useState<Order[] | null>(null);
+  // Batch 05 — payment choice (2 methods only; COD was dropped). The
+  // shopkeeper pays through their OWN bank/JazzCash/Raast app — no money
+  // moves through an API; the reference is submitted from My Orders.
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('online_advance');
+  const [paymentChannel, setPaymentChannel] = useState<PaymentChannel>('bank');
   const {
     coords,
     locating,
@@ -53,6 +58,8 @@ export default function ShopkeeperCartPage() {
         items: items.map((entry) => ({ productId: entry.product.id, quantity: entry.quantity })),
         shippingAddress: shippingAddress.trim(),
         currentLocation: location ? { lat: location.lat, lng: location.lng } : undefined,
+        paymentMethod,
+        paymentChannel,
       });
       clearCart();
       setCreatedOrders(res.orders);
@@ -123,7 +130,10 @@ export default function ShopkeeperCartPage() {
                 The supplier will confirm, ship and deliver your lot
                 {createdOrders.some((o) => o.buyerLocationLink)
                   ? ' using the shop location link shared with your order.'
-                  : '.'}
+                  : '.'}{' '}
+                {createdOrders[0]?.paymentMethod === 'online_advance'
+                  ? 'Pay via your bank/JazzCash/Raast app, then submit the transaction reference from My Orders — the money stays in escrow until delivery.'
+                  : 'You will pay online when the goods arrive at delivery.'}
               </p>
             </div>
           </div>
@@ -296,6 +306,52 @@ export default function ShopkeeperCartPage() {
                 ⚠ No location available — the supplier will only see the written shipping address.
               </p>
             )}
+          </div>
+          {/* Batch 05 — payment method + channel. No money moves here: the
+              shopkeeper pays through their own bank/JazzCash/Raast app and
+              submits the reference from My Orders afterwards. */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Payment Method
+            </p>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="paymentMethod"
+                checked={paymentMethod === 'online_advance'}
+                onChange={() => setPaymentMethod('online_advance')}
+                className="mt-0.5 accent-emerald-600"
+              />
+              <span>
+                <span className="font-bold text-slate-900 dark:text-white">Pay online now (advance)</span>
+                <span className="block text-[11px] text-slate-500">Money is held in escrow and releases to the supplier once delivery is confirmed.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="paymentMethod"
+                checked={paymentMethod === 'online_at_delivery'}
+                onChange={() => setPaymentMethod('online_at_delivery')}
+                className="mt-0.5 accent-emerald-600"
+              />
+              <span>
+                <span className="font-bold text-slate-900 dark:text-white">Pay online at delivery</span>
+                <span className="block text-[11px] text-slate-500">Check the goods first, then pay online when they arrive.</span>
+              </span>
+            </label>
+            <label className="block text-xs">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Pay through</span>
+              <select
+                value={paymentChannel}
+                onChange={(e) => setPaymentChannel(e.target.value as PaymentChannel)}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
+              >
+                <option value="bank">Bank transfer</option>
+                <option value="raast">Raast (instant, free)</option>
+                <option value="jazzcash">JazzCash</option>
+              </select>
+            </label>
           </div>
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 text-xs space-y-1">
             <div className="flex justify-between text-slate-500">

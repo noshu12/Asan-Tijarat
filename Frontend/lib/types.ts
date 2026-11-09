@@ -137,6 +137,135 @@ export interface Order {
   buyerLocation?: DeviceLocation | null;
   /** Prebuilt Google Maps URL for `buyerLocation` (clickable by suppliers). */
   buyerLocationLink?: string | null;
+  // Batch 05 — payment (records + status only, no gateway integration).
+  paymentMethod?: PaymentMethod | null;
+  paymentChannel?: PaymentChannel | null;
+  paymentStatus?: PaymentStatus;
+  paymentReference?: string;
+  platformFee?: number;
+  amountHeld?: number;
+  payoutAmount?: number;
+  refundAmount?: number;
+  deliveryProof?: DeliveryProof | null;
+  disputeId?: string | null;
+}
+
+/** Batch 05 — the two payment methods (COD was dropped). */
+export type PaymentMethod = 'online_advance' | 'online_at_delivery';
+/** Batch 05 — channel the shopkeeper paid through (own bank/JazzCash/Raast app). */
+export type PaymentChannel = 'bank' | 'raast' | 'jazzcash';
+/** Batch 05 — payment lifecycle. `paid` = online_at_delivery confirmed;
+ * `released` = escrow released to the supplier; `refunded` = money back to
+ * the shopkeeper (full or partial — see refundAmount). */
+export type PaymentStatus =
+  | 'unpaid'
+  | 'payment_submitted'
+  | 'held_in_escrow'
+  | 'released'
+  | 'frozen_dispute'
+  | 'refunded'
+  | 'paid';
+
+/** Batch 05 — one delivery-proof photo stored on the order. */
+export interface DeliveryProof {
+  url: string;
+  storage?: string;
+  publicId?: string | null;
+  originalName?: string;
+  mimeType?: string;
+  size?: number;
+  uploadedAt?: string;
+}
+
+/**
+ * Batch 05 — dispute reasons (ALL 15, exactly these). Late delivery is
+ * deliberately NOT a reason — deliveries are normally late in Pakistan.
+ * Reasons 1-13 are raised by the shopkeeper, 14-15 by the supplier.
+ */
+export type DisputeReason =
+  | 'wrong_goods'
+  | 'wrong_quantity'
+  | 'defective'
+  | 'expired'
+  | 'fake'
+  | 'damaged'
+  | 'different_listing'
+  | 'wrong_pack'
+  | 'never_arrived'
+  | 'partial_delivery'
+  | 'supplier_cancelled'
+  | 'payment_dispute'
+  | 'overcharge'
+  | 'refuses_delivery'
+  | 'refuses_payment';
+
+export type DisputeStatus = 'open' | 'in_review' | 'resolved';
+export type DisputeDecision = 'release' | 'refund_full' | 'refund_partial' | 'return_goods';
+
+export interface Dispute {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  reason: DisputeReason;
+  reasonLabel: string;
+  description: string;
+  raisedBy: string;
+  raisedByRole: 'shopkeeper' | 'supplier';
+  raisedByName?: string;
+  status: DisputeStatus;
+  resolution?: {
+    decision: DisputeDecision | null;
+    refundAmount: number;
+    note: string;
+    decidedBy?: string | null;
+    decidedByName?: string;
+    decidedAt?: string | null;
+  } | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/** Batch 05 — one in-app notification row (replaces the fake bell badge). */
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  link: string;
+  orderId?: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+/** Batch 05 — one shopkeeper rating of a delivered order. */
+export interface Rating {
+  id: string;
+  orderId: string;
+  supplierId: string;
+  shopkeeperId: string;
+  shopkeeperName?: string;
+  stars: number;
+  comment: string;
+  createdAt: string;
+}
+
+/** Batch 05 — a supplier's live average rating + latest reviews. */
+export interface SupplierRatingSummary {
+  supplierId: string;
+  average: number;
+  count: number;
+  reviews: Rating[];
+}
+
+/** Batch 05 — one chat line inside a per-order thread. */
+export interface ChatMessage {
+  id: string;
+  orderId: string;
+  senderId: string;
+  senderRole: UserRole;
+  senderName?: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface TopSupplier {

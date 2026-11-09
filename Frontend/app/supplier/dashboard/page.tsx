@@ -107,18 +107,15 @@ export default function SupplierDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
-            Supplier Portal
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {user.businessName || user.name}
-            {user.city ? ` • ${user.city}` : ''} • {totalOrders} order
-            {totalOrders === 1 ? '' : 's'} received
-          </p>
-        </div>
+      {/* Bell fix — this page imported PortalHeader but never rendered it,
+          so suppliers saw no bell. The heading block is replaced by the
+          header (same title, and the business subtitle it already showed). */}
+      <PortalHeader
+        title="Supplier Portal"
+        subtitle={`${user.businessName || user.name}${user.city ? ` • ${user.city}` : ''} • ${totalOrders} order${totalOrders === 1 ? '' : 's'} received`}
+      />
 
+      <div className="flex justify-end">
         <Link
           href="/supplier/add-product"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition self-start sm:self-auto"

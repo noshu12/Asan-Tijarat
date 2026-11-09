@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Bell } from 'lucide-react';
+import { Search, Bell, CheckCheck } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthProvider';
+import type { NotificationItem } from '@/lib/types';
+import { formatDate } from '@/lib/utils';
 
 interface PortalHeaderProps {
   title: string;
@@ -11,6 +15,7 @@ interface PortalHeaderProps {
 
 export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
   const router = useRouter();
+  const { user } = useAuth();
   // FIX (Batch 03) — search box pehle decorative tha: na state thi, na
   // onChange, na submit — type karne se kuch hota hi nahi tha. Ab ye
   // marketplace search se wired hai: Enter ya search dabane pe
@@ -21,6 +26,53 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     router.push(`/marketplace?search=${encodeURIComponent(searchQuery.trim())}`);
+  };
+
+  // Batch 05 — real notifications. The bell used to show a hardcoded badge
+  // "2" and was disabled as a placeholder; now it reads the unread count +
+  // list from /api/notifications and marks items read on open.
+  const [bellOpen, setBellOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const loadNotifications = async () => {
+    try {
+      const res = await api.notifications.list({ limit: 20 });
+      setNotifications(res.notifications ?? []);
+      setUnreadCount(res.unreadCount ?? 0);
+    } catch {
+      /* offline or expired token — the bell just stays empty */
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    void loadNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const openNotification = async (n: NotificationItem) => {
+    setBellOpen(false);
+    if (!n.read) {
+      try {
+        await api.notifications.markRead(n.id);
+        setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+        setUnreadCount((c) => Math.max(0, c - 1));
+      } catch {
+        /* marking read is best-effort — the link still opens */
+      }
+    }
+    if (n.link) router.push(n.link);
+  };
+
+  const markAllRead = async () => {
+    try {
+      await api.notifications.markAllRead();
+      setNotifications((prev) => prev.map((x) => ({ ...x, read: true })));
+      setUnreadCount(0);
+    } catch {
+      /* best-effort */
+    }
   };
 
   const today = new Date().toLocaleDateString('en-PK', {
@@ -55,19 +107,57 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
         </form>
 
         <div className="relative">
-          {/* FIX (Batch 03) — bell pe pehle hardcoded badge "2" tha, jabke
-              asal me koi notification system hai hi nahi (Batch 05 me aayega).
-              Badge hata diya hai: ab koi fake count nahi dikhega. Button
-              abhi ke liye disabled hai, taake click karke khaali lage. */}
           <button
             type="button"
-            disabled
-            aria-label="Notifications — not available yet"
-            title="Notifications coming soon"
-            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500 cursor-not-allowed transition"
+            onClick={() => { setBellOpen((o) => !o); if (!bellOpen) void loadNotifications(); }}
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+            title="Notifications"
+            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
             <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </button>
+
+          {bellOpen && (
+            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Notifications</p>
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  Mark all read
+                </button>
+              </div>
+              {notifications.length === 0 ? (
+                <p className="px-4 py-6 text-xs text-slate-500 text-center">No notifications yet.</p>
+              ) : (
+                <ul className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {notifications.map((n) => (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => void openNotification(n)}
+                        className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition ${n.read ? '' : 'bg-emerald-50/60 dark:bg-emerald-950/30'}`}
+                      >
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">{n.title}</p>
+                        {n.message && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-1">{formatDate(n.createdAt)}</p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

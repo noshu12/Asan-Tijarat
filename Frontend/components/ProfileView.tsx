@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader } from '@/components/ui/loader';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
-import { Order, Product, User } from '@/lib/types';
+import { Order, Product, SupplierRatingSummary, User } from '@/lib/types';
 import { formatDate, formatPKR, googleMapsUrl } from '@/lib/utils';
 import {
   Building2,
@@ -49,6 +49,8 @@ export function ProfileView({ role }: ProfileViewProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // Batch 05 — the supplier's live average rating (from delivered orders).
+  const [rating, setRating] = useState<SupplierRatingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +110,17 @@ export function ProfileView({ role }: ProfileViewProps) {
         .catch(() => {
           /* catalogue is secondary — never hide the rest of the profile */
         });
+
+      // Batch 05 — average rating from delivered orders (one rating each).
+      api
+        .ratings
+        .supplier(userId)
+        .then((res) => {
+          if (mounted) setRating(res);
+        })
+        .catch(() => {
+          /* no ratings yet — the profile still renders */
+        });
     }
 
     return () => {
@@ -132,16 +145,11 @@ export function ProfileView({ role }: ProfileViewProps) {
 
   return (
     <div className="space-y-8 max-w-5xl">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
-            Business Profile
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {ROLE_LABEL[role]} account • account details and trade summary
-          </p>
-        </div>
-
+      {/* Bell fix — this component used to render its own "Business Profile"
+          title block. The profile pages now render PortalHeader themselves
+          (same as the other portal pages), so the title block is removed
+          here to avoid two titles; only the Edit button stays. */}
+      <div className="flex justify-end">
         <Link
           href={`/${role}/settings`}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition self-start sm:self-auto"
@@ -247,6 +255,12 @@ export function ProfileView({ role }: ProfileViewProps) {
                 ? `${products.length} listing${products.length === 1 ? '' : 's'}`
                 : `${orders.length} order${orders.length === 1 ? '' : 's'} placed`}
             </p>
+            {/* Batch 05 — supplier rating from delivered orders. */}
+            {isSupplier && rating && rating.count > 0 && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1">
+                ★ {rating.average.toFixed(1)} · {rating.count} rating{rating.count === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
         </div>
       </div>

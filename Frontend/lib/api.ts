@@ -1,4 +1,4 @@
-import type { DeviceLocation, KycDocuments, Order, OrderStatus, Product, ProductImageUpload, User, UserRole } from './types';
+import type { ChatMessage, DeviceLocation, Dispute, DisputeDecision, DisputeReason, KycDocuments, NotificationItem, Order, OrderStatus, PaymentChannel, PaymentMethod, Product, ProductImageUpload, Rating, SupplierRatingSummary, User, UserRole } from './types';
 
 /**
  * API client — every call mirrors an Express endpoint on the backend
@@ -169,6 +169,15 @@ export interface ProfileUpdatePayload {
 export interface CreateOrderPayload {
   items: { productId: string; quantity: number }[];
   shippingAddress: string;
+  /**
+   * Batch 05 — payment choice at checkout: online_advance (pay now, held
+   * in escrow) or online_at_delivery (pay online when the goods arrive).
+   * No money moves through an API — the shopkeeper pays via their own
+   * bank/JazzCash/Raast app and submits the reference afterwards.
+   */
+  paymentMethod?: PaymentMethod;
+  /** Batch 05 — bank | raast | jazzcash (wholesale amounts are large). */
+  paymentChannel?: PaymentChannel;
   /**
    * Shopkeeper's GPS point captured at checkout — stored on the order and
    * rendered for the supplier as a Google Maps link (buyerLocationLink).
@@ -512,6 +521,77 @@ export const api = {
   updateOrderStatus: (id: string, status: OrderStatus) =>
     request<{ order: Order }>(`/api/orders/${id}/status`, { method: 'PATCH', body: { status } }),
 
+  /** One order by id — buyer, supplier or admin. */
+  order: (id: string) =>
+    request<{ order: Order }>(`/api/orders/${id}`),
+
+  /* ── Batch 05 — payment (records + status only, no gateway) ─────── */
+
+  /** Shopkeeper submits the bank/JazzCash/Raast transaction reference. */
+  submitPaymentReference: (id: string, payload: { reference: string; channel: PaymentChannel }) =>
+    request<{ order: Order }>(`/api/orders/${id}/payment-reference`, { method: 'POST', body: payload }),
+
+  /** Shopkeeper confirms the goods arrived — releases escrowed payment. */
+  confirmDelivery: (id: string) =>
+    request<{ order: Order }>(`/api/orders/${id}/confirm-delivery`, { method: 'POST' }),
+
+  /** Supplier uploads one delivery-proof photo (base64 data URL). */
+  uploadDeliveryProof: (id: string, payload: { dataUrl: string; name?: string }) =>
+    request<{ order: Order }>(`/api/orders/${id}/delivery-proof`, { method: 'POST', body: payload }),
+
+  /* ── Batch 05 — real notifications ───────────────────────────────── */
+
+  notifications: {
+    list: (query: { limit?: number; page?: number } = {}) => {
+      const params = new URLSearchParams();
+      if (query.limit !== undefined) params.set('limit', String(Math.min(50, Math.max(1, Math.floor(query.limit)))));
+      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request<{ notifications: NotificationItem[]; count: number; total: number; unreadCount: number; page: number; limit: number; totalPages: number }>(`/api/notifications${suffix}`);
+    },
+    markRead: (id: string) =>
+      request<{ notification: NotificationItem }>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
+    markAllRead: () =>
+      request<{ updated: number }>('/api/notifications/read-all', { method: 'POST' }),
+  },
+
+  /* ── Batch 05 — disputes ─────────────────────────────────────────── */
+
+  disputes: {
+    create: (payload: { orderId: string; reason: DisputeReason; description: string }) =>
+      request<{ dispute: Dispute }>('/api/disputes', { method: 'POST', body: payload }),
+    mine: (query: { status?: string; limit?: number; page?: number } = {}) => {
+      const params = new URLSearchParams();
+      if (query.status) params.set('status', query.status);
+      if (query.limit !== undefined) params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
+      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request<{ disputes: Dispute[]; count: number; total: number; page: number; limit: number; totalPages: number }>(`/api/disputes${suffix}`);
+    },
+    get: (id: string) =>
+      request<{ dispute: Dispute }>(`/api/disputes/${id}`),
+  },
+
+  /* ── Batch 05 — ratings ──────────────────────────────────────────── */
+
+  ratings: {
+    create: (payload: { orderId: string; stars: number; comment?: string }) =>
+      request<{ rating: Rating }>('/api/ratings', { method: 'POST', body: payload }),
+    forOrder: (orderId: string) =>
+      request<{ rating: Rating | null }>(`/api/ratings/order/${orderId}`),
+    supplier: (supplierId: string) =>
+      request<SupplierRatingSummary>(`/api/ratings/supplier/${supplierId}`),
+  },
+
+  /* ── Batch 05 — per-order chat ───────────────────────────────────── */
+
+  messages: {
+    list: (orderId: string) =>
+      request<{ messages: ChatMessage[]; count: number }>(`/api/orders/${orderId}/messages`),
+    send: (orderId: string, text: string) =>
+      request<{ message: ChatMessage }>(`/api/orders/${orderId}/messages`, { method: 'POST', body: { text } }),
+  },
+
   supplierAnalytics: () =>
     request<SupplierAnalytics>('/api/analytics/supplier'),
 
@@ -586,6 +666,23 @@ export const api = {
       const suffix = params.toString() ? `?${params.toString()}` : '';
       return request<{ orders: Order[]; count: number }>(`/api/admin/orders${suffix}`);
     },
+
+    /* ── Batch 05 — admin confirms a submitted payment (escrow / paid) ── */
+    confirmPayment: (orderId: string) =>
+      request<{ order: Order }>(`/api/admin/orders/${orderId}/confirm-payment`, { method: 'POST' }),
+
+    /* ── Batch 05 — admin dispute queue + decisions ─────────────────── */
+    disputes: (query: { status?: string; limit?: number; page?: number } = {}) => {
+      const params = new URLSearchParams();
+      if (query.status) params.set('status', query.status);
+      if (query.limit !== undefined) params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
+      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request<{ disputes: Dispute[]; count: number; total: number; page: number; limit: number; totalPages: number }>(`/api/admin/disputes${suffix}`);
+    },
+
+    decideDispute: (id: string, payload: { decision: DisputeDecision; refundAmount?: number; note?: string }) =>
+      request<{ dispute: Dispute; order: Order }>(`/api/admin/disputes/${id}/decide`, { method: 'POST', body: payload }),
 
     /** Newest-first contact messages from the public contact form. */
     contacts: (page = 1, limit = 50) => {

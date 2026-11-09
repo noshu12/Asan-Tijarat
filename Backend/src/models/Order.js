@@ -14,14 +14,30 @@ const orderItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/** One delivery-proof photo, stored on the order (Batch 05). */
+const deliveryProofSchema = new mongoose.Schema(
+  {
+    url: { type: String, default: '' },
+    storage: { type: String, default: '' }, // 'cloudinary' | 'local'
+    publicId: { type: String, default: null },
+    originalName: { type: String, default: '' },
+    mimeType: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    uploadedAt: { type: Date },
+  },
+  { _id: false }
+);
+
 /**
  * Order — mirrors Frontend/lib/types.ts `Order` + `OrderItem` interfaces.
  * Status flow: pending → confirmed → processing → shipped → delivered
  * (or cancelled). Lowercase only, matching the locked flow.
  *
- * No payment fields: no platformFee, no paymentMethod, no
- * paymentStatus — payment is §10 Later, not now. totalAmount is
- * therefore just the subtotal of the items.
+ * Payment fields (Batch 05) — records + status only, NO gateway
+ * integration: the shopkeeper pays through their own bank/JazzCash/Raast
+ * app and submits the reference; the admin confirms it. totalAmount is
+ * still just the items subtotal; the platform fee is computed at
+ * confirmation/release from PLATFORM_FEE_PERCENT (see utils/payment.js).
  */
 const orderSchema = new mongoose.Schema(
   {
@@ -40,6 +56,43 @@ const orderSchema = new mongoose.Schema(
 
     subtotal: { type: Number, required: true, min: 0 },
     totalAmount: { type: Number, required: true, min: 0 },
+
+    // Batch 05 — payment (2 methods only; COD was dropped).
+    paymentMethod: {
+      type: String,
+      enum: ['online_advance', 'online_at_delivery'],
+      default: 'online_advance',
+    },
+    // Channel the shopkeeper paid through: bank transfer, Raast, JazzCash.
+    paymentChannel: {
+      type: String,
+      enum: ['bank', 'raast', 'jazzcash'],
+      default: 'bank',
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['unpaid', 'payment_submitted', 'held_in_escrow', 'released', 'frozen_dispute', 'refunded', 'paid'],
+      default: 'unpaid',
+      index: true,
+    },
+    // Transaction reference the shopkeeper submitted (bank/JazzCash/Raast).
+    paymentReference: { type: String, default: '', trim: true },
+    // Platform fee actually charged on this order (0 until a fee % is set).
+    platformFee: { type: Number, default: 0, min: 0 },
+    // Money currently held in escrow for this order.
+    amountHeld: { type: Number, default: 0, min: 0 },
+    // Money released/paid to the supplier after the fee.
+    payoutAmount: { type: Number, default: 0, min: 0 },
+    // Money refunded to the shopkeeper (full or partial, via a dispute).
+    refundAmount: { type: Number, default: 0, min: 0 },
+    // Previous paymentStatus, kept while a dispute freezes the payment so
+    // the admin decision can restore or settle it (see dispute.controller).
+    prevPaymentStatus: { type: String, default: '' },
+
+    // Batch 05 — delivery proof photo (supplier uploads at delivery) +
+    // the latest dispute on this order, if any.
+    deliveryProof: { type: deliveryProofSchema, default: undefined },
+    disputeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Dispute', default: null },
 
     status: {
       type: String,

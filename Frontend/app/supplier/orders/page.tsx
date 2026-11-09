@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, OrderStatus } from '@/lib/types';
 import { OrderTable } from '@/components/OrderTable';
+import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Truck, CheckCircle, Navigation } from 'lucide-react';
@@ -97,14 +98,8 @@ export default function SupplierOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="pb-4 border-b border-slate-200 dark:border-slate-800">
-        <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
-          Received Orders
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Process wholesale orders and dispatch shipments
-        </p>
-      </div>
+      {/* Bell fix — heading block replaced by the header (same title). */}
+      <PortalHeader title="Received Orders" subtitle="Supplier Portal" />
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
         {(['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered'] as const).map((tab) => (
@@ -150,7 +145,7 @@ export default function SupplierOrdersPage() {
         </div>
       )}
 
-      {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} />}
+      {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} detailsHref={(o) => `/supplier/orders/${o.id}`} />}
 
       {/* Quick status actions for supplier — only when something is actionable */}
       {filteredOrders.some((o) => o.status !== 'delivered' && o.status !== 'cancelled') && (
