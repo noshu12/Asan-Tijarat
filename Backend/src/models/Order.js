@@ -72,4 +72,10 @@ const orderSchema = new mongoose.Schema(
   }
 );
 
+// Batch 04 — compound indexes for the two order-list queries, which both
+// filter by one party and sort newest-first: the index covers the filter
+// AND the sort, so the list stops scanning + sorting in memory.
+orderSchema.index({ buyerId: 1, createdAt: -1 });
+orderSchema.index({ supplierId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Order', orderSchema);

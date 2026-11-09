@@ -69,8 +69,16 @@ function receiptRows(items: OrderItem[]): string {
     .join('');
 }
 
+/** Recomputes the totals from the order's own lines — the stored subtotal /
+ * totalAmount are only snapshots from checkout, so the printed invoice must
+ * never trust them blindly (Batch 04: stale totals). */
+function computedSubtotal(items: OrderItem[]): number {
+  return items.reduce((sum, item) => sum + (item.unitPrice || 0) * (item.quantity || 0), 0);
+}
+
 /** Builds one receipt's inner markup (shared by single & bulk views). */
 function receiptMarkup(order: Order): string {
+  const subtotal = computedSubtotal(order.items);
   return `
   <section class="receipt">
     <header class="head">
@@ -120,8 +128,8 @@ function receiptMarkup(order: Order): string {
     </table>
 
     <div class="totals">
-      <div class="row"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>
-      <div class="row grand"><span>Total Amount</span><span>${money(order.totalAmount)}</span></div>
+      <div class="row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
+      <div class="row grand"><span>Total Amount</span><span>${money(subtotal)}</span></div>
     </div>
 
     <div class="ship">

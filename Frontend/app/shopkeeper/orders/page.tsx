@@ -17,6 +17,11 @@ export default function ShopkeeperOrdersPage() {
   const [myId, setMyId] = useState<string | null>(null);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Batch 04 — GET /api/orders is paginated (50/page); older orders load
+  // via the "Load more" button below instead of one giant response.
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Current session user — useAuth() is called at the top of the component
   // only, never inside useEffect. This effect only READS user/authLoading.
@@ -44,7 +49,8 @@ export default function ShopkeeperOrdersPage() {
     let mounted = true;
     setLoading(true);
     setError(null);
-    api.orders()
+    setPage(1);
+    api.orders({ limit: 50 })
       .then((res) => {
         if (mounted) {
           // Support both shopkeeper (buyerId) and supplier (supplierId) views.
@@ -58,6 +64,7 @@ export default function ShopkeeperOrdersPage() {
           // mock session) fall back to the server-filtered list instead of
           // silently showing an empty page.
           setOrders(myOrders.length > 0 ? myOrders : res.orders);
+          setTotalPages(res.totalPages ?? 1);
         }
       })
       .catch((err) => {
@@ -86,6 +93,29 @@ export default function ShopkeeperOrdersPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel order.');
     }
+  };
+
+  // Batch 04 — appends the next page of orders (newest-first, so "more"
+  // means older orders).
+  const loadMore = () => {
+    const nextPage = page + 1;
+    if (nextPage > totalPages || loadingMore || !myId) return;
+    setLoadingMore(true);
+    api.orders({ limit: 50, page: nextPage })
+      .then((res) => {
+        const myOrders = res.orders.filter((o) =>
+          myRole === 'shopkeeper'
+            ? String(o.buyerId) === String(myId)
+            : String(o.supplierId) === String(myId)
+        );
+        setOrders((prev) => [...prev, ...(myOrders.length > 0 ? myOrders : res.orders)]);
+        setPage(nextPage);
+        setTotalPages(res.totalPages ?? 1);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load more orders');
+      })
+      .finally(() => setLoadingMore(false));
   };
 
   const isEmpty = !loading && orders.length === 0 && myId;
@@ -155,6 +185,19 @@ export default function ShopkeeperOrdersPage() {
       )}
 
       {filteredOrders.length > 0 && <OrderTable orders={filteredOrders} onCancel={handleCancelOrder} />}
+
+      {page < totalPages && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 rounded-xl bg-asan-dark text-white text-xs font-bold shadow-md transition disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading…' : 'Load more orders'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

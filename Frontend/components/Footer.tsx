@@ -32,7 +32,9 @@ export function Footer() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.products();
+        // Batch 04 — the widest page (100): the category list below is
+        // derived from these products, so it needs more than the default 50.
+        const data = await api.products({ limit: 100 });
         setProducts(data.products);
       } catch {
         setProducts([]);

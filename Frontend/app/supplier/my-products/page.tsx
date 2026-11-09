@@ -72,7 +72,10 @@ export default function SupplierMyProductsPage() {
     }
     setLoading(true);
     setError(null);
-    api.products()
+    // Batch 04 — own listings only, via the backend supplierId filter
+    // (incl. Out of Stock), so the list is never cut off by the catalogue
+    // page size.
+    api.products({ supplierId: user.id, limit: 100 })
       .then((res) => {
         if (mounted) {
           const myProducts = res.products.filter((p: Product) => String(p.supplierId) === String(user.id));
@@ -134,7 +137,7 @@ export default function SupplierMyProductsPage() {
         moq,
         status: editForm.status,
       });
-      const updated = await api.products();
+      const updated = await api.products({ supplierId: user.id, limit: 100 });
       setProducts(updated.products.filter((p: Product) => String(p.supplierId) === String(user.id)));
       setEditingId(null);
     } catch (err) {

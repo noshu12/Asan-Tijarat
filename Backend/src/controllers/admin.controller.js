@@ -14,7 +14,8 @@ const Order = require('../models/Order');
 const AuditLog = require('../models/AuditLog');
 const ContactMessage = require('../models/ContactMessage');
 const { toClient } = require('../utils/serialize');
-const { UPLOAD_ROOT } = require('../utils/kycStorage');
+const { UPLOAD_ROOT, deleteStoredUploads: deleteKycStoredUploads } = require('../utils/kycStorage');
+const { deleteProductStoredFiles } = require('../utils/productImageStorage');
 const { getPrivateSignedUrl } = require('../utils/cloudinary');
 const { sendEmail } = require('../utils/sendEmail');
 const {
@@ -67,7 +68,11 @@ async function getStats(req, res, next) {
         Order.countDocuments({}),
       ]);
 
+    // Batch 04 — "Trade Volume" counts NON-CANCELLED orders only, the same
+    // definition as the supplier/shopkeeper analytics and dashboards. A
+    // cancelled order is not a sale, so it must never inflate the volume.
     const revenueAgg = await Order.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } },
     ]);
     const revenue = revenueAgg[0] || { total: 0 };
@@ -331,6 +336,27 @@ async function deleteUser(req, res, next) {
       return res.status(403).json({ error: { code: 'SUBADMIN_IMMUTABLE', message: 'Sub-admins cannot modify admin or sub-admin accounts.' } });
     }
     const deletedInfo = { email: user.email, businessName: user.businessName || '', role: user.role };
+    // Batch 04 — deleting a user must not leave orphan files behind:
+    // 1) the supplier's listings and their stored photos,
+    // 2) the user's KYC documents (Cloudinary private docs + local files).
+    // Cleanup never blocks the delete — the storage helpers swallow
+    // per-file failures (see productImageStorage / kycStorage).
+    const ownedProducts = await Product.find({ supplierId: user._id }).lean();
+    for (const owned of ownedProducts) {
+      // eslint-disable-next-line no-await-in-loop
+      await deleteProductStoredFiles(owned);
+    }
+    const kycStored = { files: [], cloudinaryIds: [] };
+    for (const field of KYC_FIELDS) {
+      const doc = user.documents && user.documents[field];
+      if (!doc) continue;
+      if (doc.storage === 'cloudinary' && doc.publicId) {
+        kycStored.cloudinaryIds.push({ publicId: doc.publicId, resourceType: doc.resourceType || 'image' });
+      } else if (doc.storage === 'local' && doc.url) {
+        kycStored.files.push(path.join(UPLOAD_ROOT, 'kyc', path.basename(doc.url)));
+      }
+    }
+    await deleteKycStoredUploads(kycStored);
     await Product.deleteMany({ supplierId: user._id });
     await User.deleteOne({ _id: user._id });
     await logAdminAction(req, 'USER_DELETED', 'User', req.params.id, deletedInfo);
@@ -436,6 +462,9 @@ async function deleteProduct(req, res, next) {
       return res.status(404).json({ error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' } });
     }
     const deletedInfo = { name: product.name, supplierName: product.supplierName || '' };
+    // Batch 04 — delete the listing's stored photos too (same as the
+    // supplier's own deleteProduct in product.controller.js).
+    await deleteProductStoredFiles(product);
     await Product.deleteOne({ _id: product._id });
     await logAdminAction(req, 'PRODUCT_DELETED', 'Product', req.params.id, deletedInfo);
     res.json({ deleted: true, id: req.params.id });

@@ -90,7 +90,8 @@ const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    phone: { type: String, required: true, trim: true },
+    // Batch 04 — phone login looks users up by phone; index it.
+    phone: { type: String, required: true, trim: true, index: true },
     password: { type: String, required: true, select: false },
     role: { type: String, enum: ['shopkeeper', 'supplier', 'admin', 'subadmin'], required: true, index: true },
     businessName: { type: String, trim: true },

@@ -35,14 +35,16 @@ const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true, enum: CATEGORIES, index: true },
-    price: { type: Number, required: true, min: 0 },
+    // Batch 04 — price sort + city filter are indexed (the catalogue sorts
+    // by price and filters by supplier city).
+    price: { type: Number, required: true, min: 0, index: true },
     unit: { type: String, required: true, default: 'unit', trim: true },
     moq: { type: Number, required: true, min: 1, default: 1 }, // Minimum Order Quantity
     stock: { type: Number, required: true, min: 0, default: 0 },
 
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     supplierName: { type: String, required: true, trim: true },
-    supplierCity: { type: String, trim: true },
+    supplierCity: { type: String, trim: true, index: true },
 
     // Photos uploaded by the supplier: `image` is the cover (upload order 0),
     // `additionalImages` the gallery, `imageUploads` the audit metadata.
@@ -71,5 +73,13 @@ const productSchema = new mongoose.Schema(
     },
   }
 );
+
+// Batch 04 — text index over the fields the catalogue search scans
+// (name / description / category / supplierName / supplierCity), so a
+// $text search no longer needs a full collection scan. The search itself
+// still uses the regex $or — substring matching ("bas" → "Basmati") must
+// keep working, and a text index cannot serve that — but the index is in
+// place for $text queries and for the sort/filter paths above.
+productSchema.index({ name: 'text', description: 'text', category: 'text', supplierName: 'text', supplierCity: 'text' });
 
 module.exports = mongoose.model('Product', productSchema);

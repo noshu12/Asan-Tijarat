@@ -29,4 +29,7 @@ const auditLogSchema = new mongoose.Schema(
   }
 );
 
+// Batch 04 — the audit-log list sorts newest-first; index the sort key.
+auditLogSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('AuditLog', auditLogSchema);
