@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, fileUrl } from '@/lib/api';
+import { PortalHeader } from '@/components/PortalHeader';
 import { useAuth } from '@/context/AuthProvider';
-import type { Dispute, DisputeDecision, DisputeStatus } from '@/lib/types';
+import type { ChatMessage, Dispute, DisputeDecision, DisputeStatus, Order } from '@/lib/types';
+import { PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { formatPKR, formatDate } from '@/lib/utils';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -43,6 +45,13 @@ export default function AdminDisputesPage() {
   const [refundById, setRefundById] = useState<Record<string, string>>({});
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Batch 06 — evidence for the selected claim (Finding 3): order, chat
+  // thread and delivery photo, so the admin decides on evidence.
+  const [evidenceId, setEvidenceId] = useState<string | null>(null);
+  const [evidenceOrder, setEvidenceOrder] = useState<Order | null>(null);
+  const [evidenceMessages, setEvidenceMessages] = useState<ChatMessage[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -81,16 +90,44 @@ export default function AdminDisputesPage() {
     }
   };
 
+  const loadEvidence = async (d: Dispute) => {
+    // Toggle closed.
+    if (evidenceId === d.id) {
+      setEvidenceId(null);
+      setEvidenceOrder(null);
+      setEvidenceMessages([]);
+      setEvidenceError(null);
+      return;
+    }
+    setEvidenceId(d.id);
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    try {
+      // Opening the claim also marks it "In Review" on the backend
+      // (getDispute transitions open → in_review for admins, Finding 8),
+      // and the refreshed dispute updates the list row without a reload.
+      const [disputeRes, orderRes, msgRes] = await Promise.all([
+        api.disputes.get(d.id),
+        api.order(d.orderId),
+        api.messages.list(d.orderId),
+      ]);
+      setDisputes((prev) => prev.map((x) => (x.id === d.id ? disputeRes.dispute : x)));
+      setEvidenceOrder(orderRes.order);
+      setEvidenceMessages(msgRes.messages ?? []);
+    } catch (err) {
+      setEvidenceError(err instanceof Error ? err.message : 'Failed to load evidence.');
+      setEvidenceOrder(null);
+      setEvidenceMessages([]);
+    } finally {
+      setEvidenceLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="pb-4 border-b border-slate-200 dark:border-slate-800">
-        <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
-          Disputes
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Claims from shopkeepers and suppliers — decide on the evidence. Payment stays frozen until you decide.
-        </p>
-      </div>
+      {/* Batch 06 — bell (Finding 5): the disputes page renders PortalHeader
+          like every other admin page instead of its own heading. */}
+      <PortalHeader title="Disputes" subtitle="Admin Portal" />
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
         {(['all', 'open', 'in_review', 'resolved'] as const).map((tab) => (
@@ -157,6 +194,82 @@ export default function AdminDisputesPage() {
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-300 break-words">{d.description}</p>
+
+            {/* Batch 06 — evidence (Finding 3): order, chat thread and
+                delivery photo for this claim, so the decision is made on
+                evidence, not on the claim text alone. */}
+            <Button type="button" variant="outline" onClick={() => void loadEvidence(d)}>
+              {evidenceId === d.id ? 'Hide evidence' : 'View evidence'}
+            </Button>
+            {evidenceId === d.id && (
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3">
+                {evidenceLoading && (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader />
+                  </div>
+                )}
+                {evidenceError && (
+                  <p className="text-xs text-red-600 dark:text-red-300">⚠️ {evidenceError}</p>
+                )}
+                {!evidenceLoading && !evidenceError && evidenceOrder && (
+                  <>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        Order {evidenceOrder.orderNumber} • {formatPKR(evidenceOrder.totalAmount)}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Buyer: {evidenceOrder.buyerName} • Supplier: {evidenceOrder.supplierName} • Status: {evidenceOrder.status}
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {evidenceOrder.items.map((item, idx) => (
+                          <p key={idx} className="text-[11px] text-slate-600 dark:text-slate-300">
+                            {item.productName} — {item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-2">
+                        Payment: {PAYMENT_METHOD_LABEL[evidenceOrder.paymentMethod ?? 'online_advance'] ?? evidenceOrder.paymentMethod}
+                        {' • '}Status: {evidenceOrder.paymentStatus ?? 'unpaid'}
+                        {evidenceOrder.paymentReference ? ` • Reference: ${evidenceOrder.paymentReference}` : ''}
+                        {` • Fee: ${formatPKR(evidenceOrder.platformFee ?? 0)}`}
+                        {(evidenceOrder.refundAmount ?? 0) > 0 ? ` • Refunded: ${formatPKR(evidenceOrder.refundAmount ?? 0)}` : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white mb-1">Delivery photo</p>
+                      {evidenceOrder.deliveryProof?.url ? (
+                        <div>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={fileUrl(evidenceOrder.deliveryProof.url)} alt="Delivery proof" className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 object-cover" />
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            Uploaded {evidenceOrder.deliveryProof.uploadedAt ? formatDate(evidenceOrder.deliveryProof.uploadedAt) : ''}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-500">No delivery photo uploaded.</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white mb-1">Chat thread</p>
+                      {evidenceMessages.length === 0 ? (
+                        <p className="text-[11px] text-slate-500">No messages on this order.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {evidenceMessages.map((m) => (
+                            <div key={m.id} className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                              <p className="text-[11px] font-bold text-slate-900 dark:text-white">
+                                {m.senderName || m.senderRole} • {formatDate(m.createdAt)}
+                              </p>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 break-words">{m.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {d.status === 'resolved' && d.resolution?.decision ? (
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs space-y-1">

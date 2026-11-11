@@ -195,7 +195,7 @@ export default function ShopkeeperDashboardPage() {
             View all
           </Link>
         </div>
-        <OrderTable orders={recentOrders} />
+        <OrderTable orders={recentOrders} detailsHref={(o) => `/shopkeeper/orders/${o.id}`} />
       </div>
 
     </div>

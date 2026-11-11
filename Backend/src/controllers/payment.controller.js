@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const Dispute = require('../models/Dispute');
 const AuditLog = require('../models/AuditLog');
 const { toClient } = require('../utils/serialize');
 const { calcPlatformFee } = require('../utils/payment');
@@ -27,6 +28,25 @@ const { saveDeliveryPhoto, DeliveryProofError } = require('../utils/deliveryProo
  */
 
 const PAYMENT_CHANNELS = ['bank', 'raast', 'jazzcash'];
+
+/**
+ * Batch 06 — true when the order has an open (unresolved) dispute. The
+ * check is by dispute status, not by paymentStatus: the freeze sets the
+ * payment to frozen_dispute, but a payment must never move while a claim
+ * is open even if the stored status was never frozen.
+ */
+async function hasOpenDispute(order) {
+  if (!order.disputeId) return false;
+  const d = await Dispute.findById(order.disputeId, { status: 1 }).lean();
+  return !!d && d.status !== 'resolved';
+}
+
+/** 400 when a payment action is attempted while a dispute is open. */
+function disputeOpenError(res) {
+  return res.status(400).json({
+    error: { code: 'DISPUTE_OPEN', message: 'A dispute is open on this order — the payment is frozen until the admin decides.' },
+  });
+}
 
 /** Loads an order the caller is a party to, or null (with the error sent). */
 async function loadOwnOrder(req, res, orderId) {
@@ -59,6 +79,8 @@ async function submitPaymentReference(req, res, next) {
     if (!isBuyer) {
       return res.status(403).json({ error: { code: 'ROLE_FORBIDDEN', message: 'Only the shopkeeper can submit a payment reference.' } });
     }
+    // Batch 06 — no money moves while a dispute is open (audit finding 1).
+    if (await hasOpenDispute(order)) return disputeOpenError(res);
     if (order.paymentStatus !== 'unpaid') {
       return res.status(400).json({
         error: { code: 'INVALID_STATE', message: `Payment is already "${order.paymentStatus}" — a reference cannot be submitted now.` },
@@ -123,6 +145,9 @@ async function confirmPayment(req, res, next) {
         error: { code: 'INVALID_STATE', message: 'Payment is frozen by an open dispute — decide the dispute first.' },
       });
     }
+    // Batch 06 — no money moves while a dispute is open, even if the
+    // stored status was never frozen (audit finding 1).
+    if (await hasOpenDispute(order)) return disputeOpenError(res);
     if (order.paymentStatus !== 'payment_submitted') {
       return res.status(400).json({
         error: { code: 'INVALID_STATE', message: `No submitted payment to confirm (status is "${order.paymentStatus}").` },
@@ -182,6 +207,8 @@ async function confirmDeliveryReceipt(req, res, next) {
     if (!isBuyer) {
       return res.status(403).json({ error: { code: 'ROLE_FORBIDDEN', message: 'Only the shopkeeper can confirm delivery receipt.' } });
     }
+    // Batch 06 — no release while a dispute is open (audit finding 1).
+    if (await hasOpenDispute(order)) return disputeOpenError(res);
     if (order.status !== 'delivered') {
       return res.status(400).json({
         error: { code: 'INVALID_STATE', message: 'Delivery can only be confirmed once the order is marked delivered.' },

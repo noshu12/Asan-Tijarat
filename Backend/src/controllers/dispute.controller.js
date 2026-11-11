@@ -98,6 +98,21 @@ async function openDispute(req, res, next) {
       });
     }
 
+    // Batch 06 — a dispute on an already-settled order cannot move money:
+    // the payment is already with the supplier (released/paid) or back
+    // with the shopkeeper (refunded). Refuse instead of opening a claim
+    // whose refund decision could never happen. EXCEPT reason 11 on a
+    // cancelled order: the cancel already refunded the advance in full,
+    // so the payment reads 'refunded' — but the claim itself is still
+    // allowed (Batch 05 exception above) and its refund decision records
+    // Rs 0 (see decideDispute).
+    const isReason11OnCancelled = reasonKey === 'supplier_cancelled' && order.status === 'cancelled';
+    if (!isReason11OnCancelled && ['released', 'paid', 'refunded'].includes(order.paymentStatus)) {
+      return res.status(400).json({
+        error: { code: 'DISPUTE_TOO_LATE', message: `Payment is already settled (status "${order.paymentStatus}") — a dispute must be filed before the payment is released, paid or refunded.` },
+      });
+    }
+
     const dispute = await Dispute.create({
       orderId: order._id,
       orderNumber: order.orderNumber,
@@ -110,8 +125,11 @@ async function openDispute(req, res, next) {
     });
 
     // Freeze the money while the dispute is open. The previous status is
-    // kept on the order so the decision can restore or settle it.
-    if (order.paymentStatus === 'held_in_escrow' || order.paymentStatus === 'payment_submitted') {
+    // kept on the order so the decision can restore or settle it. Every
+    // pre-settlement state freezes — an unpaid order freezes too, or the
+    // shopkeeper could still pay and the money could still move while the
+    // claim is open (Batch 06 audit finding 1).
+    if (['unpaid', 'payment_submitted', 'held_in_escrow'].includes(order.paymentStatus)) {
       order.prevPaymentStatus = order.paymentStatus;
       order.paymentStatus = 'frozen_dispute';
     }
@@ -189,7 +207,40 @@ async function getDispute(req, res, next) {
         return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only view your own disputes.' } });
       }
     }
+    // Batch 06 — an admin opening a claim moves it to "In Review", so the
+    // admin queue's In Review tab is real (nothing ever set it before).
+    if (isAdmin && dispute.status === 'open') {
+      await Dispute.updateOne({ _id: dispute._id }, { $set: { status: 'in_review' } });
+      dispute.status = 'in_review';
+    }
     res.json({ dispute: toClient(dispute) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/disputes/order/:orderId  (party to the order, or admin/sub-admin)
+ * The latest dispute for one order, so both parties see the same dispute
+ * on the order page (Batch 06 — listMyDisputes only returns disputes the
+ * caller raised, so the counterparty saw nothing and got
+ * DISPUTE_ALREADY_OPEN when they tried to file).
+ */
+async function getDisputeByOrder(req, res, next) {
+  try {
+    const order = await Order.findById(req.params.orderId, { buyerId: 1, supplierId: 1 }).lean();
+    if (!order) {
+      return res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'No order matches that id.' } });
+    }
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'subadmin';
+    const isParty =
+      String(order.buyerId) === String(req.user._id) ||
+      String(order.supplierId) === String(req.user._id);
+    if (!isAdmin && !isParty) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only view disputes on your own orders.' } });
+    }
+    const dispute = await Dispute.findOne({ orderId: order._id }).sort({ createdAt: -1 }).lean();
+    res.json({ dispute: dispute ? toClient(dispute) : null });
   } catch (err) {
     next(err);
   }
@@ -278,6 +329,17 @@ async function decideDispute(req, res, next) {
       refundAmount = total;
     }
 
+    // Batch 06 — a dispute frozen from 'unpaid' never had money move, and
+    // a dispute never frozen at all (reason 11 on a cancelled order whose
+    // advance was already refunded at cancel) has no money left to give
+    // back either. A refund decision on either records 0 — in the order,
+    // the resolution and the audit log — so no record claims money back
+    // that never left the shopkeeper or was already returned.
+    const wasUnpaid = order.prevPaymentStatus === 'unpaid';
+    const neverFrozen = order.paymentStatus !== 'frozen_dispute';
+    const noMoneyToMove = wasUnpaid || neverFrozen;
+    if (noMoneyToMove && decision !== 'release') refundAmount = 0;
+
     // Settle the frozen money.
     if (order.paymentStatus === 'frozen_dispute') {
       const wasHeld = order.prevPaymentStatus === 'held_in_escrow';
@@ -302,7 +364,13 @@ async function decideDispute(req, res, next) {
       } else {
         // refund_full / refund_partial / return_goods.
         order.refundAmount = refundAmount;
-        if (decision === 'refund_full' || decision === 'return_goods') {
+        if (wasUnpaid) {
+          // Nothing was ever paid: the shopkeeper owes nothing, and no
+          // payout or fee applies — a partial refund of money never paid
+          // is the same outcome as a full one.
+          order.platformFee = 0;
+          order.payoutAmount = 0;
+        } else if (decision === 'refund_full' || decision === 'return_goods') {
           // A full refund takes no platform fee.
           order.platformFee = 0;
           order.payoutAmount = 0;
@@ -347,12 +415,18 @@ async function decideDispute(req, res, next) {
       },
     }).catch((err) => console.log('[audit] failed to write log:', err.message));
 
-    const decisionText = {
-      release: 'released the payment to the supplier',
-      refund_full: 'refunded the full order amount to the shopkeeper',
-      refund_partial: `refunded Rs ${refundAmount} to the shopkeeper and released the rest to the supplier`,
-      return_goods: 'ordered the goods returned and refunded the full order amount to the shopkeeper',
-    }[decision];
+    const decisionText = noMoneyToMove
+      ? neverFrozen
+        ? 'decided the money was already refunded when the order was cancelled'
+        : decision === 'release'
+          ? 'decided the shopkeeper still has to pay (no payment was made)'
+          : 'decided the shopkeeper owes nothing (no payment was made)'
+      : {
+          release: 'released the payment to the supplier',
+          refund_full: 'refunded the full order amount to the shopkeeper',
+          refund_partial: `refunded Rs ${refundAmount} to the shopkeeper and released the rest to the supplier`,
+          return_goods: 'ordered the goods returned and refunded the full order amount to the shopkeeper',
+        }[decision];
     await notifyOrderParties(order, {
       type: 'dispute_resolved',
       title: `Dispute decided — ${order.orderNumber}`,
@@ -370,6 +444,7 @@ module.exports = {
   openDispute,
   listMyDisputes,
   getDispute,
+  getDisputeByOrder,
   listDisputesAdmin,
   decideDispute,
 };

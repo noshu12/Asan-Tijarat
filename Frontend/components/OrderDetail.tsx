@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
 import type { ChatMessage, Dispute, DisputeReason, Order, PaymentChannel, Rating } from '@/lib/types';
+import { PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { formatPKR, formatDate, orderGoogleMapsUrl } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,11 +39,6 @@ const DISPUTE_REASONS: { value: DisputeReason; label: string; by: 'shopkeeper' |
   { value: 'refuses_delivery', label: 'Shopkeeper refuses delivery', by: 'supplier' },
   { value: 'refuses_payment', label: 'Shopkeeper refuses to pay', by: 'supplier' },
 ];
-
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
-  online_advance: 'Pay online now (advance, held in escrow)',
-  online_at_delivery: 'Pay online at delivery',
-};
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: 'Unpaid',
@@ -102,12 +98,15 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
       const [orderRes, msgRes, disputeRes, ratingRes] = await Promise.all([
         api.order(orderId),
         api.messages.list(orderId),
-        api.disputes.mine({ limit: 100 }),
+        // Batch 06 — the dispute ON this order (both parties see the same
+        // one). listMyDisputes only returns disputes the caller raised, so
+        // the counterparty saw nothing.
+        api.disputes.forOrder(orderId),
         api.ratings.forOrder(orderId),
       ]);
       setOrder(orderRes.order);
       setMessages(msgRes.messages ?? []);
-      setDispute((disputeRes.disputes ?? []).find((d) => String(d.orderId) === String(orderId)) ?? null);
+      setDispute(disputeRes.dispute ?? null);
       setRating(ratingRes.rating ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load order.');
@@ -162,8 +161,69 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
 
   const mapsUrl = orderGoogleMapsUrl(order);
   const disputeOpen = dispute && dispute.status !== 'resolved';
-  const canDispute = !disputeOpen && order.status !== 'pending' && order.status !== 'cancelled';
-  const myReasons = DISPUTE_REASONS.filter((r) => r.by === role);
+  // Batch 06 — a cancelled order can still take a dispute, but only reason
+  // 11 (supplier cancelled after advance payment) and only from the
+  // shopkeeper. The backend enforces the same rule.
+  const canDispute = !disputeOpen && order.status !== 'pending' && (order.status !== 'cancelled' || role === 'shopkeeper');
+  const myReasons = DISPUTE_REASONS.filter(
+    (r) => r.by === role && (order.status !== 'cancelled' || r.value === 'supplier_cancelled'),
+  );
+
+  // Batch 06 gap fix — the "File a Dispute Claim" button + form, extracted
+  // unchanged so it can render in two places: on its own when no dispute
+  // exists yet, and below a resolved dispute when a new claim is allowed.
+  // An open dispute still shows alone (canDispute is false while one is open).
+  const fileDisputeBlock = (
+    <>
+      {!showDisputeForm ? (
+        <div>
+          <p className="text-xs text-slate-500 mb-2">Couldn&apos;t settle it in the chat? File a claim — it goes to the admin.</p>
+          <Button type="button" variant="outline" onClick={() => { setShowDisputeForm(true); if (order.status === 'cancelled') setDisputeReason('supplier_cancelled'); }}>File a Dispute Claim</Button>
+        </div>
+      ) : (
+        <form
+          className="space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(async () => {
+              await api.disputes.create({ orderId, reason: disputeReason, description: disputeText.trim() });
+              setShowDisputeForm(false);
+              setDisputeText('');
+            }, 'Dispute claim filed. The payment is frozen until the admin decides.');
+          }}
+        >
+          <label className="block text-xs">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">Reason</span>
+            <select
+              value={disputeReason}
+              onChange={(e) => setDisputeReason(e.target.value as DisputeReason)}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
+            >
+              {myReasons.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">What happened?</span>
+            <textarea
+              value={disputeText}
+              onChange={(e) => setDisputeText(e.target.value)}
+              placeholder="Describe the problem with this order…"
+              maxLength={2000}
+              rows={3}
+              required
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={busy}>Submit Claim</Button>
+            <Button type="button" variant="outline" onClick={() => setShowDisputeForm(false)}>Cancel</Button>
+          </div>
+        </form>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-6">
@@ -187,9 +247,30 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
               {formatDate(order.createdAt)} • Buyer: {order.buyerName} • Supplier: {order.supplierName}
             </p>
           </div>
-          <Badge variant={order.status === 'delivered' ? 'delivered' : order.status === 'cancelled' ? 'outline' : 'confirmed'}>
-            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={order.status === 'delivered' ? 'delivered' : order.status === 'cancelled' ? 'outline' : 'confirmed'}>
+              {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+            </Badge>
+            {/* Batch 06 — same cancel the orders list offers (buyer only,
+                pending only; the backend enforces both). */}
+            {isBuyer && order.status === 'pending' && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  // Same confirm as the orders list before cancelling.
+                  const ok = window.confirm(
+                    `Cancel order ${order.orderNumber}?\n\nThe order will be cancelled and the supplier will not receive it.`,
+                  );
+                  if (!ok) return;
+                  void run(async () => { await api.updateOrderStatus(orderId, 'cancelled'); }, 'Order cancelled. Any escrowed advance is refunded in full.');
+                }}
+              >
+                Cancel Order
+              </Button>
+            )}
+          </div>
         </div>
         <div className="space-y-2">
           {order.items.map((item, idx) => (
@@ -239,7 +320,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
           )}
         </div>
 
-        {isBuyer && order.paymentStatus === 'unpaid' && order.status !== 'cancelled' && (order.paymentMethod === 'online_advance' || (order.paymentMethod === 'online_at_delivery' && order.status === 'delivered')) && (
+        {isBuyer && !disputeOpen && order.paymentStatus === 'unpaid' && order.status !== 'cancelled' && (order.paymentMethod === 'online_advance' || (order.paymentMethod === 'online_at_delivery' && order.status === 'delivered')) && (
           <form
             className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2"
             onSubmit={(e) => {
@@ -290,7 +371,10 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
           </div>
         )}
 
-        {order.paymentStatus === 'frozen_dispute' && (
+        {/* Batch 06 — the banner follows the dispute, not the stored
+            payment status: an open dispute freezes the payment even when
+            the order was never frozen by an old code path. */}
+        {disputeOpen && (
           <p className="text-xs font-bold text-amber-600 dark:text-amber-400 pt-2 border-t border-slate-100 dark:border-slate-800">
             Payment is frozen while the dispute is open — no release, no refund, until the admin decides.
           </p>
@@ -364,7 +448,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
       {/* Dispute */}
       <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
         <h3 className="text-base font-bold text-slate-900 dark:text-white">Dispute</h3>
-        {dispute ? (
+        {dispute && (
           <div className="space-y-2 text-xs">
             <p className="text-slate-500">Reason: <span className="font-bold text-slate-900 dark:text-white">{dispute.reasonLabel}</span></p>
             <p className="text-slate-500">Status: <span className="font-bold text-slate-900 dark:text-white">{DISPUTE_STATUS_LABEL[dispute.status]}</span></p>
@@ -382,57 +466,17 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
               </div>
             )}
           </div>
-        ) : canDispute ? (
-          <>
-            {!showDisputeForm ? (
-              <div>
-                <p className="text-xs text-slate-500 mb-2">Couldn&apos;t settle it in the chat? File a claim — it goes to the admin.</p>
-                <Button type="button" variant="outline" onClick={() => setShowDisputeForm(true)}>File a Dispute Claim</Button>
-              </div>
-            ) : (
-              <form
-                className="space-y-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run(async () => {
-                    await api.disputes.create({ orderId, reason: disputeReason, description: disputeText.trim() });
-                    setShowDisputeForm(false);
-                    setDisputeText('');
-                  }, 'Dispute claim filed. The payment is frozen until the admin decides.');
-                }}
-              >
-                <label className="block text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Reason</span>
-                  <select
-                    value={disputeReason}
-                    onChange={(e) => setDisputeReason(e.target.value as DisputeReason)}
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
-                  >
-                    {myReasons.map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">What happened?</span>
-                  <textarea
-                    value={disputeText}
-                    onChange={(e) => setDisputeText(e.target.value)}
-                    placeholder="Describe the problem with this order…"
-                    maxLength={2000}
-                    rows={3}
-                    required
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
-                  />
-                </label>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={busy}>Submit Claim</Button>
-                  <Button type="button" variant="outline" onClick={() => setShowDisputeForm(false)}>Cancel</Button>
-                </div>
-              </form>
-            )}
-          </>
-        ) : (
+        )}
+        {/* Batch 06 gap fix — a resolved dispute no longer hides the file
+            button: when it is resolved and a new claim is allowed, the
+            button shows below it. An open dispute still shows alone. */}
+        {dispute?.status === 'resolved' && canDispute && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+            {fileDisputeBlock}
+          </div>
+        )}
+        {!dispute && canDispute && fileDisputeBlock}
+        {!dispute && !canDispute && (
           <p className="text-xs text-slate-500">
             {order.status === 'pending' || order.status === 'cancelled'
               ? 'A dispute cannot be opened on this order.'

@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const Dispute = require('../models/Dispute');
 const Product = require('../models/Product');
 const Counter = require('../models/Counter');
 const { toClient } = require('../utils/serialize');
@@ -353,7 +354,11 @@ async function getOrder(req, res, next) {
 
     const isBuyer = String(order.buyerId) === String(req.user._id);
     const isSupplier = String(order.supplierId) === String(req.user._id);
-    if (!isBuyer && !isSupplier) {
+    // Batch 06 — the admin needs to read one order to decide a dispute
+    // (evidence section on the admin disputes page); the client already
+    // documents this endpoint as "buyer, supplier or admin".
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'subadmin';
+    if (!isBuyer && !isSupplier && !isAdmin) {
       return res.status(403).json({
         error: { code: 'ORDER_NOT_YOURS', message: 'You can only view your own orders.' },
       });
@@ -417,6 +422,20 @@ async function updateOrderStatus(req, res, next) {
       });
     }
 
+    // Batch 06 — cancelling must never bypass an open dispute: the money
+    // stays frozen until the admin decides. Unreachable through the status
+    // machine today (disputes cannot open on pending orders, and only
+    // pending orders can be cancelled), but the guard keeps the money
+    // rules true even if that changes.
+    if (toStatus === 'cancelled' && order.disputeId) {
+      const d = await Dispute.findById(order.disputeId, { status: 1 }).lean();
+      if (d && d.status !== 'resolved') {
+        return res.status(400).json({
+          error: { code: 'DISPUTE_OPEN', message: 'A dispute is open on this order — the payment is frozen until the admin decides.' },
+        });
+      }
+    }
+
     order.status = toStatus;
     if (toStatus === 'confirmed') {
       order.deliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // +3 days
@@ -452,11 +471,16 @@ async function updateOrderStatus(req, res, next) {
       delivered: 'order_delivered',
       cancelled: 'order_cancelled',
     };
+    // Batch 06 — the delivered message is method-aware (audit finding 7):
+    // method (b) has no receipt-confirm action, the shopkeeper must pay
+    // and submit the transaction reference instead.
     const messageMap = {
       confirmed: `The supplier confirmed order ${order.orderNumber}.`,
       processing: `The supplier started processing order ${order.orderNumber}.`,
       shipped: `Order ${order.orderNumber} is on its way.`,
-      delivered: `Order ${order.orderNumber} was marked delivered. Please confirm receipt so the escrowed payment can release.`,
+      delivered: order.paymentMethod === 'online_at_delivery'
+        ? `Order ${order.orderNumber} was marked delivered. Pay online now that the goods have arrived, then submit the transaction reference.`
+        : `Order ${order.orderNumber} was marked delivered. Please confirm receipt so the escrowed payment can release.`,
       cancelled: `Order ${order.orderNumber} was cancelled by the shopkeeper.`,
     };
     await notifyOrderParties(order, {
