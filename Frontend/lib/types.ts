@@ -152,6 +152,15 @@ export interface Order {
 
 /** Batch 05 — the two payment methods (COD was dropped). */
 export type PaymentMethod = 'online_advance' | 'online_at_delivery';
+/**
+ * Batch 06 — one shared label for the advance method (audit finding 9):
+ * the cart said "Pay online now (advance)" while the order detail said
+ * "Pay online now (advance, held in escrow)". Both screens use this now.
+ */
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  online_advance: 'Pay online now (advance, held in escrow)',
+  online_at_delivery: 'Pay online at delivery',
+};
 /** Batch 05 — channel the shopkeeper paid through (own bank/JazzCash/Raast app). */
 export type PaymentChannel = 'bank' | 'raast' | 'jazzcash';
 /** Batch 05 — payment lifecycle. `paid` = online_at_delivery confirmed;

@@ -570,6 +570,9 @@ export const api = {
     },
     get: (id: string) =>
       request<{ dispute: Dispute }>(`/api/disputes/${id}`),
+    /** Batch 06 — the latest dispute on one order (both parties see it). */
+    forOrder: (orderId: string) =>
+      request<{ dispute: Dispute | null }>(`/api/disputes/order/${orderId}`),
   },
 
   /* ── Batch 05 — ratings ──────────────────────────────────────────── */

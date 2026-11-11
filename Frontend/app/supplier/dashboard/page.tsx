@@ -228,7 +228,7 @@ export default function SupplierDashboardPage() {
             </p>
           </div>
         )}
-        {recentOrders.length > 0 && <OrderTable orders={recentOrders} />}
+        {recentOrders.length > 0 && <OrderTable orders={recentOrders} detailsHref={(o) => `/supplier/orders/${o.id}`} />}
       </div>
 
     </div>

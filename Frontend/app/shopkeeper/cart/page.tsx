@@ -6,7 +6,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Store, ArrowRight, Trash2, Minus, Plus, Check, MapPin, Crosshair } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
-import { Order, PaymentChannel, PaymentMethod } from '@/lib/types';
+import { Order, PaymentChannel, PaymentMethod, PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { formatPKR } from '@/lib/utils';
 import { getCart, setQuantity, removeFromCart, clearCart } from '@/lib/cart';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
@@ -323,7 +323,8 @@ export default function ShopkeeperCartPage() {
                 className="mt-0.5 accent-emerald-600"
               />
               <span>
-                <span className="font-bold text-slate-900 dark:text-white">Pay online now (advance)</span>
+                {/* Batch 06 — shared label (audit finding 9): same text as the order detail page. */}
+                <span className="font-bold text-slate-900 dark:text-white">{PAYMENT_METHOD_LABEL.online_advance}</span>
                 <span className="block text-[11px] text-slate-500">Money is held in escrow and releases to the supplier once delivery is confirmed.</span>
               </span>
             </label>
