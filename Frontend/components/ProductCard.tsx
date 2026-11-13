@@ -141,7 +141,7 @@ export function ProductCard({ product }: { product: Product }) {
               onClick={() => setShowDetail(true)}
               className="block text-left"
             >
-              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-2 leading-snug hover:text-emerald-600 transition">
+              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-2 leading-snug hover:text-asan-accent transition">
                 {product.name}
               </h3>
             </button>
@@ -159,7 +159,7 @@ export function ProductCard({ product }: { product: Product }) {
 
         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
           <div>
-            <div className="text-base sm:text-lg font-extrabold text-asan-dark dark:text-emerald-400 leading-none">
+            <div className="text-base sm:text-lg font-extrabold text-asan-dark dark:text-asan-accent-light leading-none">
               {formatPKR(product.price)} / {pack}
             </div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
@@ -177,9 +177,9 @@ export function ProductCard({ product }: { product: Product }) {
               type="button"
               onClick={handleAdd}
               aria-label={`Add ${product.name} to cart`}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
                 added
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-asan-accent text-white'
                   : 'bg-asan-accent hover:bg-asan-accent-hover text-white'
               }`}
             >
@@ -229,7 +229,7 @@ export function ProductCard({ product }: { product: Product }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Price</p>
-              <p className="text-sm font-extrabold text-asan-dark dark:text-emerald-400 mt-1">
+              <p className="text-sm font-extrabold text-asan-dark dark:text-asan-accent-light mt-1">
                 {formatPKR(product.price)} / {pack}
               </p>
             </div>
@@ -254,7 +254,7 @@ export function ProductCard({ product }: { product: Product }) {
           </div>
 
           {marketSale && marketSale.bagsSold > 0 && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-3">
+            <div className="rounded-xl border border-asan-border bg-asan-accent-light dark:border-asan-mid dark:bg-asan-dark/30 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Market sale — last 30 days
               </p>
@@ -295,7 +295,7 @@ export function ProductCard({ product }: { product: Product }) {
                 <Plus className="w-4 h-4" />
               </button>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                {pack} · Total: <span className="font-extrabold text-asan-dark dark:text-emerald-400">{formatPKR(product.price * qty)}</span>
+                {pack} · Total: <span className="font-extrabold text-asan-dark dark:text-asan-accent-light">{formatPKR(product.price * qty)}</span>
               </span>
             </div>
 
@@ -305,9 +305,9 @@ export function ProductCard({ product }: { product: Product }) {
                   type="button"
                   disabled={outOfStock}
                   onClick={handlePopupAdd}
-                  className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 transition ${
+                  className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition ${
                     popupAdded
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-asan-accent text-white'
                       : 'bg-asan-accent hover:bg-asan-accent-hover text-white'
                   } disabled:opacity-40`}
                 >

@@ -56,7 +56,7 @@ export function Footer() {
   }, [products]);
 
   return (
-    <footer className="bg-asan-dark text-white pt-16 pb-12 border-t border-emerald-950 select-none">
+    <footer className="bg-asan-dark text-white pt-16 pb-12 border-t border-asan-mid select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           
@@ -69,14 +69,14 @@ export function Footer() {
               />
               <span className="font-bold text-2xl tracking-tight">Asan Tijarat</span>
             </div>
-            <p className="text-xs text-emerald-100/80 leading-relaxed">
+            <p className="text-xs text-asan-accent-light/80 leading-relaxed">
               A B2B wholesale marketplace connecting suppliers and shopkeepers. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.
             </p>
           </div>
 
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-wider text-emerald-300">Quick Links</h4>
-            <ul className="space-y-2 text-xs text-emerald-100/80">
+            <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent-light">Quick Links</h4>
+            <ul className="space-y-2 text-xs text-asan-accent-light/80">
               <li><Link href="/" className="hover:text-white transition">Home</Link></li>
               <li><Link href="/marketplace" className="hover:text-white transition">Browse Marketplace</Link></li>
               <li><Link href="/about" className="hover:text-white transition">About Our Mission</Link></li>
@@ -85,11 +85,11 @@ export function Footer() {
           </div>
 
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-wider text-emerald-300">Top Categories</h4>
+            <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent-light">Top Categories</h4>
             {categories.length === 0 ? (
-              <p className="text-xs text-emerald-100/60">No categories yet</p>
+              <p className="text-xs text-asan-accent-light/60">No categories yet</p>
             ) : (
-              <ul className="space-y-2 text-xs text-emerald-100/80">
+              <ul className="space-y-2 text-xs text-asan-accent-light/80">
                 {categories.map((category) => {
                   const slug = CATEGORY_SLUG[category];
                   const href = slug ? `/marketplace?cat=${slug}` : '/marketplace';
@@ -106,8 +106,8 @@ export function Footer() {
           </div>
 
           <div className="space-y-3">
-            <h4 className="font-bold text-sm uppercase tracking-wider text-emerald-300">Headquarters</h4>
-            <div className="space-y-2 text-xs text-emerald-100/80">
+            <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent-light">Headquarters</h4>
+            <div className="space-y-2 text-xs text-asan-accent-light/80">
               <p className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-asan-accent shrink-0" />
                 <span>FUUAST Campus, Gulshan-e-Iqbal, Karachi, Pakistan</span>
@@ -121,7 +121,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-xs text-emerald-200/60 gap-4">
+        <div className="mt-12 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-xs text-asan-accent-light/60 gap-4">
           <p>© 2026 Asan Tijarat. Final Year Project — Federal Urdu University (FUUAST).</p>
           <div className="flex items-center gap-5">
             <Link href="/terms" className="hover:text-white transition">Terms &amp; Conditions</Link>

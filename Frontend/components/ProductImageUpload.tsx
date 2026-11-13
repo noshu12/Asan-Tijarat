@@ -191,8 +191,8 @@ export function ProductImageUpload({
             className={cn(
               'h-[152px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 px-3 text-center transition',
               dragging
-                ? 'border-asan-accent bg-emerald-50/70 dark:bg-emerald-950/30'
-                : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 hover:border-emerald-500/60'
+                ? 'border-asan-accent bg-asan-accent-light/70 dark:bg-asan-dark/30'
+                : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 hover:border-asan-accent/60'
             )}
           >
             {images.length === 0 ? (

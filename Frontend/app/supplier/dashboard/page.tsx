@@ -97,7 +97,7 @@ export default function SupplierDashboardPage() {
   if (!user) {
     return (
       <div className="flex items-center justify-center py-20">
-        <svg className="animate-spin h-8 w-8 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <svg className="animate-spin h-8 w-8 text-asan-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
         </svg>
@@ -118,7 +118,7 @@ export default function SupplierDashboardPage() {
       <div className="flex justify-end">
         <Link
           href="/supplier/add-product"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-asan-accent-hover/20 transition self-start sm:self-auto"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Add New Product</span>
@@ -157,7 +157,7 @@ export default function SupplierDashboardPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">My Listings</h3>
-          <Link href="/supplier/my-products" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+          <Link href="/supplier/my-products" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
             Manage all →
           </Link>
         </div>
@@ -212,7 +212,7 @@ export default function SupplierDashboardPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recent Received Orders</h3>
-          <Link href="/supplier/orders" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+          <Link href="/supplier/orders" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
             Manage Orders
           </Link>
         </div>

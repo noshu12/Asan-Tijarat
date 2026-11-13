@@ -182,7 +182,7 @@ export default function AdminDashboardPage() {
                   </span>
                 )}
               </div>
-              <Link href="/admin/users" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+              <Link href="/admin/users" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                 Open KYC directory →
               </Link>
             </div>
@@ -260,7 +260,7 @@ export default function AdminDashboardPage() {
                       </Button>
                       <Link
                         href="/admin/users"
-                        className="text-[11px] font-bold text-slate-500 hover:text-asan-dark dark:hover:text-emerald-300"
+                        className="text-[11px] font-bold text-slate-500 hover:text-asan-dark dark:hover:text-asan-accent-light"
                       >
                         Review full details
                       </Link>
@@ -279,10 +279,10 @@ export default function AdminDashboardPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Boxes className="w-5 h-5 text-emerald-600" />
+                  <Boxes className="w-5 h-5 text-asan-accent" />
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">Latest Listings</h3>
                 </div>
-                <Link href="/admin/products" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                <Link href="/admin/products" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                   Manage all products →
                 </Link>
               </div>
@@ -319,7 +319,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recent Orders</h3>
-              <Link href="/admin/orders" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+              <Link href="/admin/orders" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                 Manage all →
               </Link>
             </div>

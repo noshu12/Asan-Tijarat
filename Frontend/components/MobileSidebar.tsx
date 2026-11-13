@@ -43,7 +43,7 @@ export function MobileSidebar() {
         type="button"
         aria-label="Open navigation menu"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-5 left-5 z-[900] md:hidden w-14 h-14 rounded-full bg-asan-accent text-white shadow-xl shadow-emerald-950/40 flex items-center justify-center active:scale-95 transition"
+        className="fixed bottom-5 left-5 z-[900] md:hidden w-14 h-14 rounded-full bg-asan-accent text-white shadow-xl shadow-asan-dark/40 flex items-center justify-center active:scale-95 transition"
       >
         <Menu className="w-6 h-6" />
       </button>

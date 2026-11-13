@@ -38,9 +38,9 @@ function header() {
   const url = logoUrl();
   const logo = url
     ? '<img src="' + url + '" alt="Asan Tijarat" width="120" style="display:block;margin:0 auto 12px auto;max-width:120px;" />'
-    : '<div style="font-size:24px;font-weight:800;color:#0B3D2E;margin-bottom:12px;">Asan Tijarat</div>';
+    : '<div style="font-size:24px;font-weight:800;color:#2B2118;margin-bottom:12px;">Asan Tijarat</div>';
   return (
-    '<div style="background:#0B3D2E;padding:24px;text-align:center;">' +
+    '<div style="background:#2B2118;padding:24px;text-align:center;">' +
     logo +
     '<div style="color:#ffffff;font-size:14px;">Pakistan\'s B2B Wholesale Marketplace</div>' +
     '</div>'
@@ -52,7 +52,7 @@ function footer() {
   return (
     '<div style="padding:16px 24px;background:#F7FAFC;color:#718096;font-size:12px;line-height:1.6;text-align:center;">' +
     'By using Asan Tijarat you agree to our ' +
-    `<a href="${url}/terms" style="color:#27AE7A;">Terms &amp; Conditions</a>. ` +
+    `<a href="${url}/terms" style="color:#8C6D1F;">Terms &amp; Conditions</a>. ` +
     'This is an automated email — please do not reply to it directly.<br />' +
     'Asan Tijarat — Wholesale Trade, Made Simple.' +
     '</div>'
@@ -64,7 +64,7 @@ function wrap(title, bodyHtml) {
     '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;border:1px solid #E2E8F0;">' +
     header() +
     '<div style="padding:24px;color:#1A202C;font-size:15px;line-height:1.7;">' +
-    `<h2 style="margin:0 0 12px 0;color:#0B3D2E;font-size:20px;">${title}</h2>` +
+    `<h2 style="margin:0 0 12px 0;color:#2B2118;font-size:20px;">${title}</h2>` +
     bodyHtml +
     '</div>' +
     footer() +
@@ -82,7 +82,7 @@ function otpEmail({ name, otp }) {
     'Your verification code',
     `<p>Hello ${safeName},</p>` +
       '<p>Your Asan Tijarat verification code is:</p>' +
-      `<div style="text-align:center;font-size:32px;font-weight:800;letter-spacing:6px;color:#0B3D2E;background:#F7FAFC;border:1px solid #E2E8F0;padding:16px;margin:16px 0;">${escapeHtml(otp)}</div>` +
+      `<div style="text-align:center;font-size:32px;font-weight:800;letter-spacing:6px;color:#2B2118;background:#F7FAFC;border:1px solid #E2E8F0;padding:16px;margin:16px 0;">${escapeHtml(otp)}</div>` +
       '<p>This code <strong>expires in 5 minutes</strong>. Do not share it with anyone.</p>' +
       '<p>If you did not request this code, please ignore this email.</p>'
   );
@@ -148,7 +148,7 @@ function accountVerifiedEmail({ name, businessName }) {
       '<p>Good news — your Asan Tijarat account has been <strong>verified</strong>!</p>' +
       `<p>Business: <strong>${safeBusiness}</strong></p>` +
       '<p>You can now sign in with your registered email and password and start your business on Asan Tijarat.</p>' +
-      `<div style="text-align:center;margin:24px 0;"><a href="${signinUrl}" style="display:inline-block;background:#27AE7A;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Sign In to Asan Tijarat</a></div>` +
+      `<div style="text-align:center;margin:24px 0;"><a href="${signinUrl}" style="display:inline-block;background:#8C6D1F;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Sign In to Asan Tijarat</a></div>` +
       `<p style="font-size:13px;color:#718096;">If the button does not work, open this link in your browser:<br />${signinUrl}</p>` +
       '<p>Thank you for joining Asan Tijarat.</p>'
   );
@@ -175,7 +175,7 @@ function resetPasswordEmail({ name, resetLink }) {
     'Reset your password',
     `<p>Hello ${safeName},</p>` +
       '<p>You requested a password reset for Asan Tijarat.</p>' +
-      `<div style="text-align:center;margin:24px 0;"><a href="${safeLink}" style="display:inline-block;background:#27AE7A;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Reset Password</a></div>` +
+      `<div style="text-align:center;margin:24px 0;"><a href="${safeLink}" style="display:inline-block;background:#8C6D1F;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Reset Password</a></div>` +
       `<p style="font-size:13px;color:#718096;">If the button does not work, open this link in your browser:<br />${safeLink}</p>` +
       '<p>This link is <strong>valid for 15 minutes</strong>.</p>' +
       '<p>If you did not request this, please ignore this email.</p>'
@@ -204,16 +204,16 @@ function contactAdminNotificationEmail({ name, email, subject, message }) {
     '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;border:1px solid #E2E8F0;">' +
     header() +
     '<div style="padding:24px;color:#1A202C;font-size:15px;line-height:1.7;">' +
-    '<h2 style="margin:0 0 12px 0;color:#0B3D2E;font-size:20px;">New contact message</h2>' +
+    '<h2 style="margin:0 0 12px 0;color:#2B2118;font-size:20px;">New contact message</h2>' +
     '<p><strong>From:</strong> ' + safeName + '</p>' +
     '<p><strong>Email:</strong> ' + safeEmail + '</p>' +
     '<p><strong>Subject:</strong> ' + safeSubject + '</p>' +
-    '<div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #27AE7A;padding:16px;margin:16px 0;">' + safeMessage + '</div>' +
+    '<div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #8C6D1F;padding:16px;margin:16px 0;">' + safeMessage + '</div>' +
     '<p>To reply, email the sender directly at ' + safeEmail + '.</p>' +
     '</div>' +
     '<div style="padding:16px 24px;background:#F7FAFC;color:#718096;font-size:12px;line-height:1.6;text-align:center;">' +
     'By using Asan Tijarat you agree to our ' +
-    '<a href="' + termsUrl + '" style="color:#27AE7A;">Terms &amp; Conditions</a>.' +
+    '<a href="' + termsUrl + '" style="color:#8C6D1F;">Terms &amp; Conditions</a>.' +
     '</div>' +
     '</div>';
   const text =
@@ -239,7 +239,7 @@ function contactAutoReplyEmail({ name, subject, message }) {
     `<p>Hello ${safeName},</p>` +
       '<p>Thank you for contacting Asan Tijarat. We received your message and our team will review it.</p>' +
       (subject ? `<p><strong>Subject:</strong> ${safeSubject}</p>` : '') +
-      `<div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #27AE7A;padding:16px;margin:16px 0;">${safeMessage}</div>` +
+      `<div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #8C6D1F;padding:16px;margin:16px 0;">${safeMessage}</div>` +
       '<p>We will get back to you on your email address.</p>'
   );
   const text =
@@ -266,7 +266,7 @@ function accountSuspendedEmail({ name, businessName, reason }) {
       '<p>Your Asan Tijarat account has been <strong>temporarily suspended</strong>, so you cannot sign in right now.</p>' +
       (safeBusiness ? `<p>Business: <strong>${safeBusiness}</strong></p>` : '') +
       (reason
-        ? `<p><strong>Reason:</strong></p><div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #27AE7A;padding:16px;margin:16px 0;">${safeReason}</div>`
+        ? `<p><strong>Reason:</strong></p><div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #8C6D1F;padding:16px;margin:16px 0;">${safeReason}</div>`
         : '<p>For more details, please contact us through the contact form on the website.</p>') +
       '<p>If you believe this is a mistake, please contact us through the contact form on the website and our team will review it.</p>'
   );
@@ -294,7 +294,7 @@ function accountRejectedEmail({ name, businessName, reason }) {
       '<p>Thank you for registering on Asan Tijarat. After review, your registration could <strong>not be approved</strong>.</p>' +
       (safeBusiness ? `<p>Business: <strong>${safeBusiness}</strong></p>` : '') +
       (reason
-        ? `<p><strong>Reason:</strong></p><div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #27AE7A;padding:16px;margin:16px 0;">${safeReason}</div>`
+        ? `<p><strong>Reason:</strong></p><div style="background:#F7FAFC;border:1px solid #E2E8F0;border-left:4px solid #8C6D1F;padding:16px;margin:16px 0;">${safeReason}</div>`
         : '<p>For more details, please contact us through the contact form on the website.</p>') +
       '<p>If you believe the information submitted was incorrect, please contact us through the contact form on the website.</p>'
   );
@@ -321,7 +321,7 @@ function accountReactivatedEmail({ name, businessName }) {
       '<p>Good news — your Asan Tijarat account has been <strong>reactivated</strong>!</p>' +
       (safeBusiness ? `<p>Business: <strong>${safeBusiness}</strong></p>` : '') +
       '<p>You can now sign in with your registered email and password and start your business on Asan Tijarat.</p>' +
-      `<div style="text-align:center;margin:24px 0;"><a href="${signinUrl}" style="display:inline-block;background:#27AE7A;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Sign In to Asan Tijarat</a></div>` +
+      `<div style="text-align:center;margin:24px 0;"><a href="${signinUrl}" style="display:inline-block;background:#8C6D1F;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:8px;">Sign In to Asan Tijarat</a></div>` +
       `<p style="font-size:13px;color:#718096;">If the button does not work, open this link in your browser:<br />${signinUrl}</p>` +
       '<p>Thank you for continuing with Asan Tijarat.</p>'
   );

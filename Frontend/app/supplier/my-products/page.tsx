@@ -188,7 +188,7 @@ export default function SupplierMyProductsPage() {
       <div className="flex justify-end">
         <Link
           href="/supplier/add-product"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-asan-accent-hover/20 transition self-start sm:self-auto"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Add New Product</span>
@@ -253,7 +253,7 @@ export default function SupplierMyProductsPage() {
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={() => openEditModal(prod)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-asan-accent hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                       title="Edit Product"
                     >
                       <Edit className="w-4 h-4" />

@@ -129,7 +129,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
                 <button
                   type="button"
                   onClick={markAllRead}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   Mark all read
@@ -144,7 +144,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
                       <button
                         type="button"
                         onClick={() => void openNotification(n)}
-                        className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition ${n.read ? '' : 'bg-emerald-50/60 dark:bg-emerald-950/30'}`}
+                        className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition ${n.read ? '' : 'bg-asan-accent-light/60 dark:bg-asan-dark/30'}`}
                       >
                         <p className="text-xs font-bold text-slate-900 dark:text-white">{n.title}</p>
                         {n.message && (

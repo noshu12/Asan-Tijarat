@@ -126,14 +126,14 @@ export default function ShopkeeperDashboardPage() {
       )}
 
       {/* Welcome Banner matching Figma w4.png */}
-      <div className="rounded-3xl bg-gradient-to-r from-asan-dark to-emerald-900 text-white p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="rounded-3xl bg-gradient-to-r from-asan-dark to-asan-mid text-white p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
+        <div className="absolute right-0 top-0 w-80 h-80 bg-asan-accent/10 rounded-full blur-3xl pointer-events-none" />
         
         <div>
           <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             Welcome back, {user?.businessName || user?.name || 'Shopkeeper'} 👋
           </h2>
-          <p className="text-xs sm:text-sm text-emerald-200/80 mt-1">
+          <p className="text-xs sm:text-sm text-asan-accent-light/80 mt-1">
             Browse wholesale products listed by suppliers.
           </p>
         </div>
@@ -174,7 +174,7 @@ export default function ShopkeeperDashboardPage() {
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recommended for You</h3>
             <span className="text-[11px] text-slate-400">Products from the marketplace</span>
           </div>
-          <Link href="/marketplace" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1">
+          <Link href="/marketplace" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline flex items-center gap-1">
             <span>Browse all</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
@@ -191,7 +191,7 @@ export default function ShopkeeperDashboardPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recent Orders</h3>
-          <Link href="/shopkeeper/orders" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+          <Link href="/shopkeeper/orders" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
             View all
           </Link>
         </div>

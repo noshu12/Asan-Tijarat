@@ -29,7 +29,7 @@ export function MapsLink({ user }: { user: Pick<User, 'currentLocation' | 'curre
           ? `Captured GPS: ${user.currentLocation.lat}, ${user.currentLocation.lng}`
           : user.currentHouseLocation
       }
-      className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+      className="inline-flex items-center gap-1 text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
     >
       <MapPin className="w-3.5 h-3.5 shrink-0" />
       <span>Open in Google Maps</span>

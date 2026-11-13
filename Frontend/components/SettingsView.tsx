@@ -158,7 +158,7 @@ function CategoryMultiSelect({
                     key={cat}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
                       selected.includes(cat)
-                        ? 'bg-emerald-50 text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
+                        ? 'bg-asan-accent-light text-asan-dark dark:bg-asan-dark dark:text-asan-accent-light'
                         : 'text-slate-600 dark:text-slate-300'
                     }`}
                   >
@@ -166,7 +166,7 @@ function CategoryMultiSelect({
                       type="checkbox"
                       checked={selected.includes(cat)}
                       onChange={() => onToggle(cat)}
-                      className="w-4 h-4 accent-emerald-600"
+                      className="w-4 h-4 accent-asan-accent"
                     />
                     {cat}
                   </label>
@@ -187,7 +187,7 @@ function CategoryMultiSelect({
           {selected.map((cat) => (
             <span
               key={cat}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-asan-dark border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-asan-accent-light text-asan-dark border border-asan-border dark:bg-asan-dark dark:text-asan-accent-light dark:border-asan-mid"
             >
               {cat}
               <button
@@ -520,10 +520,10 @@ export function SettingsView({ role }: SettingsViewProps) {
             <img
               src={avatar}
               alt={avatarDisplayName}
-              className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-500 shrink-0"
+              className="w-20 h-20 rounded-2xl object-cover border-2 border-asan-accent shrink-0"
             />
           ) : (
-            <div className="w-20 h-20 rounded-2xl bg-asan-dark text-white flex items-center justify-center text-2xl font-extrabold border-2 border-emerald-500 shrink-0">
+            <div className="w-20 h-20 rounded-2xl bg-asan-dark text-white flex items-center justify-center text-2xl font-extrabold border-2 border-asan-accent shrink-0">
               {avatarInitial}
             </div>
           )}

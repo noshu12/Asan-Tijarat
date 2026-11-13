@@ -106,8 +106,8 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
           className={cn(
             'w-full p-4 rounded-2xl border-2 border-dashed text-center transition',
             dragging
-              ? 'border-asan-accent bg-emerald-50/70 dark:bg-emerald-950/30'
-              : 'border-slate-200 dark:border-slate-800 hover:border-emerald-500/50'
+              ? 'border-asan-accent bg-asan-accent-light/70 dark:bg-asan-dark/30'
+              : 'border-slate-200 dark:border-slate-800 hover:border-asan-accent/50'
           )}
         >
           <UploadCloud className="w-6 h-6 text-slate-400 mx-auto mb-1" />
@@ -116,16 +116,16 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
           <p className="text-[10px] text-slate-400">PNG, JPG or PDF • max 5MB • click or drop a file</p>
         </button>
       ) : (
-        <div className="p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 flex items-center gap-3">
+        <div className="p-3 rounded-2xl border-2 border-asan-border dark:border-asan-mid bg-asan-accent-light/60 dark:bg-asan-dark/20 flex items-center gap-3">
           {value.isImage ? (
             <img
               src={value.previewUrl}
               alt={`${label} preview`}
-              className="w-14 h-14 rounded-xl object-cover border border-emerald-200 dark:border-emerald-800 bg-white shrink-0"
+              className="w-14 h-14 rounded-xl object-cover border border-asan-border dark:border-asan-mid bg-white shrink-0"
             />
           ) : (
-            <span className="w-14 h-14 rounded-xl grid place-items-center border border-emerald-200 dark:border-emerald-800 bg-white shrink-0">
-              <FileText className="w-6 h-6 text-emerald-600" />
+            <span className="w-14 h-14 rounded-xl grid place-items-center border border-asan-border dark:border-asan-mid bg-white shrink-0">
+              <FileText className="w-6 h-6 text-asan-accent" />
             </span>
           )}
 

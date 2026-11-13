@@ -114,10 +114,10 @@ export function Navbar() {
             <img
               src="/logo.png"
               alt="Asan Tijarat logo"
-              className="w-10 h-10 rounded-xl object-contain shadow-md shadow-emerald-950/20 group-hover:scale-105 transition"
+              className="w-10 h-10 rounded-xl object-contain shadow-md shadow-asan-dark/20 group-hover:scale-105 transition"
             />
             <div className="flex flex-col">
-              <span className="font-bold text-xl leading-none text-asan-dark dark:text-emerald-400 tracking-tight">
+              <span className="font-bold text-xl leading-none text-asan-dark dark:text-asan-accent-light tracking-tight">
                 Asan Tijarat
               </span>
               <span className="text-[10px] font-medium text-slate-400 dark:text-slate-400 tracking-wide uppercase">
@@ -136,7 +136,7 @@ export function Navbar() {
                   className={cn(
                     "px-3.5 py-2 rounded-lg text-sm font-medium transition-all",
                     isActive
-                      ? "text-asan-dark font-semibold bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300"
+                      ? "text-asan-dark font-semibold bg-asan-accent-light dark:bg-asan-dark/50 dark:text-asan-accent-light"
                       : "text-slate-600 hover:text-asan-dark hover:bg-slate-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800"
                   )}
                 >
@@ -167,14 +167,14 @@ export function Navbar() {
               <>
                 <Link
                   href="/signin"
-                  className="hidden sm:inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-asan-dark hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-slate-800 transition"
+                  className="hidden sm:inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                 >
                   Sign In
                 </Link>
 
                 <Link
                   href="/getstarted"
-                  className="hidden sm:inline-flex px-4 py-2 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-md shadow-emerald-700/20 transition"
+                  className="hidden sm:inline-flex px-4 py-2 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition"
                 >
                   Get Started
                 </Link>
@@ -200,7 +200,7 @@ export function Navbar() {
 
                 <Link
                   href={userHome}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-asan-dark hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-slate-800 transition"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                 >
                   {user.role === 'admin' ? <ShieldCheck className="w-4 h-4" /> : <LayoutDashboard className="w-4 h-4" />}
                   {user.role === 'admin' ? 'Admin' : user.role === 'supplier' ? 'Supplier Portal' : 'Dashboard'}
@@ -262,7 +262,7 @@ export function Navbar() {
                       className={cn(
                         'block px-4 py-3 rounded-xl text-sm font-semibold transition-all',
                         isActive
-                          ? 'text-asan-dark font-bold bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          ? 'text-asan-dark font-bold bg-asan-accent-light dark:bg-asan-dark/50 dark:text-asan-accent-light'
                           : 'text-slate-600 hover:text-asan-dark hover:bg-slate-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
                       )}
                     >
@@ -277,7 +277,7 @@ export function Navbar() {
                       <Link
                         href="/signin"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-slate-800 transition"
+                        className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                       >
                         Sign In
                       </Link>
@@ -297,7 +297,7 @@ export function Navbar() {
                         <Link
                           href="/shopkeeper/cart"
                           onClick={() => setMobileMenuOpen(false)}
-                          className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-slate-800 transition"
+                          className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                         >
                           🛒 My Cart ({cartItemCount})
                         </Link>
@@ -305,7 +305,7 @@ export function Navbar() {
                       <Link
                         href={userHome}
                         onClick={() => setMobileMenuOpen(false)}
-                        className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 transition"
+                        className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark bg-asan-accent-light dark:bg-asan-dark/50 dark:text-asan-accent-light transition"
                       >
                         {user.role === 'admin' ? 'Admin Panel' : user.role === 'supplier' ? 'Supplier Portal' : 'My Dashboard'}
                       </Link>

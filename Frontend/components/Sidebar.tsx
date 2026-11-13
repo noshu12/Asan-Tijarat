@@ -95,7 +95,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="px-3 py-2 mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-asan-accent animate-pulse" />
-            <span className="text-xs font-semibold tracking-wide uppercase text-emerald-300">
+            <span className="text-xs font-semibold tracking-wide uppercase text-asan-accent-light">
               {isAdmin ? 'Admin Panel' : isSupplier ? 'Supplier Portal' : 'Shopkeeper Portal'}
             </span>
           </div>
@@ -113,8 +113,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 className={cn(
                   "flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
                   isActive
-                    ? "bg-asan-accent text-white shadow-md shadow-emerald-900/30 font-semibold"
-                    : "text-emerald-100/80 hover:bg-asan-mid hover:text-white"
+                    ? "bg-asan-accent text-white shadow-md shadow-asan-dark/30 font-semibold"
+                    : "text-asan-accent-light/80 hover:bg-asan-mid hover:text-white"
                 )}
               >
                 <Icon className="w-5 h-5 shrink-0" />
@@ -133,16 +133,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               <img
                 src={avatar}
                 alt={displayName}
-                className="w-9 h-9 rounded-full object-cover border border-emerald-400 shrink-0"
+                className="w-9 h-9 rounded-full object-cover border border-asan-accent-light shrink-0"
               />
             ) : (
-              <div className="w-9 h-9 rounded-full bg-emerald-700/60 border border-emerald-400 flex items-center justify-center font-bold text-sm text-white shrink-0">
+              <div className="w-9 h-9 rounded-full bg-asan-accent-hover/60 border border-asan-accent-light flex items-center justify-center font-bold text-sm text-white shrink-0">
                 {displayName[0]}
               </div>
             )}
             <div className="truncate">
               <p className="text-xs font-bold text-white truncate">{displayName}</p>
-              <p className="text-[11px] text-emerald-300/80 truncate capitalize">
+              <p className="text-[11px] text-asan-accent-light/80 truncate capitalize">
                 {displayRole === 'admin' ? 'Administrator' : displayRole === 'supplier' ? 'Supplier' : displayRole === 'subadmin' ? 'Sub Admin' : 'Shopkeeper'}
               </p>
             </div>

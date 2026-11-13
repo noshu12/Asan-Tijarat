@@ -14,7 +14,7 @@ export interface StatsCardProps {
 
 export function StatsCard({ title, value, change, isPositive = true, icon: Icon }: StatsCardProps) {
   return (
-    <Card className="flex items-start justify-between p-5 hover:border-emerald-500/40 transition">
+    <Card className="flex items-start justify-between p-5 hover:border-asan-accent/40 transition">
       <div>
         <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{title}</p>
         <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1 tracking-tight">
@@ -37,7 +37,7 @@ export function StatsCard({ title, value, change, isPositive = true, icon: Icon 
         )}
       </div>
 
-      <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-asan-dark dark:text-emerald-300">
+      <div className="p-3 rounded-2xl bg-asan-accent-light dark:bg-asan-dark/60 text-asan-dark dark:text-asan-accent-light">
         <Icon className="w-6 h-6" />
       </div>
     </Card>

@@ -8,7 +8,7 @@ export default function TermsPage() {
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <Link
           href="/"
-          className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+          className="text-sm font-medium text-asan-accent-hover hover:text-asan-dark"
         >
           ← Back to Home
         </Link>

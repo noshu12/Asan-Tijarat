@@ -85,8 +85,8 @@ export default function HomePage() {
       {/* 1. HERO SECTION */}
       <section className="relative bg-asan-dark text-white pt-20 pb-24 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full overflow-hidden pointer-events-none opacity-20">
-          <div className="absolute -top-24 left-1/4 w-96 h-96 bg-emerald-500 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-emerald-400 rounded-full blur-3xl" />
+          <div className="absolute -top-24 left-1/4 w-96 h-96 bg-asan-accent rounded-full blur-3xl" />
+          <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-asan-accent-light rounded-full blur-3xl" />
         </div>
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -94,11 +94,11 @@ export default function HomePage() {
             {/* Headline */}
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-4xl mx-auto leading-[1.1]">
               Wholesale Trade, <br />
-              <span className="text-emerald-400">Made Simple</span>
+              <span className="text-asan-accent-light">Made Simple</span>
             </h1>
 
             {/* Subtext — true claims only */}
-            <p className="mt-6 text-base sm:text-xl text-emerald-100/80 max-w-2xl mx-auto leading-relaxed">
+            <p className="mt-6 text-base sm:text-xl text-asan-accent-light/80 max-w-2xl mx-auto leading-relaxed">
               Connect suppliers and shopkeepers across Pakistan. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown — all in one place.
             </p>
 
@@ -106,7 +106,7 @@ export default function HomePage() {
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/signin"
-                className="group inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-lg shadow-emerald-950/40 transition"
+                className="group inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-lg shadow-asan-dark/40 transition"
               >
                 <Building2 className="w-4 h-4" />
                 <span>I&apos;m a Supplier</span>
@@ -126,19 +126,19 @@ export default function HomePage() {
       </section>
 
       {/* 2. STATS BANNER — real counts from listed products only */}
-      <section className="bg-emerald-900/60 border-y border-emerald-800 text-white py-8 backdrop-blur">
+      <section className="bg-asan-dark/60 border-y border-asan-mid text-white py-8 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
           <div>
-            <p className="text-3xl sm:text-4xl font-extrabold text-emerald-300">{isLoading ? '…' : products.length}</p>
-            <p className="text-xs sm:text-sm text-emerald-100/70 uppercase tracking-wider font-semibold mt-1">Products Listed</p>
+            <p className="text-3xl sm:text-4xl font-extrabold text-asan-accent-light">{isLoading ? '…' : products.length}</p>
+            <p className="text-xs sm:text-sm text-asan-accent-light/70 uppercase tracking-wider font-semibold mt-1">Products Listed</p>
           </div>
           <div>
-            <p className="text-3xl sm:text-4xl font-extrabold text-emerald-300">{isLoading ? '…' : categories.length}</p>
-            <p className="text-xs sm:text-sm text-emerald-100/70 uppercase tracking-wider font-semibold mt-1">Categories</p>
+            <p className="text-3xl sm:text-4xl font-extrabold text-asan-accent-light">{isLoading ? '…' : categories.length}</p>
+            <p className="text-xs sm:text-sm text-asan-accent-light/70 uppercase tracking-wider font-semibold mt-1">Categories</p>
           </div>
           <div>
-            <p className="text-3xl sm:text-4xl font-extrabold text-emerald-300">{isLoading ? '…' : suppliers}</p>
-            <p className="text-xs sm:text-sm text-emerald-100/70 uppercase tracking-wider font-semibold mt-1">Suppliers</p>
+            <p className="text-3xl sm:text-4xl font-extrabold text-asan-accent-light">{isLoading ? '…' : suppliers}</p>
+            <p className="text-xs sm:text-sm text-asan-accent-light/70 uppercase tracking-wider font-semibold mt-1">Suppliers</p>
           </div>
         </div>
       </section>
@@ -146,7 +146,7 @@ export default function HomePage() {
       {/* 3. TOP PRODUCTS — real products only, no mock slides */}
       <section className="py-16 bg-slate-50 dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-6">
-          <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider mb-2">
+          <span className="inline-block px-3 py-1 rounded-full bg-asan-accent-light dark:bg-asan-dark text-asan-dark dark:text-asan-accent-light font-bold text-xs uppercase tracking-wider mb-2">
             Trending Wholesale Commodities
           </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-asan-dark dark:text-white">
@@ -181,7 +181,7 @@ export default function HomePage() {
       <section className="py-20 bg-white dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
+            <span className="px-3 py-1 rounded-full bg-asan-accent-light dark:bg-asan-dark text-asan-dark dark:text-asan-accent-light font-bold text-xs uppercase tracking-wider">
               What We Trade
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-asan-dark dark:text-white mt-3">
@@ -212,7 +212,7 @@ export default function HomePage() {
                     href={href}
                     className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-xl transition-all p-6 text-center"
                   >
-                    <p className="font-bold text-xs sm:text-sm leading-tight group-hover:text-emerald-600 transition">
+                    <p className="font-bold text-xs sm:text-sm leading-tight group-hover:text-asan-accent transition">
                       {category}
                     </p>
                   </Link>
@@ -224,7 +224,7 @@ export default function HomePage() {
           <div className="mt-10 text-center">
             <Link
               href="/marketplace"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-md shadow-emerald-700/20 transition"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition"
             >
               <span>View All Products</span>
               <ArrowRight className="w-4 h-4" />
@@ -239,16 +239,16 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             
             <div>
-              <span className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-emerald-300 font-bold text-xs uppercase tracking-wider">
+              <span className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-asan-accent-light font-bold text-xs uppercase tracking-wider">
                 Our Story
               </span>
               <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight mt-4 leading-tight">
                 Built for Pakistan&apos;s Backbone — Its Traders
               </h2>
-              <p className="text-emerald-100/80 text-sm sm:text-base leading-relaxed mt-6">
+              <p className="text-asan-accent-light/80 text-sm sm:text-base leading-relaxed mt-6">
                 Pakistan&apos;s wholesale economy runs on trust and relationships — but finding reliable suppliers, negotiating fair prices, and ordering in bulk has always been a struggle. Traders lose time and money to middlemen who add cost without value.
               </p>
-              <p className="text-emerald-100/80 text-sm sm:text-base leading-relaxed mt-4">
+              <p className="text-asan-accent-light/80 text-sm sm:text-base leading-relaxed mt-4">
                 We built <strong>Asan Tijarat</strong> to fix this. A digital marketplace where suppliers and shopkeepers connect directly, with separate portals, bulk orders, and prices shown clearly per pack. No middlemen. No guesswork. Just trade — made easy.
               </p>
 
@@ -257,35 +257,35 @@ export default function HomePage() {
                   <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-bold text-sm">Accounts reviewed before trading</h3>
-                    <p className="text-xs text-emerald-200/70">Business accounts are reviewed before trading</p>
+                    <p className="text-xs text-asan-accent-light/70">Business accounts are reviewed before trading</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Building2 className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-bold text-sm">Bulk orders with MOQ</h3>
-                    <p className="text-xs text-emerald-200/70">Order in bulk with minimum order quantity</p>
+                    <p className="text-xs text-asan-accent-light/70">Order in bulk with minimum order quantity</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Package className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-bold text-sm">Price per pack, clearly shown</h3>
-                    <p className="text-xs text-emerald-200/70">Prices shown per pack, with pack size and stock</p>
+                    <p className="text-xs text-asan-accent-light/70">Prices shown per pack, with pack size and stock</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Store className="w-5 h-5 text-asan-accent shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-bold text-sm">Separate portals</h3>
-                    <p className="text-xs text-emerald-200/70">Separate shopkeeper and supplier portals</p>
+                    <p className="text-xs text-asan-accent-light/70">Separate shopkeeper and supplier portals</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div>
-              <p className="text-emerald-100/80 text-sm sm:text-base leading-relaxed">
+              <p className="text-asan-accent-light/80 text-sm sm:text-base leading-relaxed">
                 Suppliers list their products, shopkeepers browse the marketplace, and orders move through clear stages from pending to delivered. Everything you see on this page comes from products actually listed on the platform.
               </p>
             </div>
@@ -298,7 +298,7 @@ export default function HomePage() {
       <section className="py-20 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
+            <span className="px-3 py-1 rounded-full bg-asan-accent-light dark:bg-asan-dark text-asan-dark dark:text-asan-accent-light font-bold text-xs uppercase tracking-wider">
               How It Works
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-asan-dark dark:text-white mt-3">
@@ -353,10 +353,10 @@ export default function HomePage() {
                 className="relative rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-asan-accent-light text-asan-dark dark:bg-asan-dark dark:text-asan-accent-light">
                     {item.badge}
                   </span>
-                  <span className="text-3xl font-extrabold text-emerald-500/20 font-mono">
+                  <span className="text-3xl font-extrabold text-asan-accent/20 font-mono">
                     {item.step}
                   </span>
                 </div>
@@ -378,14 +378,14 @@ export default function HomePage() {
           
           <div className="p-8 sm:p-10 rounded-3xl bg-asan-dark text-white flex flex-col justify-between shadow-xl">
             <div>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-800/80 flex items-center justify-center text-emerald-300 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-asan-mid/80 flex items-center justify-center text-asan-accent-light mb-6">
                 <Building2 className="w-6 h-6" />
               </div>
               <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">For Suppliers</h3>
-              <p className="text-xs sm:text-sm text-emerald-200/70 mt-2">
+              <p className="text-xs sm:text-sm text-asan-accent-light/70 mt-2">
                 Grow your B2B sales by listing products for shopkeepers on the marketplace.
               </p>
-              <ul className="mt-6 space-y-3 text-xs sm:text-sm text-emerald-100/90">
+              <ul className="mt-6 space-y-3 text-xs sm:text-sm text-asan-accent-light/90">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-asan-accent shrink-0" />
                   <span>List products with photos, price per pack, MOQ, and stock</span>
@@ -413,13 +413,13 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="p-8 sm:p-10 rounded-3xl bg-emerald-700 text-white flex flex-col justify-between shadow-xl">
+          <div className="p-8 sm:p-10 rounded-3xl bg-asan-accent-hover text-white flex flex-col justify-between shadow-xl">
             <div>
               <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-white mb-6">
                 <Store className="w-6 h-6" />
               </div>
               <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">For Shopkeepers</h3>
-              <p className="text-xs sm:text-sm text-emerald-100 mt-2">
+              <p className="text-xs sm:text-sm text-asan-accent-light mt-2">
                 Get supplier prices directly, without travelling to mandis.
               </p>
               <ul className="mt-6 space-y-3 text-xs sm:text-sm text-white/90">

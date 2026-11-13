@@ -193,7 +193,7 @@ export default function AdminSecurityPage() {
         {phase === 'enabled' && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <ShieldCheck className="w-10 h-10 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <ShieldCheck className="w-10 h-10 text-asan-accent dark:text-asan-accent-light shrink-0" />
               <div>
                 <h2 className="font-bold text-slate-900 dark:text-white">Two-factor authentication is on</h2>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">

@@ -45,7 +45,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {orders.map((order) => (
               <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                <td className="px-5 py-4 font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                <td className="px-5 py-4 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light">
                   {order.orderNumber}
                 </td>
                 <td className="px-5 py-4">
@@ -88,7 +88,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     {detailsHref && (
                       <Link
                         href={detailsHref(order)}
-                        className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                        className="p-1.5 rounded-lg text-asan-accent hover:text-asan-accent-hover hover:bg-asan-accent-light dark:hover:bg-asan-dark/40 transition"
                         title="Open order page — payment, chat, dispute, rating"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -145,13 +145,13 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
               </div>
               <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white pt-1 border-t">
                 <span>Total Amount</span>
-                <span className="text-emerald-600 dark:text-emerald-400">{formatPKR(selectedOrder.totalAmount)}</span>
+                <span className="text-asan-accent dark:text-asan-accent-light">{formatPKR(selectedOrder.totalAmount)}</span>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs space-y-2">
+            <div className="p-3 rounded-xl bg-asan-accent-light dark:bg-asan-dark/40 border border-asan-border dark:border-asan-mid text-xs space-y-2">
               <div>
-                <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <p className="font-bold text-asan-dark dark:text-asan-accent-light flex items-center gap-1.5">
                   <Truck className="w-4 h-4" /> Shipping Address
                 </p>
                 <p className="text-slate-600 dark:text-slate-300 mt-1">{selectedOrder.shippingAddress}</p>
@@ -164,8 +164,8 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                 if (!mapsUrl) return null;
                 const hasGps = Boolean(selectedOrder.buyerLocation);
                 return (
-                  <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800">
-                    <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                  <div className="pt-2 border-t border-asan-border dark:border-asan-mid">
+                    <p className="font-bold text-asan-dark dark:text-asan-accent-light flex items-center gap-1.5">
                       <MapPin className="w-4 h-4" /> Shopkeeper&apos;s Live Location
                     </p>
                     {hasGps && selectedOrder.buyerLocation && (
@@ -177,7 +177,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                       href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition"
+                      className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white text-[11px] font-bold transition"
                       title="Opens Google Maps at the shopkeeper's exact location"
                     >
                       <Navigation className="w-3.5 h-3.5" />

@@ -288,11 +288,11 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
         </div>
         <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white pt-2 border-t border-slate-100 dark:border-slate-800">
           <span>Total Amount</span>
-          <span className="text-emerald-600 dark:text-emerald-400">{formatPKR(order.totalAmount)}</span>
+          <span className="text-asan-accent dark:text-asan-accent-light">{formatPKR(order.totalAmount)}</span>
         </div>
         <p className="text-xs text-slate-500">Shipping: {order.shippingAddress}</p>
         {mapsUrl && (
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
             Open shop location in Google Maps →
           </a>
         )}
@@ -416,7 +416,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
         <div className="space-y-2 max-h-72 overflow-y-auto">
           {messages.length === 0 && <p className="text-xs text-slate-500">No messages yet.</p>}
           {messages.map((m) => (
-            <div key={m.id} className={`p-3 rounded-xl text-xs max-w-[85%] ${m.senderRole === role ? 'bg-emerald-50 dark:bg-emerald-950/40 ml-auto text-right' : 'bg-slate-50 dark:bg-slate-800/60'}`}>
+            <div key={m.id} className={`p-3 rounded-xl text-xs max-w-[85%] ${m.senderRole === role ? 'bg-asan-accent-light dark:bg-asan-dark/40 ml-auto text-right' : 'bg-slate-50 dark:bg-slate-800/60'}`}>
               <p className="font-bold text-slate-900 dark:text-white">{m.senderName || m.senderRole}</p>
               <p className="text-slate-600 dark:text-slate-300 mt-0.5 break-words">{m.text}</p>
               <p className="text-[10px] text-slate-400 mt-1">{formatDate(m.createdAt)}</p>
@@ -455,8 +455,8 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
             <p className="text-slate-600 dark:text-slate-300 break-words">{dispute.description}</p>
             <p className="text-[11px] text-slate-400">Opened by {dispute.raisedByName || dispute.raisedByRole} • {formatDate(dispute.createdAt)}</p>
             {dispute.status === 'resolved' && dispute.resolution?.decision && (
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                <p className="font-bold text-emerald-800 dark:text-emerald-300">Admin decision: {DECISION_LABEL[dispute.resolution.decision]}</p>
+              <div className="p-3 rounded-xl bg-asan-accent-light dark:bg-asan-dark/40 border border-asan-border dark:border-asan-mid">
+                <p className="font-bold text-asan-dark dark:text-asan-accent-light">Admin decision: {DECISION_LABEL[dispute.resolution.decision]}</p>
                 {dispute.resolution.refundAmount > 0 && (
                   <p className="text-slate-600 dark:text-slate-300 mt-1">Refund: {formatPKR(dispute.resolution.refundAmount)}</p>
                 )}

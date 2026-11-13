@@ -30,7 +30,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
         </p>
         <a
           href="/admin/users"
-          className="text-sm font-medium text-emerald-700 underline hover:text-emerald-900"
+          className="text-sm font-medium text-asan-accent-hover underline hover:text-asan-dark"
         >
           Go to Users &amp; KYC
         </a>
