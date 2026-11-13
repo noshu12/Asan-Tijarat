@@ -182,7 +182,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                   </span>
                 ) : isPdf(doc as KycDocument) ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-500">
-                    <FileText className="w-6 h-6 text-emerald-600" />
+                    <FileText className="w-6 h-6 text-asan-accent" />
                     <span className="text-[10px] font-bold">PDF document</span>
                   </span>
                 ) : (
@@ -211,7 +211,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                         type="button"
                         disabled={!url}
                         onClick={() => url && setPreview({ key: slot.key, label: slot.label, doc })}
-                        className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-40 disabled:no-underline"
+                        className="text-[10px] font-bold text-asan-accent dark:text-asan-accent-light hover:underline disabled:opacity-40 disabled:no-underline"
                       >
                         View full size
                       </button>

@@ -130,7 +130,7 @@ function CategoryMultiSelect({
                     key={cat}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
                       selected.includes(cat)
-                        ? 'bg-emerald-50 text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
+                        ? 'bg-asan-accent-light text-asan-dark dark:bg-asan-dark dark:text-asan-accent-light'
                         : 'text-slate-600 dark:text-slate-300'
                     }`}
                   >
@@ -138,7 +138,7 @@ function CategoryMultiSelect({
                       type="checkbox"
                       checked={selected.includes(cat)}
                       onChange={() => onToggle(cat)}
-                      className="w-4 h-4 accent-emerald-600"
+                      className="w-4 h-4 accent-asan-accent"
                     />
                     {cat}
                   </label>
@@ -160,7 +160,7 @@ function CategoryMultiSelect({
           {selected.map((cat) => (
             <span
               key={cat}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-asan-dark border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-asan-accent-light text-asan-dark border border-asan-border dark:bg-asan-dark dark:text-asan-accent-light dark:border-asan-mid"
             >
               {cat}
               <button
@@ -511,7 +511,7 @@ export default function GetStartedPage() {
 
       {/* Left Brand Panel */}
       <div className="w-full md:w-1/2 bg-asan-dark text-white p-8 sm:p-14 lg:p-20 flex flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-asan-accent/10 rounded-full blur-3xl pointer-events-none" />
 
         <div>
           <Link href="/" className="inline-flex items-center gap-2.5">
@@ -526,10 +526,10 @@ export default function GetStartedPage() {
           <div className="mt-16 sm:mt-24">
             <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
               Pakistan&apos;s leading <br />
-              <span className="text-emerald-400">B2B trade platform</span>
+              <span className="text-asan-accent-light">B2B trade platform</span>
             </h2>
 
-            <div className="mt-10 space-y-4 text-sm sm:text-base text-emerald-100/90">
+            <div className="mt-10 space-y-4 text-sm sm:text-base text-asan-accent-light/90">
               <div className="flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0" />
                 <span>Accounts verified before trading</span>
@@ -550,7 +550,7 @@ export default function GetStartedPage() {
           </div>
         </div>
 
-        <div className="mt-12 text-xs text-emerald-200/50">
+        <div className="mt-12 text-xs text-asan-accent-light/50">
           © 2026 Asan Tijarat. Final Year Project — FUUAST. All rights reserved.
         </div>
       </div>
@@ -562,7 +562,7 @@ export default function GetStartedPage() {
           {submitted ? (
             /* ── Confirmation: account created, OTP verified, awaiting admin verification ── */
             <div className="text-center py-2">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 rounded-full bg-asan-accent-light dark:bg-asan-dark flex items-center justify-center mx-auto mb-4">
                 <ShieldCheck className="w-8 h-8 text-asan-accent" />
               </div>
 
@@ -644,7 +644,7 @@ export default function GetStartedPage() {
                     type="button"
                     onClick={handleSendOtp}
                     disabled={isSendingOtp}
-                    className="w-full text-center text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-60"
+                    className="w-full text-center text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline disabled:opacity-60"
                   >
                     Resend OTP
                   </button>
@@ -665,7 +665,7 @@ export default function GetStartedPage() {
 
               <p className="text-center text-xs text-slate-500 mt-6">
                 Already have an account?{' '}
-                <Link href="/signin" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                <Link href="/signin" className="font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                   Sign In
                 </Link>
               </p>
@@ -676,7 +676,7 @@ export default function GetStartedPage() {
               <div className="flex items-center justify-between mb-8 px-4">
             <div className="flex items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                step > 1 ? 'bg-asan-accent text-white' : step === 1 ? 'bg-asan-accent text-white ring-4 ring-emerald-100 dark:ring-emerald-950' : 'bg-slate-200 text-slate-600'
+                step > 1 ? 'bg-asan-accent text-white' : step === 1 ? 'bg-asan-accent text-white ring-4 ring-asan-accent-light dark:ring-asan-dark' : 'bg-slate-200 text-slate-600'
               }`}>
                 {step > 1 ? <Check className="w-4 h-4" /> : '1'}
               </div>
@@ -686,7 +686,7 @@ export default function GetStartedPage() {
 
             <div className="flex items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                step > 2 ? 'bg-asan-accent text-white' : step === 2 ? 'bg-asan-accent text-white ring-4 ring-emerald-100 dark:ring-emerald-950' : 'bg-slate-200 text-slate-600'
+                step > 2 ? 'bg-asan-accent text-white' : step === 2 ? 'bg-asan-accent text-white ring-4 ring-asan-accent-light dark:ring-asan-dark' : 'bg-slate-200 text-slate-600'
               }`}>
                 {step > 2 ? <Check className="w-4 h-4" /> : '2'}
               </div>
@@ -696,7 +696,7 @@ export default function GetStartedPage() {
 
             <div className="flex items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                step === 3 ? 'bg-asan-accent text-white ring-4 ring-emerald-100 dark:ring-emerald-950' : 'bg-slate-200 text-slate-600'
+                step === 3 ? 'bg-asan-accent text-white ring-4 ring-asan-accent-light dark:ring-asan-dark' : 'bg-slate-200 text-slate-600'
               }`}>
                 3
               </div>
@@ -717,7 +717,7 @@ export default function GetStartedPage() {
                     onClick={() => setRole('supplier')}
                     className={`py-2 rounded-xl text-xs font-bold border transition ${
                       role === 'supplier'
-                        ? 'bg-emerald-50 border-asan-accent text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
+                        ? 'bg-asan-accent-light border-asan-accent text-asan-dark dark:bg-asan-dark dark:text-asan-accent-light'
                         : 'border-slate-200 text-slate-500 dark:border-slate-800'
                     }`}
                   >
@@ -728,7 +728,7 @@ export default function GetStartedPage() {
                     onClick={() => setRole('shopkeeper')}
                     className={`py-2 rounded-xl text-xs font-bold border transition ${
                       role === 'shopkeeper'
-                        ? 'bg-emerald-50 border-asan-accent text-asan-dark dark:bg-emerald-950 dark:text-emerald-300'
+                        ? 'bg-asan-accent-light border-asan-accent text-asan-dark dark:bg-asan-dark dark:text-asan-accent-light'
                         : 'border-slate-200 text-slate-500 dark:border-slate-800'
                     }`}
                   >
@@ -1043,14 +1043,14 @@ export default function GetStartedPage() {
                     type="checkbox"
                     checked={termsAccepted}
                     onChange={(e) => setTermsAccepted(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 shrink-0 accent-emerald-600"
+                    className="mt-0.5 w-4 h-4 shrink-0 accent-asan-accent"
                   />
                   <p className="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-300">
                     I agree to the{' '}
                     <button
                       type="button"
                       onClick={() => setShowTerms(true)}
-                      className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                      className="font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
                     >
                       Terms &amp; Conditions
                     </button>
@@ -1093,7 +1093,7 @@ export default function GetStartedPage() {
 
               <p className="text-center text-xs text-slate-500 mt-6">
                 Already have an account?{' '}
-                <Link href="/signin" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                <Link href="/signin" className="font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                   Sign In
                 </Link>
               </p>

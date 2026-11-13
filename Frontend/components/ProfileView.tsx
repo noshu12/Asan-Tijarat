@@ -152,7 +152,7 @@ export function ProfileView({ role }: ProfileViewProps) {
       <div className="flex justify-end">
         <Link
           href={`/${role}/settings`}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold shadow-md shadow-asan-accent-hover/20 transition self-start sm:self-auto"
         >
           <Pencil className="w-3.5 h-3.5" />
           <span>Edit in Settings</span>
@@ -173,10 +173,10 @@ export function ProfileView({ role }: ProfileViewProps) {
               <img
                 src={profile.avatar}
                 alt={businessName}
-                className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-500 shrink-0"
+                className="w-20 h-20 rounded-2xl object-cover border-2 border-asan-accent shrink-0"
               />
             ) : (
-              <div className="w-20 h-20 rounded-2xl bg-asan-dark text-white flex items-center justify-center text-2xl font-extrabold border-2 border-emerald-500 shrink-0">
+              <div className="w-20 h-20 rounded-2xl bg-asan-dark text-white flex items-center justify-center text-2xl font-extrabold border-2 border-asan-accent shrink-0">
                 {businessName.charAt(0).toUpperCase()}
               </div>
             )}
@@ -225,7 +225,7 @@ export function ProfileView({ role }: ProfileViewProps) {
                         href={locationMapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="break-words hover:text-emerald-600 hover:underline"
+                        className="break-words hover:text-asan-accent hover:underline"
                         title={
                           profile.currentLocation
                             ? `Captured GPS: ${profile.currentLocation.lat}, ${profile.currentLocation.lng}`
@@ -240,14 +240,14 @@ export function ProfileView({ role }: ProfileViewProps) {
                   </span>
                 )}
                 {profile.ntn && (
-                  <span className="font-mono text-emerald-600 font-bold">NTN: {profile.ntn}</span>
+                  <span className="font-mono text-asan-accent font-bold">NTN: {profile.ntn}</span>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-center sm:text-right shrink-0">
-            <p className="text-lg font-extrabold text-asan-dark dark:text-emerald-300 capitalize">
+          <div className="p-4 rounded-2xl bg-asan-accent-light dark:bg-asan-dark/50 border border-asan-border dark:border-asan-mid text-center sm:text-right shrink-0">
+            <p className="text-lg font-extrabold text-asan-dark dark:text-asan-accent-light capitalize">
               {ROLE_LABEL[role]}
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -334,7 +334,7 @@ export function ProfileView({ role }: ProfileViewProps) {
             </h3>
             <Link
               href="/supplier/my-products"
-              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+              className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
             >
               Manage listings →
             </Link>

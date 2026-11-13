@@ -232,7 +232,7 @@ function MarketplaceContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-asan-accent dark:text-asan-accent-light">
                 Wholesale Commodities Directory
               </span>
               <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
@@ -336,7 +336,7 @@ function MarketplaceContent() {
                 type="checkbox"
                 checked={inStockOnly}
                 onChange={(e) => { setInStockOnly(e.target.checked); setPage(1); }}
-                className="w-4 h-4 rounded accent-emerald-600"
+                className="w-4 h-4 rounded accent-asan-accent"
               />
               In stock only
             </label>

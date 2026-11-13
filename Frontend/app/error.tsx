@@ -44,7 +44,7 @@ export default function Error({
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <button
             onClick={reset}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-asan-accent px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-700/20 transition hover:bg-asan-accent-hover sm:w-auto"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-asan-accent px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-asan-accent-hover/20 transition hover:bg-asan-accent-hover sm:w-auto"
           >
             <RefreshCw className="h-4 w-4" />
             Try Again

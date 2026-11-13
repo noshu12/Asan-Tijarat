@@ -15,7 +15,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const base = "inline-flex items-center justify-center font-medium rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.98]";
 
     const variants = {
-      primary: "bg-asan-accent hover:bg-asan-accent-hover text-white shadow-md shadow-emerald-700/20 focus-visible:ring-asan-accent",
+      primary: "bg-asan-accent hover:bg-asan-accent-hover text-white shadow-md shadow-asan-accent-hover/20 focus-visible:ring-asan-accent",
       secondary: "bg-asan-dark hover:bg-asan-mid text-white focus-visible:ring-asan-dark",
       outline: "border-2 border-asan-accent text-asan-accent hover:bg-asan-accent/10 dark:hover:bg-asan-accent/20 focus-visible:ring-asan-accent",
       danger: "bg-asan-error hover:bg-red-600 text-white shadow-md shadow-red-600/20 focus-visible:ring-asan-error",

@@ -15,7 +15,7 @@ export default function NotFound() {
         transition={{ type: 'spring', duration: 0.5 }}
         className="w-full max-w-xl text-center"
       >
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/50">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-asan-border bg-asan-accent-light dark:border-asan-mid dark:bg-asan-dark/50">
           <SearchX className="h-10 w-10 text-asan-accent" />
         </div>
 
@@ -33,7 +33,7 @@ export default function NotFound() {
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             href="/"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-asan-accent px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-700/20 transition hover:bg-asan-accent-hover sm:w-auto"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-asan-accent px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-asan-accent-hover/20 transition hover:bg-asan-accent-hover sm:w-auto"
           >
             <House className="h-4 w-4" />
             Back to Home

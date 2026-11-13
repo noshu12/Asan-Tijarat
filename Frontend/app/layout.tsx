@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
+import { Fraunces } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
 import { AuthProvider } from '@/context/AuthProvider';
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  weight: ['400', '600', '900'],
+});
 
 export const metadata: Metadata = {
   title: 'Asan Tijarat | B2B Wholesale Marketplace',
@@ -15,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased flex flex-col font-sans transition-colors duration-200">
+      <body className={`${fraunces.className} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased flex flex-col font-sans transition-colors duration-200`}>
         <AuthProvider>
           <Navbar />
           <main className="flex-1">

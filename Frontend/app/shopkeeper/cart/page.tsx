@@ -156,7 +156,7 @@ export default function ShopkeeperCartPage() {
       )}
       {items.length === 0 && !createdOrders && (
         <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mx-auto text-asan-accent mb-4">
+          <div className="w-16 h-16 rounded-full bg-asan-accent-light dark:bg-asan-dark flex items-center justify-center mx-auto text-asan-accent mb-4">
             <Store className="w-8 h-8" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Your wholesale cart is empty</h3>
@@ -230,7 +230,7 @@ export default function ShopkeeperCartPage() {
               </div>
               <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white pt-2 border-t">
                 <span>Total</span>
-                <span className="text-emerald-600 dark:text-emerald-400">{formatPKR(total)}</span>
+                <span className="text-asan-accent dark:text-asan-accent-light">{formatPKR(total)}</span>
               </div>
             </div>
             <Button type="button" className="w-full mt-5" onClick={openCheckout}>
@@ -275,7 +275,7 @@ export default function ShopkeeperCartPage() {
                   href={locationPreviewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
                 >
                   <MapPin className="w-3 h-3" />
                   Preview in Google Maps
@@ -320,7 +320,7 @@ export default function ShopkeeperCartPage() {
                 name="paymentMethod"
                 checked={paymentMethod === 'online_advance'}
                 onChange={() => setPaymentMethod('online_advance')}
-                className="mt-0.5 accent-emerald-600"
+                className="mt-0.5 accent-asan-accent"
               />
               <span>
                 {/* Batch 06 — shared label (audit finding 9): same text as the order detail page. */}
@@ -334,7 +334,7 @@ export default function ShopkeeperCartPage() {
                 name="paymentMethod"
                 checked={paymentMethod === 'online_at_delivery'}
                 onChange={() => setPaymentMethod('online_at_delivery')}
-                className="mt-0.5 accent-emerald-600"
+                className="mt-0.5 accent-asan-accent"
               />
               <span>
                 <span className="font-bold text-slate-900 dark:text-white">Pay online at delivery</span>

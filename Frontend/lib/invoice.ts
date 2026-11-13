@@ -12,15 +12,15 @@ import { Order, OrderItem } from '@/lib/types';
 /* Brand palette (mirrors tailwind.config.ts "asan-*" tokens)          */
 /* ------------------------------------------------------------------ */
 const BRAND = {
-  dark: '#0B3D2E',
-  mid: '#1A6B4A',
-  accent: '#27AE7A',
+  dark: '#2B2118',
+  mid: '#5C4632',
+  accent: '#8C6D1F',
   warning: '#E09B2D',
   error: '#E74C3C',
-  ink: '#1A202C',
-  muted: '#718096',
-  border: '#E2E8F0',
-  surface: '#F7FAFC',
+  ink: '#2B2118',
+  muted: '#8A7F70',
+  border: '#EDE3CE',
+  surface: '#FFFFFF',
 } as const;
 
 /** Escapes untrusted text before it enters the invoice HTML. */
@@ -155,14 +155,14 @@ function buildDocument(orders: Order[]): string {
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: ${BRAND.surface}; color: ${BRAND.ink}; padding: 24px; }
-    .receipt { max-width: 800px; margin: 0 auto 28px; background: #fff; border: 1px solid ${BRAND.border}; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(11,61,46,.08); }
+    .receipt { max-width: 800px; margin: 0 auto 28px; background: #fff; border: 1px solid ${BRAND.border}; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(43,33,24,.08); }
     .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 26px; background: ${BRAND.dark}; color: #fff; }
     .brand { display: flex; gap: 12px; align-items: center; }
     .logo-mark { width: 44px; height: 44px; border-radius: 12px; background: ${BRAND.accent}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; letter-spacing: .5px; color: #fff; }
     .brand h1 { font-size: 19px; letter-spacing: -.2px; }
     .brand p { font-size: 10.5px; opacity: .75; margin-top: 2px; }
     .invoice-tag { font-size: 10px; letter-spacing: 2px; opacity: .7; }
-    .order-no { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; font-size: 15px; margin-top: 2px; color: #7EE2B8; }
+    .order-no { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; font-size: 15px; margin-top: 2px; color: #F3EAD3; }
     .order-date { font-size: 11px; opacity: .75; margin-top: 2px; }
     .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; padding: 18px 26px 0; }
     .info-card { border: 1px solid ${BRAND.border}; border-radius: 10px; padding: 12px 14px; background: #fff; }
@@ -179,7 +179,7 @@ function buildDocument(orders: Order[]): string {
     .totals { width: calc(100% - 52px); margin: 14px auto 0; font-size: 12.5px; }
     .totals .row { display: flex; justify-content: space-between; padding: 5px 10px; color: ${BRAND.muted}; }
     .totals .grand { border-top: 2px solid ${BRAND.dark}; margin-top: 6px; padding-top: 10px; font-size: 15px; font-weight: 800; color: ${BRAND.mid}; }
-    .ship { margin: 16px 26px 0; padding: 11px 14px; border-radius: 10px; background: #ECFDF5; border: 1px solid #BBEAD4; font-size: 11.5px; }
+    .ship { margin: 16px 26px 0; padding: 11px 14px; border-radius: 10px; background: #F3EAD3; border: 1px solid #EDE3CE; font-size: 11.5px; }
     .ship p { margin-top: 3px; }
     .foot { margin: 18px 26px 20px; padding-top: 12px; border-top: 1px dashed ${BRAND.border}; font-size: 10.5px; color: ${BRAND.muted}; text-align: center; line-height: 1.6; }
     .page-break { height: 0; border-top: 2px dashed #CBD5E1; max-width: 800px; margin: 26px auto; }

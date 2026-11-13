@@ -27,7 +27,7 @@ export function AIRecommendationCard({ product }: { product: Product }) {
   };
 
   return (
-    <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-slate-900 p-4 shadow-sm hover:shadow-md transition">
+    <div className="rounded-2xl border border-asan-accent/30 bg-gradient-to-b from-asan-accent-light/50 to-white dark:from-asan-accent/20 dark:to-slate-900 p-4 shadow-sm hover:shadow-md transition">
       <div className="flex gap-3.5">
         <ProductImage
           src={product.image}
@@ -42,7 +42,7 @@ export function AIRecommendationCard({ product }: { product: Product }) {
             <p className="text-[11px] text-slate-400 truncate">{product.supplierName}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="font-extrabold text-sm text-asan-dark dark:text-emerald-400">
+            <span className="font-extrabold text-sm text-asan-dark dark:text-asan-accent-light">
               {formatPKR(product.price)}
             </span>
             <button
@@ -51,7 +51,7 @@ export function AIRecommendationCard({ product }: { product: Product }) {
               title="Add to Cart"
               aria-label={`Add ${product.name} to cart`}
               className={added
-                ? 'p-1.5 rounded-lg bg-emerald-600 text-white transition'
+                ? 'p-1.5 rounded-lg bg-asan-accent text-white transition'
                 : 'p-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white transition'}
             >
               {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}

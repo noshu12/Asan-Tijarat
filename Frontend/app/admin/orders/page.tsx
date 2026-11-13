@@ -157,7 +157,7 @@ export default function AdminOrdersPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {orders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                  <td className="px-4 py-3 font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                  <td className="px-4 py-3 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light">
                     {o.orderNumber}
                   </td>
                   <td className="px-4 py-3">

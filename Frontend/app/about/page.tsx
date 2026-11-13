@@ -51,7 +51,7 @@ export default function AboutPage() {
     {
       title: 'For Farmers, Millers & Manufacturers',
       subtitle: 'Sell Bulk Volume Directly',
-      color: 'border-emerald-500/30 bg-emerald-950/20',
+      color: 'border-asan-accent/30 bg-asan-dark/20',
       points: [
         'List products with photos, price per pack, pack size, MOQ, and stock',
         'Receive bulk orders from shopkeepers and manage them from the supplier portal',
@@ -76,21 +76,21 @@ export default function AboutPage() {
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
       
       {/* Hero Header */}
-      <section className="bg-asan-dark text-white py-20 text-center border-b border-emerald-900 relative overflow-hidden">
+      <section className="bg-asan-dark text-white py-20 text-center border-b border-asan-mid relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full overflow-hidden pointer-events-none opacity-20">
-          <div className="absolute -top-24 left-1/4 w-96 h-96 bg-emerald-500 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-emerald-400 rounded-full blur-3xl" />
+          <div className="absolute -top-24 left-1/4 w-96 h-96 bg-asan-accent rounded-full blur-3xl" />
+          <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-asan-accent-light rounded-full blur-3xl" />
         </div>
 
         <div className="relative max-w-4xl mx-auto px-4">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-6 border border-white/10 backdrop-blur">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-asan-accent-light text-xs font-bold uppercase tracking-wider mb-6 border border-white/10 backdrop-blur">
             Platform Capabilities & Mission
           </span>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
             What Can You Do on <br />
-            <span className="text-emerald-400">Asan Tijarat?</span>
+            <span className="text-asan-accent-light">Asan Tijarat?</span>
           </h1>
-          <p className="mt-6 text-sm sm:text-lg text-emerald-100/90 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 text-sm sm:text-lg text-asan-accent-light/90 max-w-2xl mx-auto leading-relaxed">
             Asan Tijarat is a B2B wholesale marketplace connecting suppliers and shopkeepers in Pakistan — with separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.
           </p>
         </div>
@@ -102,7 +102,7 @@ export default function AboutPage() {
         {/* 1. Core Platform Capabilities Grid */}
         <div>
           <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
+            <span className="px-3 py-1 rounded-full bg-asan-accent-light dark:bg-asan-dark text-asan-dark dark:text-asan-accent-light font-bold text-xs uppercase tracking-wider">
               Core Capabilities
             </span>
             <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-3">
@@ -119,13 +119,13 @@ export default function AboutPage() {
               return (
                 <div
                   key={idx}
-                  className="p-7 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-emerald-500/40 transition-all group flex flex-col justify-between"
+                  className="p-7 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-asan-accent/40 transition-all group flex flex-col justify-between"
                 >
                   <div>
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-asan-accent mb-5 group-hover:scale-110 transition">
+                    <div className="w-12 h-12 rounded-2xl bg-asan-accent-light dark:bg-asan-dark/60 flex items-center justify-center text-asan-accent mb-5 group-hover:scale-110 transition">
                       <Icon className="w-6 h-6" />
                     </div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-asan-accent dark:group-hover:text-asan-accent-light transition">
                       {cap.title}
                     </h3>
                     <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2.5 leading-relaxed">
@@ -141,7 +141,7 @@ export default function AboutPage() {
         {/* 2. Value Breakdown by Stakeholder */}
         <div>
           <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
+            <span className="px-3 py-1 rounded-full bg-asan-accent-light dark:bg-asan-dark text-asan-dark dark:text-asan-accent-light font-bold text-xs uppercase tracking-wider">
               Dual Ecosystem
             </span>
             <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-3">
@@ -156,7 +156,7 @@ export default function AboutPage() {
                 className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-6"
               >
                 <div>
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-asan-accent dark:text-asan-accent-light uppercase tracking-wider">
                     {item.subtitle}
                   </span>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-1">
@@ -175,7 +175,7 @@ export default function AboutPage() {
 
                 <Link
                   href={idx === 0 ? "/signin" : "/marketplace"}
-                  className="inline-flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                  className="inline-flex items-center gap-2 text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
                 >
                   <span>{idx === 0 ? "Start as a Supplier" : "Browse Wholesale Marketplace"}</span>
                   <ArrowRight className="w-4 h-4" />
@@ -186,15 +186,15 @@ export default function AboutPage() {
         </div>
 
         {/* 3. How Trading Works */}
-        <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-asan-dark to-emerald-900 text-white shadow-xl relative overflow-hidden">
+        <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-asan-dark to-asan-mid text-white shadow-xl relative overflow-hidden">
           <div className="relative max-w-3xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-asan-accent-light text-xs font-bold">
               <span>How It Works</span>
             </div>
             <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               From Registration to Delivery
             </h3>
-            <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
+            <p className="text-xs sm:text-sm text-asan-accent-light/90 leading-relaxed">
               Register as a supplier or shopkeeper and get your account reviewed. Suppliers list products with photos, price per pack, and MOQ. Shopkeepers browse the marketplace and place bulk orders. Suppliers confirm, process, ship, and deliver, and the order status stays visible in the portals at every step.
             </p>
           </div>

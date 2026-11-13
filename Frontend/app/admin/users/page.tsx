@@ -79,7 +79,7 @@ function SensitiveValue({
         type="button"
         onClick={reveal}
         disabled={loading}
-        className="text-xs text-emerald-700 underline hover:text-emerald-900 disabled:opacity-50"
+        className="text-xs text-asan-accent-hover underline hover:text-asan-dark disabled:opacity-50"
       >
         {loading ? 'Loading…' : error ?? 'View'}
       </button>
@@ -428,7 +428,7 @@ export default function AdminUsersPage() {
                           {u.avatar ? (
                               <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover bg-slate-100" />
                             ) : (
-                              <span className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                              <span className="w-8 h-8 shrink-0 rounded-full bg-asan-accent-light text-asan-accent-hover flex items-center justify-center text-xs font-bold">
                                 {(u.name || '?').trim().charAt(0).toUpperCase()}
                               </span>
                             )}

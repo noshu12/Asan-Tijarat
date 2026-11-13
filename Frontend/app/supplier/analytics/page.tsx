@@ -144,7 +144,7 @@ export default function SupplierAnalyticsPage() {
                   <span className="text-[10px] text-slate-400 w-14 shrink-0">{d.date.slice(5)}</span>
                   <div className="flex-1 h-4 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <div
-                      className="h-4 rounded bg-emerald-500"
+                      className="h-4 rounded bg-asan-accent"
                       style={{ width: `${maxDaily > 0 ? (d.revenue / maxDaily) * 100 : 0}%` }}
                     />
                   </div>

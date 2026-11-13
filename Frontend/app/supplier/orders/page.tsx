@@ -169,7 +169,7 @@ export default function SupplierOrdersPage() {
                       href={orderGoogleMapsUrl(order)!}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950 text-xs font-bold transition"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-asan-border dark:border-asan-mid bg-asan-accent-light dark:bg-asan-dark/40 text-asan-accent-hover dark:text-asan-accent-light hover:bg-asan-accent-light dark:hover:bg-asan-dark text-xs font-bold transition"
                       title="Open the shopkeeper's location in Google Maps"
                     >
                       <Navigation className="w-3.5 h-3.5" />

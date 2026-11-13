@@ -261,7 +261,7 @@ export function CoverflowCarousel({
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${count}`}
                 className={cn(
-                  "absolute left-1/2 top-0 aspect-square overflow-hidden rounded-2xl bg-muted shadow-2xl will-change-transform border border-emerald-500/20",
+                  "absolute left-1/2 top-0 aspect-square overflow-hidden rounded-2xl bg-muted shadow-2xl will-change-transform border border-asan-accent/20",
                   cardClassName,
                 )}
                 style={{ width: "var(--cf-card)" }}
@@ -275,7 +275,7 @@ export function CoverflowCarousel({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-4 text-white">
                   <p className="font-bold text-sm leading-tight">{slide.title}</p>
-                  <p className="text-xs text-emerald-300">{slide.subtitle}</p>
+                  <p className="text-xs text-asan-accent-light">{slide.subtitle}</p>
                 </div>
               </div>
             ))}
