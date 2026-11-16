@@ -16,7 +16,7 @@ export default function ShopkeeperLayout({
         <div className="hidden md:block shrink-0">
           <Sidebar />
         </div>
-        <div className="flex-1 p-4 sm:p-8 max-w-7xl overflow-x-hidden">
+        <div className="flex-1 px-4 pt-4 pb-20 sm:px-8 sm:pt-8 md:pb-8 max-w-7xl overflow-x-hidden">
           {children}
         </div>
       </div>

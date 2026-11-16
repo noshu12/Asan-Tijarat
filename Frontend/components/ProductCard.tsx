@@ -206,7 +206,7 @@ export function ProductCard({ product }: { product: Product }) {
             <ProductImage
               src={product.image}
               alt={product.name}
-              className="w-full max-h-[45vh] object-contain"
+              className="w-full max-h-[35vh] object-contain"
             />
             {product.status === 'Low Stock' && (
               <div className="absolute top-2.5 right-2.5">

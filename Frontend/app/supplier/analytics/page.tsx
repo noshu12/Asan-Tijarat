@@ -109,8 +109,8 @@ export default function SupplierAnalyticsPage() {
             {data.topProducts.length === 0 ? (
               <p className="text-xs text-slate-500">No completed sales yet.</p>
             ) : (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
+                <table className="min-w-[480px] w-full text-sm">
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200 dark:border-slate-800">
                       <th className="px-4 py-3 font-bold">Product</th>
@@ -126,7 +126,7 @@ export default function SupplierAnalyticsPage() {
                           <span className="truncate">{p.productName}</span>
                         </td>
                         <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{p.quantity}</td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">{formatPKR(p.revenue)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">{formatPKR(p.revenue)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -148,7 +148,7 @@ export default function SupplierAnalyticsPage() {
                       style={{ width: `${maxDaily > 0 ? (d.revenue / maxDaily) * 100 : 0}%` }}
                     />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-24 text-right shrink-0">
+                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-28 text-right shrink-0 whitespace-nowrap">
                     {formatPKR(d.revenue)}
                   </span>
                 </div>

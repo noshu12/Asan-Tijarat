@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -151,8 +151,8 @@ export default function SignInPage() {
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950">
       
-      {/* Left Brand Panel (Espresso #2B2118) */}
-      <div className="w-full md:w-1/2 bg-asan-dark text-white p-8 sm:p-14 lg:p-20 flex flex-col justify-between relative overflow-hidden">
+      {/* Left Brand Panel (Light mint) */}
+      <div className="w-full md:w-1/2 bg-asan-accent-light text-asan-dark p-8 sm:p-14 lg:p-20 flex flex-col justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-asan-accent/10 rounded-full blur-3xl pointer-events-none" />
         
         <div>
@@ -168,10 +168,10 @@ export default function SignInPage() {
           <div className="mt-16 sm:mt-24">
             <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
               Pakistan&apos;s leading <br />
-              <span className="text-asan-accent-light">B2B trade platform</span>
+              <span className="text-asan-accent">B2B trade platform</span>
             </h2>
 
-            <div className="mt-10 space-y-4 text-sm sm:text-base text-asan-accent-light/90">
+            <div className="mt-10 space-y-4 text-sm sm:text-base text-asan-text-light">
               <div className="flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0" />
                 <span>Accounts verified before trading</span>
@@ -192,7 +192,7 @@ export default function SignInPage() {
           </div>
         </div>
 
-        <div className="mt-12 text-xs text-asan-accent-light/50">
+        <div className="mt-12 text-xs text-asan-text-light">
           © 2026 Asan Tijarat. Final Year Project — FUUAST. All rights reserved.
         </div>
       </div>

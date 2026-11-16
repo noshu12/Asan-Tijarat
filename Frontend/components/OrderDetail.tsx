@@ -242,7 +242,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
       <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{order.orderNumber}</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white break-all">{order.orderNumber}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {formatDate(order.createdAt)} • Buyer: {order.buyerName} • Supplier: {order.supplierName}
             </p>
@@ -316,7 +316,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
             <p className="text-slate-500">Refunded: <span className="font-bold text-slate-900 dark:text-white">{formatPKR(order.refundAmount ?? 0)}</span></p>
           )}
           {order.paymentReference && (
-            <p className="text-slate-500">Reference: <span className="font-mono font-bold text-slate-900 dark:text-white">{order.paymentReference}</span></p>
+            <p className="text-slate-500">Reference: <span className="font-mono font-bold text-slate-900 dark:text-white break-all">{order.paymentReference}</span></p>
           )}
         </div>
 

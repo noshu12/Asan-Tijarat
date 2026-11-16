@@ -172,7 +172,7 @@ export default function AdminDashboardPage() {
               Every new shopkeeper/supplier registration lands here with the
               details they submitted plus a one-click Verify action. */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-500" />
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Pending Verifications</h3>
@@ -287,7 +287,7 @@ export default function AdminDashboardPage() {
                 </Link>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {recentProducts.map((p) => (
                   <Link
                     key={p.id}

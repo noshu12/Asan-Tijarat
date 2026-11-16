@@ -165,7 +165,7 @@ export default function AdminMessagesPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="w-full text-left text-sm">
+          <table className="min-w-[720px] w-full text-left text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-4 py-3">From</th>
@@ -257,7 +257,7 @@ export default function AdminMessagesPage() {
             )}
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Message</p>
-              <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 whitespace-pre-wrap">{selected.message}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 whitespace-pre-wrap break-words">{selected.message}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <Button

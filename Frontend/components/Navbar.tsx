@@ -126,7 +126,7 @@ export function Navbar() {
             </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => {
               const isActive = pathname === link.href;
               return (
@@ -223,7 +223,7 @@ export function Navbar() {
               aria-label="Toggle navigation menu"
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((open) => !open)}
-              className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+              className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -240,7 +240,7 @@ export function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 z-[1040] md:hidden bg-black/30 backdrop-blur-sm"
+              className="fixed inset-0 z-[1040] lg:hidden bg-black/30 backdrop-blur-sm"
             />
             <motion.nav
               ref={mobileMenuRef}
@@ -249,7 +249,7 @@ export function Navbar() {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.18 }}
               aria-label="Mobile navigation"
-              className="fixed inset-x-0 top-16 z-[1050] md:hidden border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto"
+              className="fixed inset-x-0 top-16 z-[1050] lg:hidden border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto"
             >
               <div className="px-4 py-4 space-y-1">
                 {navLinks.map((link) => {

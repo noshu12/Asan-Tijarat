@@ -10,7 +10,7 @@ import { Sidebar } from './Sidebar';
  *
  * The static <Sidebar /> is hidden below the md breakpoint, which would leave
  * dashboard users with no navigation at all on phones. This renders a
- * floating trigger button (bottom-left) that opens a dark slide-in drawer
+ * floating trigger button (bottom-left) that opens a light slide-in drawer
  * containing the same <Sidebar />. The drawer closes on: overlay tap,
  * navigating to a link, or pressing Escape. Hidden entirely on md+ where
  * the static sidebar is visible.

@@ -121,7 +121,7 @@ export default function AdminSecurityPage() {
         </p>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
         {phase === 'loading' && (
           <p className="text-sm text-slate-500">Loading your security status…</p>
         )}

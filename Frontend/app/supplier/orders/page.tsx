@@ -156,9 +156,9 @@ export default function SupplierOrdersPage() {
           {filteredOrders
             .filter((o) => o.status !== 'delivered' && o.status !== 'cancelled')
             .map((order) => (
-              <div key={order.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <div>
-                  <p className="font-semibold text-slate-900 dark:text-white">{order.orderNumber}</p>
+              <div key={order.id} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900 dark:text-white truncate">{order.orderNumber}</p>
                   <p className="text-xs text-slate-500">{formatDate(order.createdAt)}</p>
                 </div>
                 <div className="flex items-center gap-2">

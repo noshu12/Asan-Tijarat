@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { Fraunces } from 'next/font/google';
+import { Poppins } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
 import { AuthProvider } from '@/context/AuthProvider';
 
-const fraunces = Fraunces({
+const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['400', '600', '900'],
+  weight: ['400', '500', '600', '700', '800'],
 });
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${fraunces.className} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased flex flex-col font-sans transition-colors duration-200`}>
+      <body className={`${poppins.className} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased flex flex-col font-sans transition-colors duration-200`}>
         <AuthProvider>
           <Navbar />
           <main className="flex-1">

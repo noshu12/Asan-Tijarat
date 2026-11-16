@@ -144,7 +144,7 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="w-full text-left text-sm">
+          <table className="min-w-[720px] w-full text-left text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-4 py-3">Order #</th>
@@ -157,7 +157,7 @@ export default function AdminOrdersPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {orders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                  <td className="px-4 py-3 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light">
+                  <td className="px-4 py-3 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light whitespace-nowrap">
                     {o.orderNumber}
                   </td>
                   <td className="px-4 py-3">
@@ -166,13 +166,13 @@ export default function AdminOrdersPage() {
                       Buyer: {o.buyerName} → Supplier: {o.supplierName}
                     </p>
                   </td>
-                  <td className="px-4 py-3 text-xs font-bold text-slate-900 dark:text-white">
+                  <td className="px-4 py-3 text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
                     {formatPKR(o.totalAmount)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={getVariant(o.status)}>{statusLabel(o.status)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                  <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                     {formatDate(o.createdAt)}
                   </td>
                 </tr>

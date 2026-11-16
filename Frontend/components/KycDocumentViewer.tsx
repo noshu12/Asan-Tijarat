@@ -246,7 +246,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                   key={preview.key}
                   src={`${previewUrl}#toolbar=1`}
                   title={`${preview.label} preview`}
-                  className="w-full h-[65vh] rounded-xl border border-slate-200 dark:border-slate-800 bg-white"
+                  className="w-full h-[55vh] sm:h-[60vh] rounded-xl border border-slate-200 dark:border-slate-800 bg-white"
                 />
               ) : (
                 <p className="text-xs text-slate-500">Document could not be loaded.</p>
@@ -256,13 +256,13 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                 key={preview.key}
                 src={previewUrl}
                 alt={`${preview.label} full size`}
-                className="w-full max-h-[65vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
+                className="w-full max-h-[55vh] sm:max-h-[60vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
               />
             ) : (
               <p className="text-xs text-slate-500">Document could not be loaded.</p>
             )}
 
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Document on file for <span className="font-semibold">{ownerLabel || 'this account'}</span>,
                 stored by the API and linked to their registration.
