@@ -70,7 +70,7 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto p-4">
           <motion.div
             ref={dialogRef}
             role="dialog"
@@ -90,7 +90,7 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', duration: 0.3 }}
             className={cn(
-              "relative w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-10",
+              "relative max-h-[85dvh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-10",
               maxWidth
             )}
           >

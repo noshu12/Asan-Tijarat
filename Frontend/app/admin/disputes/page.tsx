@@ -227,7 +227,7 @@ export default function AdminDisputesPage() {
                           </p>
                         ))}
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-2">
+                      <p className="text-[11px] text-slate-500 mt-2 break-words">
                         Payment: {PAYMENT_METHOD_LABEL[evidenceOrder.paymentMethod ?? 'online_advance'] ?? evidenceOrder.paymentMethod}
                         {' • '}Status: {evidenceOrder.paymentStatus ?? 'unpaid'}
                         {evidenceOrder.paymentReference ? ` • Reference: ${evidenceOrder.paymentReference}` : ''}

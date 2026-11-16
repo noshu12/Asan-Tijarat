@@ -51,7 +51,7 @@ export default function AboutPage() {
     {
       title: 'For Farmers, Millers & Manufacturers',
       subtitle: 'Sell Bulk Volume Directly',
-      color: 'border-asan-accent/30 bg-asan-dark/20',
+      color: 'border-asan-accent/30 bg-asan-accent-light',
       points: [
         'List products with photos, price per pack, pack size, MOQ, and stock',
         'Receive bulk orders from shopkeepers and manage them from the supplier portal',
@@ -62,7 +62,7 @@ export default function AboutPage() {
     {
       title: 'For Shopkeepers & Distributors',
       subtitle: 'Procure at Factory-Gate Rates',
-      color: 'border-blue-500/30 bg-blue-950/20',
+      color: 'border-blue-500/30 bg-blue-50',
       points: [
         'Browse products listed by suppliers at transparent price per pack',
         'Search and filter by product, supplier, city, and category',
@@ -76,21 +76,21 @@ export default function AboutPage() {
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
       
       {/* Hero Header */}
-      <section className="bg-asan-dark text-white py-20 text-center border-b border-asan-mid relative overflow-hidden">
+      <section className="bg-[linear-gradient(135deg,#EAF7EE_0%,#FFFFFF_60%)] text-asan-dark py-20 text-center border-b border-asan-border relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full overflow-hidden pointer-events-none opacity-20">
           <div className="absolute -top-24 left-1/4 w-96 h-96 bg-asan-accent rounded-full blur-3xl" />
           <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-asan-accent-light rounded-full blur-3xl" />
         </div>
 
         <div className="relative max-w-4xl mx-auto px-4">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-asan-accent-light text-xs font-bold uppercase tracking-wider mb-6 border border-white/10 backdrop-blur">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-white text-asan-accent text-xs font-bold uppercase tracking-wider mb-6 border border-asan-border">
             Platform Capabilities & Mission
           </span>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
             What Can You Do on <br />
-            <span className="text-asan-accent-light">Asan Tijarat?</span>
+            <span className="text-asan-accent">Asan Tijarat?</span>
           </h1>
-          <p className="mt-6 text-sm sm:text-lg text-asan-accent-light/90 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 text-sm sm:text-lg text-asan-text-light max-w-2xl mx-auto leading-relaxed">
             Asan Tijarat is a B2B wholesale marketplace connecting suppliers and shopkeepers in Pakistan — with separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.
           </p>
         </div>
@@ -186,15 +186,15 @@ export default function AboutPage() {
         </div>
 
         {/* 3. How Trading Works */}
-        <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-asan-dark to-asan-mid text-white shadow-xl relative overflow-hidden">
+        <div className="p-8 sm:p-12 rounded-3xl bg-asan-accent-light text-asan-dark shadow-xl relative overflow-hidden">
           <div className="relative max-w-3xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-asan-accent-light text-xs font-bold">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-asan-accent text-xs font-bold border border-asan-border">
               <span>How It Works</span>
             </div>
             <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               From Registration to Delivery
             </h3>
-            <p className="text-xs sm:text-sm text-asan-accent-light/90 leading-relaxed">
+            <p className="text-xs sm:text-sm text-asan-text-light leading-relaxed">
               Register as a supplier or shopkeeper and get your account reviewed. Suppliers list products with photos, price per pack, and MOQ. Shopkeepers browse the marketplace and place bulk orders. Suppliers confirm, process, ship, and deliver, and the order status stays visible in the portals at every step.
             </p>
           </div>

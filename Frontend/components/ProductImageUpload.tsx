@@ -152,7 +152,7 @@ export function ProductImageUpload({
                 type="button"
                 onClick={() => makeCover(image.id)}
                 title="Use as the main product photo"
-                className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-bold opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 transition"
               >
                 Make main
               </button>

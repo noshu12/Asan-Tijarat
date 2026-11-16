@@ -45,6 +45,7 @@ export default function TurnstileWidget({ onVerify, onExpire }: Props) {
       }
       widgetId.current = w.render(ref.current, {
         sitekey: SITE_KEY,
+        size: 'compact',
         callback: (token: string) => cbRef.current.onVerify(token),
         'expired-callback': () => {
           widgetId.current = null;

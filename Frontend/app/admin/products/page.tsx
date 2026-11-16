@@ -153,7 +153,7 @@ export default function AdminProductsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="w-full text-left text-sm">
+          <table className="min-w-[720px] w-full text-left text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-4 py-3">Product</th>
@@ -247,11 +247,11 @@ export default function AdminProductsPage() {
             <ProductImage
               src={previewProduct.image}
               alt={`${previewProduct.name} — uploaded photo`}
-              className="w-full max-h-[55vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
+              className="w-full max-h-[40vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
             />
 
             {(previewProduct.additionalImages?.length || 0) > 0 && (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {(previewProduct.additionalImages || []).map((url, index) => (
                   <ProductImage
                     key={url}

@@ -31,7 +31,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
   return (
     <>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-        <table className="w-full text-left text-sm">
+        <table className="min-w-[720px] w-full text-left text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
             <tr>
               <th className="px-5 py-3.5">Order ID</th>
@@ -45,7 +45,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {orders.map((order) => (
               <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                <td className="px-5 py-4 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light">
+                <td className="px-5 py-4 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light whitespace-nowrap">
                   {order.orderNumber}
                 </td>
                 <td className="px-5 py-4">
@@ -56,7 +56,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     Buyer: {order.buyerName} • Supplier: {order.supplierName}
                   </div>
                 </td>
-                <td className="px-5 py-4 font-bold text-slate-900 dark:text-white">
+                <td className="px-5 py-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">
                   {formatPKR(order.totalAmount)}
                 </td>
                 <td className="px-5 py-4">
@@ -64,7 +64,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     {statusLabel(order.status)}
                   </Badge>
                 </td>
-                <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">
+                <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                   {formatDate(order.createdAt)}
                 </td>
                 <td className="px-5 py-4 text-right">
@@ -122,20 +122,22 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
 
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase text-slate-500">Ordered Products</p>
+              <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
               {selectedOrder.items.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 rounded-lg object-cover" />
-                    <div>
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">{item.productName}</p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 shrink-0 rounded-lg object-cover" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.productName}</p>
                       <p className="text-[11px] text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>
                     </div>
                   </div>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white shrink-0">
                     {formatPKR(item.unitPrice * item.quantity)}
                   </p>
                 </div>
               ))}
+              </div>
             </div>
 
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">

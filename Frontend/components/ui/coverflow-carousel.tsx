@@ -274,8 +274,8 @@ export function CoverflowCarousel({
                   className="h-full w-full select-none object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-4 text-white">
-                  <p className="font-bold text-sm leading-tight">{slide.title}</p>
-                  <p className="text-xs text-asan-accent-light">{slide.subtitle}</p>
+                  <p className="font-bold text-sm leading-tight line-clamp-2">{slide.title}</p>
+                  <p className="text-xs text-asan-accent-light line-clamp-1">{slide.subtitle}</p>
                 </div>
               </div>
             ))}

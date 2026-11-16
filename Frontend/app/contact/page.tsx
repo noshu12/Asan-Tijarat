@@ -160,12 +160,12 @@ export default function ContactPage() {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
 
-      <div className="bg-asan-dark text-white py-12 text-center border-b border-asan-mid">
-        <span className="text-xs font-bold uppercase tracking-wider text-asan-accent-light">
+      <div className="bg-asan-accent-light text-asan-dark py-12 text-center border-b border-asan-border">
+        <span className="text-xs font-bold uppercase tracking-wider text-asan-accent">
           Get in Touch
         </span>
         <h1 className="text-3xl sm:text-4xl font-extrabold mt-1">Contact Us</h1>
-        <p className="text-xs sm:text-sm text-asan-accent-light/80 mt-1 max-w-md mx-auto">
+        <p className="text-xs sm:text-sm text-asan-text-light mt-1 max-w-md mx-auto">
           Send us a message using the form below.
         </p>
       </div>

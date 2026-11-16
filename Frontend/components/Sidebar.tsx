@@ -90,12 +90,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const links = isSubadmin ? subadminNav : isAdmin ? adminNav : isSupplier ? supplierNav : shopkeeperNav;
 
   return (
-    <aside className="w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 bg-asan-dark text-white flex flex-col justify-between p-4 shadow-xl select-none overflow-y-auto">
+    <aside className="w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 bg-white text-asan-dark flex flex-col justify-between p-4 shadow-sm border-r border-asan-border select-none overflow-y-auto">
       <div>
-        <div className="px-3 py-2 mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+        <div className="px-3 py-2 mb-4 rounded-xl bg-asan-accent-light border border-asan-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-asan-accent animate-pulse" />
-            <span className="text-xs font-semibold tracking-wide uppercase text-asan-accent-light">
+            <span className="text-xs font-semibold tracking-wide uppercase text-asan-accent">
               {isAdmin ? 'Admin Panel' : isSupplier ? 'Supplier Portal' : 'Shopkeeper Portal'}
             </span>
           </div>
@@ -113,8 +113,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 className={cn(
                   "flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
                   isActive
-                    ? "bg-asan-accent text-white shadow-md shadow-asan-dark/30 font-semibold"
-                    : "text-asan-accent-light/80 hover:bg-asan-mid hover:text-white"
+                    ? "bg-asan-accent text-white shadow-md shadow-asan-accent/30 font-semibold"
+                    : "text-asan-text-light hover:bg-asan-accent-light hover:text-asan-dark"
                 )}
               >
                 <Icon className="w-5 h-5 shrink-0" />
@@ -125,24 +125,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </nav>
       </div>
 
-      <div className="pt-4 mt-6 border-t border-white/10 shrink-0">
-        <div className="flex items-center px-2 py-2 rounded-xl bg-black/20">
+      <div className="pt-4 mt-6 border-t border-asan-border shrink-0">
+        <div className="flex items-center px-2 py-2 rounded-xl bg-asan-accent-light">
           <div className="flex items-center gap-2.5 min-w-0">
             {avatar ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={avatar}
                 alt={displayName}
-                className="w-9 h-9 rounded-full object-cover border border-asan-accent-light shrink-0"
+                className="w-9 h-9 rounded-full object-cover border border-asan-accent shrink-0"
               />
             ) : (
-              <div className="w-9 h-9 rounded-full bg-asan-accent-hover/60 border border-asan-accent-light flex items-center justify-center font-bold text-sm text-white shrink-0">
+              <div className="w-9 h-9 rounded-full bg-asan-accent border border-asan-accent flex items-center justify-center font-bold text-sm text-white shrink-0">
                 {displayName[0]}
               </div>
             )}
             <div className="truncate">
-              <p className="text-xs font-bold text-white truncate">{displayName}</p>
-              <p className="text-[11px] text-asan-accent-light/80 truncate capitalize">
+              <p className="text-xs font-bold text-asan-dark truncate">{displayName}</p>
+              <p className="text-[11px] text-asan-text-light truncate capitalize">
                 {displayRole === 'admin' ? 'Administrator' : displayRole === 'supplier' ? 'Supplier' : displayRole === 'subadmin' ? 'Sub Admin' : 'Shopkeeper'}
               </p>
             </div>
@@ -153,7 +153,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             and Shopkeeper dashboards) and inside the mobile drawer. */}
         <SignOutButton
           onSignOut={onNavigate}
-          className="w-full mt-3 px-3 py-2.5 bg-white/5 hover:bg-red-500/20 border border-white/10 text-red-200 hover:text-white"
+          className="w-full mt-3 px-3 py-2.5 bg-white hover:bg-red-50 border border-asan-border text-red-500 hover:text-red-600"
         />
       </div>
     </aside>

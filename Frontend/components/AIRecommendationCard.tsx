@@ -42,7 +42,7 @@ export function AIRecommendationCard({ product }: { product: Product }) {
             <p className="text-[11px] text-slate-400 truncate">{product.supplierName}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="font-extrabold text-sm text-asan-dark dark:text-asan-accent-light">
+            <span className="font-extrabold text-sm text-asan-dark dark:text-asan-accent-light whitespace-nowrap">
               {formatPKR(product.price)}
             </span>
             <button
@@ -51,8 +51,8 @@ export function AIRecommendationCard({ product }: { product: Product }) {
               title="Add to Cart"
               aria-label={`Add ${product.name} to cart`}
               className={added
-                ? 'p-1.5 rounded-lg bg-asan-accent text-white transition'
-                : 'p-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white transition'}
+                ? 'p-1.5 rounded-lg bg-asan-accent text-white transition shrink-0'
+                : 'p-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white transition shrink-0'}
             >
               {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </button>

@@ -126,14 +126,14 @@ export default function ShopkeeperDashboardPage() {
       )}
 
       {/* Welcome Banner matching Figma w4.png */}
-      <div className="rounded-3xl bg-gradient-to-r from-asan-dark to-asan-mid text-white p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
+      <div className="rounded-3xl bg-[linear-gradient(135deg,#EAF7EE_0%,#FFFFFF_60%)] text-asan-dark p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl relative overflow-hidden border border-asan-border">
         <div className="absolute right-0 top-0 w-80 h-80 bg-asan-accent/10 rounded-full blur-3xl pointer-events-none" />
         
         <div>
           <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             Welcome back, {user?.businessName || user?.name || 'Shopkeeper'} 👋
           </h2>
-          <p className="text-xs sm:text-sm text-asan-accent-light/80 mt-1">
+          <p className="text-xs sm:text-sm text-asan-text-light mt-1">
             Browse wholesale products listed by suppliers.
           </p>
         </div>

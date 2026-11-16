@@ -210,7 +210,7 @@ export default function SupplierMyProductsPage() {
         </div>
       )}
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-        <table className="w-full text-left text-sm">
+        <table className="min-w-[720px] w-full text-left text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
             <tr>
               <th className="px-5 py-3.5">Product Lot</th>

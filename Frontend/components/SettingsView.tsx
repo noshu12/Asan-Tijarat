@@ -523,7 +523,7 @@ export function SettingsView({ role }: SettingsViewProps) {
               className="w-20 h-20 rounded-2xl object-cover border-2 border-asan-accent shrink-0"
             />
           ) : (
-            <div className="w-20 h-20 rounded-2xl bg-asan-dark text-white flex items-center justify-center text-2xl font-extrabold border-2 border-asan-accent shrink-0">
+            <div className="w-20 h-20 rounded-2xl bg-asan-accent-light text-asan-accent flex items-center justify-center text-2xl font-extrabold border-2 border-asan-accent shrink-0">
               {avatarInitial}
             </div>
           )}
