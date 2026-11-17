@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -160,6 +160,8 @@ export default function SignInPage() {
             <img
               src="/logo.png"
               alt="Asan Tijarat logo"
+              width={40}
+              height={40}
               className="w-10 h-10 rounded-xl object-contain"
             />
             <span className="font-bold text-2xl tracking-tight">Asan Tijarat</span>

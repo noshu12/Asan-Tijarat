@@ -114,6 +114,8 @@ export function Navbar() {
             <img
               src="/logo.png"
               alt="Asan Tijarat logo"
+              width={40}
+              height={40}
               className="w-10 h-10 rounded-xl object-contain shadow-md shadow-asan-dark/20 group-hover:scale-105 transition"
             />
             <div className="flex flex-col">
