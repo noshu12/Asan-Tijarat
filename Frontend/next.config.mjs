@@ -12,7 +12,93 @@
  * - images.remotePatterns: Cloudinary host ADD kiya (production image
  *   store), via.placeholder.com HATA diya (placeholder service, "no mock
  *   data" rule ke khilaf tha). Unsplash/R2 hosts waise hi rakhe hain.
+ *
+ * FIX (Audit fix #7) — Security headers.
+ * - Content-Security-Policy REPORT-ONLY pehle (enforce nahi) — CSP galat
+ *   ho to bhi site nahi tootegi, sirf browser console me report aayegi.
+ *   Deploy ke baad console check karo, phir enforce mode me badlo.
+ * - X-Frame-Options DENY + frame-ancestors 'none': site ko iframe me
+ *   nahi khola ja sakta (clickjacking band).
+ * - X-Content-Type-Options nosniff, Referrer-Policy
+ *   strict-origin-when-cross-origin, Permissions-Policy locked down
+ *   (sirf geolocation=(self) — lib/useDeviceLocation.ts GPS use karta
+ *   hai; baaki sab band: camera, microphone, payment, usb, ...).
+ * - CSP me jo origins hain, wo code se verify kiye gaye hain:
+ *   scripts: self + Cloudflare Turnstile (challenges.cloudflare.com,
+ *   components/TurnstileWidget.tsx) + 'unsafe-inline' (Next.js inline
+ *   scripts ke liye lazmi); images: self + data:/blob: (KYC blob previews)
+ *   + Cloudinary/Unsplash/R2 (images.remotePatterns wale hosts) + backend
+ *   origin (backend se /uploads/* images aati hain, lib/api.ts fileUrl);
+ *   connect: self + backend origin + Turnstile; frames: Turnstile + blob:.
+ * - Backend origin: NEXT_PUBLIC_API_URL / BACKEND_INTERNAL_URL se liya
+ *   jata hai (rewrites() wala pattern). Production backend Render pe hai,
+ *   is liye https://*.onrender.com safety net ke tor pe bhi hai — agar env
+ *   var build time pe set nahi tha to bhi API calls report-only me block
+ *   nahi hongi. Deploy ke baad console reports check kar ke connect-src /
+ *   img-src ko exact Render origin pe tight karo, phir enforce karo.
  */
+
+/** Backend ka origin — CSP ke connect-src / img-src ke liye. */
+function backendOrigin() {
+  const raw =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.BACKEND_INTERNAL_URL ||
+    'http://localhost:5000';
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return 'http://localhost:5000';
+  }
+}
+
+const BACKEND_ORIGIN = backendOrigin();
+
+const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://plus.unsplash.com https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev ${BACKEND_ORIGIN} https://*.onrender.com`,
+  "font-src 'self' data:",
+  `connect-src 'self' ${BACKEND_ORIGIN} https://*.onrender.com https://challenges.cloudflare.com`,
+  'frame-src https://challenges.cloudflare.com blob:',
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+  'upgrade-insecure-requests',
+].join('; ');
+
+// Permissions-Policy: sab band, sirf geolocation khula (self) —
+// useDeviceLocation.ts GPS use karta hai (registration + settings).
+const PERMISSIONS_POLICY = [
+  'accelerometer=()',
+  'ambient-light-sensor=()',
+  'autoplay=()',
+  'battery=()',
+  'camera=()',
+  'cross-origin-isolated=()',
+  'display-capture=()',
+  'document-domain=()',
+  'encrypted-media=()',
+  'execution-while-not-rendered=()',
+  'execution-while-out-of-viewport=()',
+  'fullscreen=()',
+  'geolocation=(self)',
+  'gyroscope=()',
+  'keyboard-map=()',
+  'magnetometer=()',
+  'microphone=()',
+  'midi=()',
+  'navigation-override=()',
+  'payment=()',
+  'picture-in-picture=()',
+  'publickey-credentials-get=()',
+  'screen-wake-lock=()',
+  'sync-xhr=()',
+  'usb=()',
+  'web-share=()',
+  'xr-spatial-tracking=()',
+].join(', ');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -35,6 +121,23 @@ const nextConfig = {
       { protocol: 'https', hostname: 'pub-940ccf6255b54fa799a9b01050e6c227.r2.dev' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },
     ],
+  },
+  // FIX (Audit fix #7) — security headers, har route pe.
+  // CSP report-only hai (enforce nahi), is liye galat rule se bhi
+  // site nahi tootegi — sirf console me report aayegi.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: PERMISSIONS_POLICY },
+        ],
+      },
+    ];
   },
 };
 

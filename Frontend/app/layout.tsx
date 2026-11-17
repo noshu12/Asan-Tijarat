@@ -10,8 +10,31 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://asan-tijarat.vercel.app'),
   title: 'Asan Tijarat | B2B Wholesale Marketplace',
   description: 'Connect suppliers and shopkeepers across Pakistan. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.',
+  openGraph: {
+    type: 'website',
+    locale: 'en_PK',
+    url: 'https://asan-tijarat.vercel.app',
+    siteName: 'Asan Tijarat',
+    title: 'Asan Tijarat | B2B Wholesale Marketplace',
+    description: 'Connect suppliers and shopkeepers across Pakistan. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Asan Tijarat — B2B Wholesale Marketplace Pakistan',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Asan Tijarat | B2B Wholesale Marketplace',
+    description: 'Connect suppliers and shopkeepers across Pakistan. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown.',
+    images: ['/og-image.png'],
+  },
 };
 
 export default function RootLayout({
