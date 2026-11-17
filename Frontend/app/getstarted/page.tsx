@@ -738,7 +738,7 @@ export default function GetStartedPage() {
               </div>
 
               <form onSubmit={handleStep1} className="space-y-3.5">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="First Name"
                     placeholder="Ahmed"

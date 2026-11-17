@@ -168,11 +168,11 @@ export default function ShopkeeperDashboardPage() {
 
       {/* AI Recommendations Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-asan-accent" />
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recommended for You</h3>
-            <span className="text-[11px] text-slate-400">Products from the marketplace</span>
+            <span className="text-[11px] text-slate-400 hidden sm:inline">Products from the marketplace</span>
           </div>
           <Link href="/marketplace" className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline flex items-center gap-1">
             <span>Browse all</span>

@@ -112,6 +112,12 @@ function CategoryMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // Batch 07 (S12) — the dropdown always opened downward, so near the
+  // bottom of a short viewport (125%/150% zoom) it opened off-screen.
+  // Measure on open: if there is not enough room below but more room
+  // above, the panel opens upward instead.
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [openUp, setOpenUp] = useState(false);
 
   const filtered = CATEGORIES.filter((c) =>
     c.toLowerCase().includes(search.trim().toLowerCase())
@@ -125,7 +131,18 @@ function CategoryMultiSelect({
       <div className="relative">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          ref={buttonRef}
+          onClick={() => {
+            const rect = buttonRef.current?.getBoundingClientRect();
+            if (rect) {
+              const spaceBelow = window.innerHeight - rect.bottom;
+              const spaceAbove = rect.top;
+              // Panel is ~290px tall (search + 224px list); flip up when
+              // there is not enough room below but more room above.
+              setOpenUp(spaceBelow < 320 && spaceAbove > spaceBelow);
+            }
+            setOpen((o) => !o);
+          }}
           className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent flex items-center justify-between gap-2"
         >
           <span className={selected.length === 0 ? 'text-slate-400' : 'font-semibold'}>
@@ -141,7 +158,7 @@ function CategoryMultiSelect({
         {open && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-xl dark:bg-slate-900 dark:border-slate-800 overflow-hidden">
+            <div className={`absolute z-20 w-full rounded-xl border border-slate-200 bg-white shadow-xl dark:bg-slate-900 dark:border-slate-800 overflow-hidden max-h-[50vh] ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
               <div className="p-2 border-b border-slate-100 dark:border-slate-800">
                 <input
                   type="text"
