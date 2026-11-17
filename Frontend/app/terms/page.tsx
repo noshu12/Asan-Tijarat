@@ -2,6 +2,14 @@ import Link from 'next/link';
 import TermsContent from '@/components/TermsContent';
 import { Footer } from '@/components/Footer';
 
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Terms of Service | Asan Tijarat',
+  description: 'Read the terms of service for using Asan Tijarat: accounts, KYC, orders, payments, disputes, and the responsibilities of suppliers and shopkeepers.',
+  robots: { index: false, follow: false },
+};
+
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-white">
