@@ -2,6 +2,14 @@ import Link from 'next/link';
 import PrivacyContent from '@/components/PrivacyContent';
 import { Footer } from '@/components/Footer';
 
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Privacy Policy | Asan Tijarat',
+  description: 'How Asan Tijarat collects, uses and protects your data: CNIC and KYC documents, order history and account security, explained in plain words.',
+  robots: { index: false, follow: false },
+};
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-white">
