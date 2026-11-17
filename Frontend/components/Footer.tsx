@@ -1,10 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { MapPin } from 'lucide-react';
-import { api } from '@/lib/api';
-import { Product } from '@/lib/types';
 
 // Same marketplace filter slugs as the marketplace page categories.
 const CATEGORY_SLUG: Record<string, string> = {
@@ -25,35 +23,19 @@ const CATEGORY_SLUG: Record<string, string> = {
 };
 
 export function Footer() {
-  // Real categories from GET /api/products. On backend failure this stays
-  // empty on purpose — no hardcoded fallback, so no fake categories show.
-  const [products, setProducts] = useState<Product[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        // Batch 04 — the widest page (100): the category list below is
-        // derived from these products, so it needs more than the default 50.
-        const data = await api.products({ limit: 100 });
-        setProducts(data.products);
-      } catch {
-        setProducts([]);
-      }
-    };
-    void load();
-  }, []);
-
-  const categories = useMemo(() => {
-    const seen = new Set<string>();
-    const list: string[] = [];
-    for (const product of products) {
-      if (product.category && !seen.has(product.category)) {
-        seen.add(product.category);
-        list.push(product.category);
-      }
-    }
-    return list;
-  }, [products]);
+  // The 14 master categories — the same list as the marketplace filters
+  // and the backend master list (Backend/src/constants/categories.js).
+  // Rendered statically, so the footer is identical on every page.
+  //
+  // FIX (audit #4) — the old footer derived its categories from a
+  // client-side products fetch (GET /api/products, limit 100). Until that
+  // fetch finished — or when the backend was cold/unreachable — the list
+  // was empty and the footer showed "No categories yet". The audit caught
+  // it on the Contact page while other pages showed 10 categories. A
+  // static list cannot be empty, so no page can show that message again.
+  // Categories that have no listings yet simply open an empty filtered
+  // marketplace view, same as the marketplace filter row itself.
+  const categories = Object.keys(CATEGORY_SLUG);
 
   return (
     <footer className="bg-asan-accent-light text-asan-dark pt-16 pb-12 border-t border-asan-border select-none">
@@ -88,23 +70,19 @@ export function Footer() {
 
           <div className="space-y-3">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Top Categories</h4>
-            {categories.length === 0 ? (
-              <p className="text-xs text-asan-text-light">No categories yet</p>
-            ) : (
-              <ul className="space-y-2 text-xs text-asan-text-light">
-                {categories.map((category) => {
-                  const slug = CATEGORY_SLUG[category];
-                  const href = slug ? `/marketplace?cat=${slug}` : '/marketplace';
-                  return (
-                    <li key={category}>
-                      <Link href={href} className="hover:text-asan-accent transition">
-                        {category}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <ul className="space-y-2 text-xs text-asan-text-light">
+              {categories.map((category) => {
+                const slug = CATEGORY_SLUG[category];
+                const href = slug ? `/marketplace?cat=${slug}` : '/marketplace';
+                return (
+                  <li key={category}>
+                    <Link href={href} className="hover:text-asan-accent transition">
+                      {category}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
 
           <div className="space-y-3">

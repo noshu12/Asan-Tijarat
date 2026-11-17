@@ -90,6 +90,18 @@ const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN || '')
     return true;
   });
 
+// FIX (Audit fix #7) — production me CLIENT_ORIGIN khali ho to CORS
+// chup-chap har browser origin ko mana kar dega (secure default, lekin
+// site ka har API call fail hoga). Is liye boot pe zor se bata do.
+// Render pe lazmi set karo: CLIENT_ORIGIN=https://asan-tijarat.vercel.app
+// (wildcard `*` yahan kabhi allow nahi hota — upar filter kar diya gaya
+// hai — is liye live site pe `access-control-allow-origin: *` nahi aana
+// chahiye; agar audit me dikha to Render ka deploy purana tha).
+if (IS_PRODUCTION && CLIENT_ORIGINS.length === 0) {
+  console.warn('[server] ⚠️  CLIENT_ORIGIN is empty in production — every browser origin will be refused by CORS.');
+  console.warn('[server]   → set CLIENT_ORIGIN=https://asan-tijarat.vercel.app on Render and redeploy.');
+}
+
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
 
 function isAllowedOrigin(origin) {
