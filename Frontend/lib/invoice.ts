@@ -156,7 +156,7 @@ function buildDocument(orders: Order[]): string {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: ${BRAND.surface}; color: ${BRAND.ink}; padding: 24px; }
     .receipt { max-width: 800px; margin: 0 auto 28px; background: #fff; border: 1px solid ${BRAND.border}; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(17,24,39,.08); }
-    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 26px; background: ${BRAND.dark}; color: #fff; }
+    .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 26px; background: ${BRAND.dark}; color: #fff; }
     .brand { display: flex; gap: 12px; align-items: center; }
     .logo-mark { width: 44px; height: 44px; border-radius: 12px; background: ${BRAND.accent}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; letter-spacing: .5px; color: #fff; }
     .brand h1 { font-size: 19px; letter-spacing: -.2px; }
@@ -183,7 +183,8 @@ function buildDocument(orders: Order[]): string {
     .ship p { margin-top: 3px; }
     .foot { margin: 18px 26px 20px; padding-top: 12px; border-top: 1px dashed ${BRAND.border}; font-size: 10.5px; color: ${BRAND.muted}; text-align: center; line-height: 1.6; }
     .page-break { height: 0; border-top: 2px dashed #CBD5E1; max-width: 800px; margin: 26px auto; }
-    @media print { body { padding: 0; background: #fff; } .receipt { box-shadow: none; break-inside: avoid; } .page-break { border-color: #fff; height: 24px; } @page { margin: 12mm; } }
+    @media (max-width: 600px) { body { padding: 12px; } th, td { padding: 6px; } table { width: calc(100% - 24px); } .totals { width: calc(100% - 24px); } .head { padding: 16px; } .info-grid { padding: 12px 12px 0; } }
+    @media print { body { padding: 0; background: #fff; } .receipt { box-shadow: none; } .page-break { border-color: #fff; height: 24px; } @page { margin: 12mm; } }
   </style>
 </head>
 <body>${body}</body>

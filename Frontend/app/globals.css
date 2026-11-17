@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Batch 07 (C1) — `scrollbar-none` is used by the marketplace category
+   pills row but Tailwind has no such utility; define it here so the row
+   hides its scrollbar instead of showing one. */
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

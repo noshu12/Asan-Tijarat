@@ -305,7 +305,7 @@ export default function ContactPage() {
                   className="w-full p-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-asan-accent focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white"
                   required
                 />
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <p className={`text-xs ${messageLength > 1000 ? 'font-semibold text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
                     {formData.message.length} / 1000 characters
                   </p>

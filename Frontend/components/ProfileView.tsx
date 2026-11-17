@@ -328,13 +328,13 @@ export function ProfileView({ role }: ProfileViewProps) {
 
       {isSupplier && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
               Active Wholesale Products from this Supplier
             </h3>
             <Link
               href="/supplier/my-products"
-              className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
+              className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline shrink-0"
             >
               Manage listings →
             </Link>
