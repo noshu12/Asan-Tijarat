@@ -187,7 +187,11 @@ export default function ProductDetailClient({ id }: { id: string }) {
               <ProductImage
                 src={images[selectedImage] ?? product.image}
                 alt={product.name}
-                className="w-full aspect-square object-contain"
+                className="w-full aspect-square"
+                imgClassName="object-contain"
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                priority
               />
               {product.status === 'Low Stock' && (
                 <div className="absolute top-3 right-3">
@@ -209,7 +213,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
                         : 'border-slate-200 dark:border-slate-800 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <ProductImage src={src} alt={`${product.name} photo ${i + 1}`} className="w-full h-full object-cover" />
+                    <ProductImage src={src} alt={`${product.name} photo ${i + 1}`} className="w-full h-full object-cover" width={80} height={80} />
                   </button>
                 ))}
               </div>

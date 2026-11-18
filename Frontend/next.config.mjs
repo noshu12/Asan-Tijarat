@@ -53,6 +53,32 @@ function backendOrigin() {
 
 const BACKEND_ORIGIN = backendOrigin();
 
+/**
+ * FIX (New audit #7) — next/image ke liye backend host.
+ * Product photos stored paths (`/uploads/products/...`) hain, jo lib/api.ts
+ * fileUrl() backend origin ke against resolve karta hai (dev me
+ * http://localhost:5000, production me Render URL). Bina is pattern ke
+ * next/image un images ko optimize karne se inkar kar deta hai ("hostname is
+ * not configured"). `*.onrender.com` safety net hai — agar build time pe env
+ * var set nahi tha to bhi Render-hosted images kaam karengi (CSP wali hi
+ * approach).
+ */
+function backendRemotePattern() {
+  try {
+    const u = new URL(BACKEND_ORIGIN);
+    const pattern = {
+      protocol: u.protocol.replace(':', ''),
+      hostname: u.hostname,
+    };
+    if (u.port) pattern.port = u.port;
+    return pattern;
+  } catch {
+    return null;
+  }
+}
+
+const BACKEND_REMOTE_PATTERN = backendRemotePattern();
+
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
@@ -120,6 +146,10 @@ const nextConfig = {
       { protocol: 'https', hostname: 'plus.unsplash.com' },
       { protocol: 'https', hostname: 'pub-940ccf6255b54fa799a9b01050e6c227.r2.dev' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },
+      // FIX (New audit #7) — backend origin (product photos /uploads/*)
+      // + *.onrender.com safety net (agar build-time env var missing ho).
+      ...(BACKEND_REMOTE_PATTERN ? [BACKEND_REMOTE_PATTERN] : []),
+      { protocol: 'https', hostname: '*.onrender.com' },
     ],
   },
   // FIX (Audit fix #7) — security headers, har route pe.

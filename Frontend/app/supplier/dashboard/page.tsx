@@ -185,6 +185,8 @@ export default function SupplierDashboardPage() {
                   src={p.image}
                   alt={p.name}
                   className="w-16 h-16 rounded-xl object-cover shrink-0"
+                  width={64}
+                  height={64}
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{p.name}</p>

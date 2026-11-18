@@ -1,0 +1,68 @@
+# CI — Asan Tijarat
+# Runs on every pull request to main and every push to main.
+# Free tier only: ubuntu-latest runners + the two official actions
+# (checkout, setup-node). No secrets, no deployments, no paid actions.
+# Two jobs so Frontend and Backend results show separately in the PR Checks tab.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend
+    steps:
+      # Get the code.
+      - uses: actions/checkout@v4
+      # Install Node 20 (the version the project uses) + cache npm deps.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+      # Install exactly the versions in package-lock.json.
+      - name: Install dependencies
+        run: npm ci
+      # Type-check the whole frontend (no "typecheck" script exists yet).
+      - name: Typecheck
+        run: npx tsc --noEmit
+      # Lint the whole frontend (runs `next lint`).
+      - name: Lint
+        run: npm run lint
+      # Production build — catches broken imports, bad metadata, etc.
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend (Express)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend
+    steps:
+      # Get the code.
+      - uses: actions/checkout@v4
+      # Install Node 20 (the version the project uses) + cache npm deps.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Backend/package-lock.json
+      # Install exactly the versions in package-lock.json.
+      - name: Install dependencies
+        run: npm ci
+      # Syntax-check every backend file (no test or lint script exists yet —
+      # if `npm test` is added later, add a `run: npm test` step here).
+      - name: Syntax check
+        run: for f in $(find server.js src -name '*.js'); do node --check "$f" || exit 1; done

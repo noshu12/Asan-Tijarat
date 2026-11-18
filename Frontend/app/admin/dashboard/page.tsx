@@ -298,6 +298,8 @@ export default function AdminDashboardPage() {
                       src={p.image}
                       alt={p.name}
                       className="w-full aspect-square rounded-xl object-cover"
+                      fill
+                      sizes="(max-width: 420px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 16vw"
                     />
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-900 dark:text-white truncate" title={p.name}>

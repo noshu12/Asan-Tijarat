@@ -84,7 +84,14 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-200/80 dark:border-slate-800">
-      <div>
+      {/* FIX (Batch 03 #16) — tablet (~768px) the header row is a no-wrap
+          flex row: title + fixed 256px search + bell ≈ 470px, but the
+          portal content is only ≈448px wide (256px sidebar + px-8). The
+          bell was clipped by the layout's overflow-x-hidden. min-w-0 on
+          both children + a shrinking search form let the search narrow
+          instead of clipping. Desktop unchanged: the form still caps at
+          256px (sm:max-w-64) and the input is w-full inside it. */}
+      <div className="min-w-0">
         <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
           {title}
         </h1>
@@ -93,8 +100,8 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <form onSubmit={handleSearchSubmit} className="relative">
+      <div className="flex min-w-0 items-center gap-3">
+        <form onSubmit={handleSearchSubmit} className="relative min-w-0 flex-1 sm:max-w-64">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -102,7 +109,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Search products"
-            className="pl-9 pr-4 py-2 w-48 sm:w-64 rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
+            className="pl-9 pr-4 py-2 w-48 sm:w-full rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
           />
         </form>
 
