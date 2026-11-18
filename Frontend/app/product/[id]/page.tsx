@@ -78,6 +78,8 @@ export async function generateMetadata({
       title: 'Product not found | Asan Tijarat',
       description: FALLBACK_DESCRIPTION,
       openGraph: {
+        type: 'website',
+        url: `${SITE_URL}/product/${id}`,
         title: 'Product not found | Asan Tijarat',
         description: FALLBACK_DESCRIPTION,
         images: [
@@ -113,6 +115,8 @@ export async function generateMetadata({
     title,
     description,
     openGraph: {
+      type: 'website',
+      url: `${SITE_URL}/product/${id}`,
       title,
       description,
       images: [

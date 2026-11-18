@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: 'Sign In | Asan Tijarat - Supplier & Shopkeeper Portal',
   description: 'Sign in to your Asan Tijarat account to manage orders, products and payments. Separate portals for suppliers and shopkeepers across Pakistan.',
   openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app/signin',
     title: 'Sign In | Asan Tijarat - Supplier & Shopkeeper Portal',
     description: 'Sign in to your Asan Tijarat account to manage orders, products and payments. Separate portals for suppliers and shopkeepers across Pakistan.',
     images: [

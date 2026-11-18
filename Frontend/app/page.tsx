@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: 'Asan Tijarat | B2B Wholesale Marketplace in Pakistan',
   description: 'Buy and sell bulk kiryana goods across Pakistan on Asan Tijarat. Suppliers list wholesale lots with MOQ and pack price; shopkeepers order direct, no middleman.',
   openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app',
     title: 'Asan Tijarat | B2B Wholesale Marketplace in Pakistan',
     description: 'Buy and sell bulk kiryana goods across Pakistan on Asan Tijarat. Suppliers list wholesale lots with MOQ and pack price; shopkeepers order direct, no middleman.',
     images: [
