@@ -108,7 +108,7 @@ export function ProductCard({ product }: { product: Product }) {
             <div className="text-base sm:text-lg font-extrabold text-asan-dark dark:text-asan-accent-light leading-none">
               {formatPKR(product.price)} / {pack}
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Min: {product.moq} {pack}
             </div>
             {weight && (

@@ -134,9 +134,25 @@ app.use(
     credentials: true,
   })
 );
-// 25MB: registration attaches up to three KYC documents (CNIC front/back +
-// NTN, 5MB each) as base64 data URLs — see src/utils/kycStorage.js.
-app.use(express.json({ limit: '25mb' }));
+// FIX (New audit #9) — the 25 MB JSON limit was global, so EVERY route
+// (/api/products, /api/public/contact, ...) accepted a 25 MB body. Only
+// the routes that carry base64 file uploads need it:
+//   • POST /api/auth/register — KYC docs (3 × 5 MB, see kycStorage.js)
+//   • POST /api/products + PATCH /api/products/:id — photos (5 × 5 MB)
+//   • POST /api/orders/:id/delivery-proof — one 5 MB photo
+// The upload parser runs FIRST for those routes: body-parser marks the
+// request parsed (req._body), so the global 1 MB parser below skips it.
+// A body over the route limit is rejected with 413 before any controller,
+// Turnstile check or DB call runs. (The report suggested 25 MB only on
+// register, but product photos and the delivery proof are base64 too —
+// a 1 MB global limit alone would have broken both flows.)
+const JSON_UPLOAD_LIMIT = '25mb';
+app.post('/api/auth/register', express.json({ limit: JSON_UPLOAD_LIMIT }));
+app.post('/api/products', express.json({ limit: JSON_UPLOAD_LIMIT }));
+app.patch('/api/products/:id', express.json({ limit: JSON_UPLOAD_LIMIT }));
+app.post('/api/orders/:id/delivery-proof', express.json({ limit: JSON_UPLOAD_LIMIT }));
+// Everything else: 1 MB is plenty — all other bodies are plain fields.
+app.use(express.json({ limit: '1mb' }));
 
 // asan_token cookie ko sahi tareeqe se parse karne ke liye.
 // Is se pehle protect middleware cookie ko haath se parse kar raha tha.

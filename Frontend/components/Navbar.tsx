@@ -122,7 +122,7 @@ export function Navbar() {
               <span className="font-bold text-xl leading-none text-asan-dark dark:text-asan-accent-light tracking-tight">
                 Asan Tijarat
               </span>
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-400 tracking-wide uppercase">
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-400 tracking-wide uppercase">
                 B2B Marketplace PK
               </span>
             </div>
@@ -149,11 +149,14 @@ export function Navbar() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* FIX (audit #11) — icon buttons were 36x36 px (p-2 + 20px icon),
+                below the 44x44 px touch minimum. min-h/min-w 44px + flex
+                centring keeps the icon centred; look unchanged. */}
             <button
               type="button"
               aria-label="Search products"
               onClick={() => setSearchOpen(true)}
-              className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition"
+              className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition"
               title="Search products"
             >
               <Search className="w-5 h-5" />
@@ -188,7 +191,7 @@ export function Navbar() {
                 {user.role === 'shopkeeper' && (
                   <Link
                     href="/shopkeeper/cart"
-                    className="relative p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+                    className="relative inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
                     title="Shopping Cart"
                   >
                     <ShoppingCart className="w-5 h-5" />
@@ -225,7 +228,7 @@ export function Navbar() {
               aria-label="Toggle navigation menu"
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((open) => !open)}
-              className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+              className="lg:hidden flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
