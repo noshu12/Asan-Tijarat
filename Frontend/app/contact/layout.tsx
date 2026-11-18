@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: 'Contact Asan Tijarat | Support for Suppliers & Shopkeepers',
   description: 'Questions about buying or selling wholesale on Asan Tijarat? Send us a message through the contact form and our team will get back to you soon.',
   openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app/contact',
     title: 'Contact Asan Tijarat | Support for Suppliers & Shopkeepers',
     description: 'Questions about buying or selling wholesale on Asan Tijarat? Send us a message through the contact form and our team will get back to you soon.',
     images: [

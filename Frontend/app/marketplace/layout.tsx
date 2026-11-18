@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: 'Wholesale Marketplace | Bulk Kiryana Goods - Asan Tijarat',
   description: 'Browse wholesale lots from verified suppliers across Pakistan. Compare price per pack, MOQ and stock, then order bulk kiryana goods direct from suppliers.',
   openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app/marketplace',
     title: 'Wholesale Marketplace | Bulk Kiryana Goods - Asan Tijarat',
     description: 'Browse wholesale lots from verified suppliers across Pakistan. Compare price per pack, MOQ and stock, then order bulk kiryana goods direct from suppliers.',
     images: [

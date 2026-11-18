@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: 'Get Started | Join Asan Tijarat as a Supplier or Shopkeeper',
   description: 'Create your free Asan Tijarat account in 3 steps. Suppliers list wholesale lots; shopkeepers order bulk kiryana goods direct from suppliers.',
   openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app/getstarted',
     title: 'Get Started | Join Asan Tijarat as a Supplier or Shopkeeper',
     description: 'Create your free Asan Tijarat account in 3 steps. Suppliers list wholesale lots; shopkeepers order bulk kiryana goods direct from suppliers.',
     images: [

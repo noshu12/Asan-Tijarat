@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: 'Reset Password | Asan Tijarat',
   description: 'Choose a new password for your Asan Tijarat account. It must be at least 8 characters long and is stored securely, hashed, never in plain text.',
   openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app/reset-password',
     title: 'Reset Password | Asan Tijarat',
     description: 'Choose a new password for your Asan Tijarat account. It must be at least 8 characters long and is stored securely, hashed, never in plain text.',
     images: [
