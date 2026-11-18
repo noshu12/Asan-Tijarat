@@ -2,13 +2,32 @@ const router = require('express').Router();
 const { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
 const { protect, requireRole } = require('../middleware/auth');
 const { requireTurnstile } = require('../utils/turnstile');
+const rateLimit = require('express-rate-limit');
+
+// FIX (New audit #10) — OTP/email endpoints par per-IP cap nahi tha.
+// /send-otp aur /forgot-password pe sirf global limiter (300/15 min) aur
+// auth limiter (50/15 min) lagte thay; send-otp pe per-user 60-sec gap hai
+// magar koi per-IP cap nahi — attacker 50 alag emails pe OTP trigger kar
+// ke Brevo quota jala sakta tha aur users ko spam kar sakta tha.
+// Is liye OTP bhejnewale dono routes pe dedicated limiter: 5 requests
+// per 15 min per IP. Limiter Turnstile se PEHLE chalta hai — flood ko
+// sab se saste point pe roko, Turnstile verify karne se pehle.
+// verify-otp / reset-password / check-availability is limiter se bahar
+// hain (report ne sirf send-otp aur forgot-password manga hai).
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Too many OTP requests. Please try again in a few minutes.' } },
+});
 
 router.post('/register', requireTurnstile, register);
 router.post('/login', requireTurnstile, login);
 router.post('/check-availability', checkAvailability);
-router.post('/send-otp', sendOtp);
+router.post('/send-otp', otpLimiter, sendOtp);
 router.post('/verify-otp', verifyOtp);
-router.post('/forgot-password', requireTurnstile, forgotPassword);
+router.post('/forgot-password', otpLimiter, requireTurnstile, forgotPassword);
 router.post('/reset-password', resetPassword);
 // Admin 2FA (TOTP authenticator app) — setup / verify-setup / disable need a
 // signed-in admin; the final login step is public and gated by the

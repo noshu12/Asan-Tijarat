@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import type { User } from '@/lib/types';
 
 /** What login() hands back — a signed-in session, a 2FA challenge, or a
@@ -60,8 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await api.me();
         if (mounted && res.user) setUser(res.user);
-      } catch {
-        // 401 or network error — no session.
+      } catch (err) {
+        // Guests have no session: GET /api/auth/me answers 401, and that
+        // is the expected case — return silently, no error state, no log.
+        // (Fix #14, teamily audit: the 401 used to look like an error.)
+        if (err instanceof ApiError && err.status === 401) {
+          if (mounted) setUser(null);
+          return;
+        }
+        // Anything else (network down, 5xx) — same as before: no session.
         if (mounted) setUser(null);
       } finally {
         if (mounted) setLoading(false);

@@ -40,6 +40,17 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  // Body too large (express.json limit) — body-parser throws an
+  // entity.too.large error with status 413. Without this branch it would
+  // fall through to the generic 500 below and the client would never see
+  // the real reason. (New audit #9: the 1 MB global limit is only useful
+  // if oversize bodies come back as 413, not 500.)
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: { code: 'BODY_TOO_LARGE', message: 'Request body is too large.' },
+    });
+  }
+
   console.error('[error]', err);
   res.status(500).json({
     error: { code: 'SERVER_ERROR', message: 'Something went wrong on the server.' },

@@ -107,7 +107,7 @@ export function Footer() {
             <Link href="/terms" className="hover:text-asan-accent transition">Terms &amp; Conditions</Link>
             <Link href="/privacy" className="hover:text-asan-accent transition">Privacy Policy</Link>
           </div>
-          <p className="text-[11px]">Cutting Out The Middle, Scaling Up The Profit</p>
+          <p className="text-xs">Cutting Out The Middle, Scaling Up The Profit</p>
         </div>
       </div>
     </footer>
