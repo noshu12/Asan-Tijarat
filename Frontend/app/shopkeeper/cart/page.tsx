@@ -182,7 +182,7 @@ export default function ShopkeeperCartPage() {
               {items.map((entry) => (
                 <div key={entry.product.id} className="flex items-center justify-between gap-4 py-4">
                   <div className="flex items-center gap-3 min-w-0">
-                    <ProductImage src={entry.product.image} alt={entry.product.name} className="w-14 h-14 rounded-lg object-cover shrink-0" />
+                    <ProductImage src={entry.product.image} alt={entry.product.name} className="w-14 h-14 rounded-lg object-cover shrink-0" width={56} height={56} />
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{entry.product.name}</p>
                       <p className="text-[11px] text-slate-400">

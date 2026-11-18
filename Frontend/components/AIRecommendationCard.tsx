@@ -33,6 +33,8 @@ export function AIRecommendationCard({ product }: { product: Product }) {
           src={product.image}
           alt={product.name}
           className="w-20 h-20 rounded-xl object-cover shrink-0 border border-slate-100 dark:border-slate-800"
+          width={80}
+          height={80}
         />
         <div className="flex flex-col justify-between flex-1 min-w-0">
           <div>

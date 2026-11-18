@@ -126,7 +126,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
               {selectedOrder.items.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                   <div className="flex min-w-0 items-center gap-3">
-                    <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 shrink-0 rounded-lg object-cover" />
+                    <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 shrink-0 rounded-lg object-cover" width={48} height={48} />
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.productName}</p>
                       <p className="text-[11px] text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>

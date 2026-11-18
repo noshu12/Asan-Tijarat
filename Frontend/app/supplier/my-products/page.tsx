@@ -228,7 +228,7 @@ export default function SupplierMyProductsPage() {
               <tr key={prod.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
-                    <ProductImage src={prod.image} alt={prod.name} className="w-12 h-12 rounded-xl object-cover" />
+                    <ProductImage src={prod.image} alt={prod.name} className="w-12 h-12 rounded-xl object-cover" width={48} height={48} />
                     <div>
                       <p className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{prod.name}</p>
                       <p className="text-[11px] text-slate-400">{prod.category} • {((prod as unknown as { ordersCount?: number }).ordersCount ?? 0)} total sales</p>

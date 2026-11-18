@@ -276,7 +276,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
           {order.items.map((item, idx) => (
             <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3 min-w-0">
-                <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 rounded-lg object-cover shrink-0" width={48} height={48} />
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.productName}</p>
                   <p className="text-[11px] text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>

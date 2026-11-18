@@ -108,7 +108,11 @@ export default function AdminProductsPage() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      {/* FIX (Batch 03 #16) — tablet: same wrap guard as the users filter
+          row; the search + select + Reset row is close to the ≈448px
+          content width at 768px, so it wraps instead of clipping. Desktop
+          unchanged (one row when it fits). */}
+      <div className="flex flex-col flex-wrap sm:flex-row sm:items-center gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -177,7 +181,7 @@ export default function AdminProductsPage() {
                         title="View the uploaded product photo"
                         className="relative group/thumb shrink-0 rounded-lg"
                       >
-                        <ProductImage src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />
+                        <ProductImage src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover" width={40} height={40} />
                         <span className="absolute inset-0 grid place-items-center rounded-lg bg-black/50 text-white opacity-0 group-hover/thumb:opacity-100 transition">
                           <ZoomIn className="w-3.5 h-3.5" />
                         </span>
@@ -248,6 +252,7 @@ export default function AdminProductsPage() {
               src={previewProduct.image}
               alt={`${previewProduct.name} — uploaded photo`}
               className="w-full max-h-[40vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
+              natural
             />
 
             {(previewProduct.additionalImages?.length || 0) > 0 && (
@@ -258,6 +263,8 @@ export default function AdminProductsPage() {
                     src={url}
                     alt={`${previewProduct.name} — photo ${index + 2}`}
                     className="w-full h-20 rounded-lg object-cover border border-slate-200 dark:border-slate-800"
+                    fill
+                    sizes="(max-width: 640px) 33vw, 25vw"
                   />
                 ))}
               </div>

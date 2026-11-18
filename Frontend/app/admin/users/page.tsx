@@ -244,7 +244,12 @@ export default function AdminUsersPage() {
           ⚠️ {error}
         </div>
       )}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      {/* FIX (Batch 03 #16) — tablet (~768px): search + 2 selects + Apply
+          need ≈540px in a no-wrap row, but the portal content is only
+          ≈448px wide, so the Apply button was clipped off (layout has
+          overflow-x-hidden). flex-wrap lets the selects wrap to a second
+          line on tablet; desktop is unchanged (one row when it fits). */}
+      <div className="flex flex-col flex-wrap sm:flex-row sm:items-center gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
