@@ -84,3 +84,43 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* FIX (New audit #19) — framer-motion replacements: mount-only entrance
+   animations as plain CSS keyframes. The spring easing framer-motion used
+   is matched with an ease-out curve — same distance, same duration, no JS
+   animation library involved. Exit animations (drawer / menu / search
+   panel) use transition classes driven by a `closing` state in the
+   component. `both` fill is used ONLY for mount-only elements (error /
+   404 pages, which never animate out); the enter keyframes below have NO
+   fill, so the exit transitions can take over after the entrance ends. */
+@keyframes asan-rise-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes asan-rise-in-plain {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes asan-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes asan-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes asan-menu-in {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes asan-pop-in {
+  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-asan-rise-in { animation: asan-rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-asan-rise-in-plain { animation: asan-rise-in-plain 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-asan-fade-in { animation: asan-fade-in 0.2s ease-out; }
+.animate-asan-drawer-in { animation: asan-drawer-in 0.25s ease-out; }
+.animate-asan-menu-in { animation: asan-menu-in 0.18s ease-out; }
+.animate-asan-pop-in { animation: asan-pop-in 0.2s ease-out; }

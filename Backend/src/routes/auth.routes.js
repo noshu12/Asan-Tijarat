@@ -29,22 +29,28 @@ router.post('/send-otp', otpLimiter, sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/forgot-password', otpLimiter, requireTurnstile, forgotPassword);
 router.post('/reset-password', resetPassword);
-// Admin 2FA (TOTP authenticator app) — setup / verify-setup / disable need a
-// signed-in admin; the final login step is public and gated by the
-// short-lived tempToken that login() issued with requires2FA:true.
+// 2FA (TOTP authenticator app) — setup / verify-setup / disable need a
+// signed-in admin, supplier or shopkeeper; the final login step is public
+// and gated by the short-lived tempToken that login() issued with
+// requires2FA:true. FIX (New audit #15) — suppliers and shopkeepers use
+// these same three endpoints (optional 2FA from their portal settings).
+// Sub-admins do NOT use them — their mandatory first-time setup is
+// /2fa/setup-first + /2fa/verify-setup-first below.
 // All four live under /api/auth, so the authLimiter in server.js covers them.
-router.post('/2fa/setup', protect, requireRole('admin'), setupTwoFactor);
-router.post('/2fa/verify-setup', protect, requireRole('admin'), verifyTwoFactorSetup);
-router.post('/2fa/disable', protect, requireRole('admin'), disableTwoFactor);
+router.post('/2fa/setup', protect, requireRole('admin', 'shopkeeper', 'supplier'), setupTwoFactor);
+router.post('/2fa/verify-setup', protect, requireRole('admin', 'shopkeeper', 'supplier'), verifyTwoFactorSetup);
+router.post('/2fa/disable', protect, requireRole('admin', 'shopkeeper', 'supplier'), disableTwoFactor);
 router.post('/2fa/login', verifyTwoFactorLogin);
 // Dedicated ADMIN login (admin subdomain) — issues the host-only
 // asan_admin_token cookie. Turnstile-protected like the regular login.
 // The regular /login above now rejects admin/subadmin roles.
 router.post('/admin/login', requireTurnstile, adminLogin);
 router.post('/admin/2fa/login', adminVerifyTwoFactorLogin);
-// Sub-admin FIRST-TIME 2FA setup — public, gated by the short-lived setup
-// tempToken login() issued with requires2FASetup:true (the sub-admin has no
-// session yet, so protect() cannot be used here).
+// ADMIN + SUB-ADMIN FIRST-TIME 2FA setup — public, gated by the short-lived
+// setup tempToken adminLogin() issued with requires2FASetup:true (the account
+// has no session yet, so protect() cannot be used here). FIX (New audit #5)
+// — the main admin uses this same flow: 2FA is mandatory for the main admin
+// too, so a first sign-in without it routes here exactly like a sub-admin's.
 router.post('/2fa/setup-first', setupTwoFactorFirst);
 router.post('/2fa/verify-setup-first', verifyTwoFactorSetupFirst);
 router.post('/logout', protect, logout);

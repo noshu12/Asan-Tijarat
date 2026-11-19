@@ -2,11 +2,19 @@
 //
 // Two hosts, two worlds:
 //  - ADMIN_HOST (e.g. admin.asantijarat.com, or admin.localhost:3000 in dev):
-//    only /admin/* (+ the sub-admin first-time 2FA setup page) is served.
+//    only /admin/* (+ the admin/sub-admin first-time 2FA setup page) is served.
 //    Anything else redirects to /admin/login.
 //  - Main host: /admin/* returns 404 (the admin panel does not exist here).
 //    When ADMIN_HOST is unset (plain local dev), /admin/* keeps working on
 //    the main host so existing workflows don't break.
+//
+// FIX (New audit #5, decision 2026-11-19) — ADMIN_HOST is UNSET by deliberate
+// choice: no domain is bought yet, so there is no admin subdomain and the
+// isolation above stays off. /admin/* keeps working on the main host. The
+// admin panel is protected instead by MANDATORY main-admin 2FA (see adminLogin
+// in Backend/src/controllers/auth.controller.js). When a domain is bought
+// later, set ADMIN_HOST and this isolation activates automatically — no code
+// change needed then.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';

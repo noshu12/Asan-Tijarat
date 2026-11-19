@@ -2,7 +2,8 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+// FIX (New audit #19) — mount-only entrance (opacity 0→1, y 18→0,
+// scale 0.98→1, 0.45s) is now the CSS .animate-asan-rise-in keyframe.
 import { AlertTriangle, RefreshCw, House } from 'lucide-react';
 
 /**
@@ -23,11 +24,8 @@ export default function Error({
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16 bg-slate-50 dark:bg-slate-950">
-      <motion.div
-        initial={{ opacity: 0, y: 18, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', duration: 0.45 }}
-        className="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/60 dark:shadow-black/20 p-10 text-center"
+      <div
+        className="w-full max-w-lg rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/60 dark:shadow-black/20 p-10 text-center animate-asan-rise-in"
       >
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/50">
           <AlertTriangle className="h-8 w-8 text-asan-error" />
@@ -63,7 +61,7 @@ export default function Error({
             Error ref: {error.digest}
           </p>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }

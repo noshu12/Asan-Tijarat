@@ -45,7 +45,8 @@ export default function AdminLoginPage() {
       const result = await api.adminLogin(identifier.trim(), password, tsToken || undefined);
 
       if ('requires2FASetup' in result) {
-        // Sub-admin first sign-in — 2FA setup is mandatory.
+        // Admin/sub-admin first sign-in without 2FA — setup is mandatory
+        // (FIX New audit #5: the main admin uses this same flow now).
         sessionStorage.setItem('subadmin_setup_token', result.tempToken || '');
         router.push('/subadmin-setup');
         return;

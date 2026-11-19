@@ -2,18 +2,16 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+// FIX (New audit #19) — mount-only entrance (opacity 0→1, y 18→0, 0.5s)
+// is now the CSS .animate-asan-rise-in-plain keyframe.
 import { House, SearchX, Store } from 'lucide-react';
 
 /** Custom 404 — keeps lost traders inside the Asan Tijarat funnel. */
 export default function NotFound() {
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16 bg-slate-50 dark:bg-slate-950">
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', duration: 0.5 }}
-        className="w-full max-w-xl text-center"
+      <div
+        className="w-full max-w-xl text-center animate-asan-rise-in-plain"
       >
         <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-asan-border bg-asan-accent-light dark:border-asan-mid dark:bg-asan-dark/50">
           <SearchX className="h-10 w-10 text-asan-accent" />
@@ -46,7 +44,7 @@ export default function NotFound() {
             Browse Marketplace
           </Link>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

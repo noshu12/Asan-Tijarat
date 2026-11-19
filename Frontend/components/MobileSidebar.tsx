@@ -1,9 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Menu } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import { Sidebar } from './Sidebar';
+
+// FIX (New audit #19) — the slide-in drawer + backdrop fade were
+// framer-motion (AnimatePresence + motion.div/aside). Same motion in plain
+// CSS now: the entrance is a keyframe (animate-asan-drawer-in /
+// animate-asan-fade-in, globals.css) and the exit is a `closing` state
+// that flips transition classes to the hidden state; the drawer stays
+// mounted for CLOSE_MS so the slide-out can play, exactly like
+// AnimatePresence's exit did. Timing kept: 250 ms slide, ease-out.
+// The drawer state is local to this component, so the exit lifecycle is
+// fully contained here — nothing else in the app depends on it.
+const CLOSE_MS = 250;
 
 /**
  * 📱 MOBILE SIDEBAR — slide-in navigation drawer for portal pages (< md).
@@ -16,14 +27,45 @@ import { Sidebar } from './Sidebar';
  * the static sidebar is visible.
  */
 export function MobileSidebar() {
-  const [isOpen, setIsOpen] = useState(false);
+  // `rendered` keeps the drawer mounted while the slide-out transition
+  // plays; `closing` flips the transition classes to the hidden state.
+  const [rendered, setRendered] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | null>(null);
 
-  // Close on Escape + lock background scroll while the drawer is open.
+  const openDrawer = () => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setClosing(false);
+    setRendered(true);
+  };
+
+  const closeDrawer = () => {
+    if (!rendered || closing) return;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      setRendered(false);
+      setClosing(false);
+      closeTimer.current = null;
+    }, CLOSE_MS);
+  };
+
+  // Never leave a pending close timer behind on unmount.
   useEffect(() => {
-    if (!isOpen) return;
+    return () => {
+      if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  // Close on Escape + lock background scroll while the drawer is open
+  // (including the slide-out, so the page never scrolls under it).
+  useEffect(() => {
+    if (!rendered) return;
 
     const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
+      if (event.key === 'Escape') closeDrawer();
     };
     document.addEventListener('keydown', handleEscapeKey);
 
@@ -34,7 +76,10 @@ export function MobileSidebar() {
       document.removeEventListener('keydown', handleEscapeKey);
       document.body.style.overflow = previousOverflow;
     };
-  }, [isOpen]);
+    // closeDrawer only reads refs + stable setters, so depending on it
+    // would re-subscribe on every render for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rendered]);
 
   return (
     <>
@@ -42,37 +87,34 @@ export function MobileSidebar() {
       <button
         type="button"
         aria-label="Open navigation menu"
-        onClick={() => setIsOpen(true)}
+        onClick={openDrawer}
         className="fixed bottom-5 left-5 z-[900] md:hidden w-14 h-14 rounded-full bg-asan-accent text-white shadow-xl shadow-asan-dark/40 flex items-center justify-center active:scale-95 transition"
       >
         <Menu className="w-6 h-6" />
       </button>
 
-      <AnimatePresence>
-        {isOpen && (
-          <div className="fixed inset-0 z-[1000] md:hidden">
-            {/* Dimmed backdrop — tap to dismiss */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
+      {rendered && (
+        <div className="fixed inset-0 z-[1000] md:hidden">
+          {/* Dimmed backdrop — tap to dismiss */}
+          <div
+            onClick={closeDrawer}
+            className={cn(
+              'absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-asan-fade-in',
+              closing ? 'opacity-0' : 'opacity-100'
+            )}
+          />
 
-            {/* Slide-in panel (starts below the sticky navbar) */}
-            <motion.aside
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-              className="absolute top-16 bottom-0 left-0 w-72 max-w-[82vw] shadow-2xl"
-            >
-              <Sidebar onNavigate={() => setIsOpen(false)} />
-            </motion.aside>
-          </div>
-        )}
-      </AnimatePresence>
+          {/* Slide-in panel (starts below the sticky navbar) */}
+          <aside
+            className={cn(
+              'absolute top-16 bottom-0 left-0 w-72 max-w-[82vw] shadow-2xl transition-transform duration-[250ms] ease-out animate-asan-drawer-in',
+              closing ? '-translate-x-full' : 'translate-x-0'
+            )}
+          >
+            <Sidebar onNavigate={closeDrawer} />
+          </aside>
+        </div>
+      )}
     </>
   );
 }

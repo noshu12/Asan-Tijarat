@@ -56,6 +56,63 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+/* ── CSRF double-submit token (New audit #20) ───────────────────────── */
+
+/**
+ * The backend sets a non-httpOnly `asan_csrf` cookie on every /api GET and
+ * verifies `x-csrf-token` == cookie on every state-changing call.
+ * Same-origin (localhost) the token is read straight from document.cookie;
+ * cross-origin (Vercel → Render) the cookie is not readable from JS, so
+ * GET /api/auth/csrf-token returns the same value in its JSON body. The
+ * value is cached in memory for the page lifetime; a 403
+ * CSRF_TOKEN_INVALID clears it and the request is retried once with a
+ * fresh token (safe: the 403 means the server never ran the handler).
+ */
+const CSRF_COOKIE = 'asan_csrf';
+const CSRF_HEADER = 'x-csrf-token';
+let csrfTokenCache: string | null = null;
+let csrfTokenInflight: Promise<string> | null = null;
+
+function readCsrfCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function ensureCsrfToken(): Promise<string> {
+  if (csrfTokenCache) return csrfTokenCache;
+  const fromCookie = readCsrfCookie();
+  if (fromCookie) {
+    csrfTokenCache = fromCookie;
+    return fromCookie;
+  }
+  if (!csrfTokenInflight) {
+    csrfTokenInflight = (async () => {
+      const url = isAdminHost() ? '/backend-api/auth/csrf-token' : `${API_URL}/api/auth/csrf-token`;
+      const res = await fetch(url, { credentials: 'include' });
+      const data = (await res.json().catch(() => null)) as { csrfToken?: string } | null;
+      const token = data?.csrfToken || readCsrfCookie() || '';
+      csrfTokenInflight = null;
+      if (!token) {
+        throw new ApiError(
+          0,
+          'CSRF_TOKEN_UNAVAILABLE',
+          'Could not obtain a CSRF token. Refresh the page and try again.'
+        );
+      }
+      csrfTokenCache = token;
+      return token;
+    })();
+  }
+  return csrfTokenInflight;
+}
+
+/** Headers for the one direct fetch() POST outside this client (contact form). */
+export async function csrfHeaders(): Promise<Record<string, string>> {
+  const token = await ensureCsrfToken();
+  return { [CSRF_HEADER]: token };
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, auth = true } = options;
 
@@ -65,41 +122,62 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // path is always /api/... here → /backend-api/... (see next.config.js).
   const url = isAdminHost() ? `/backend-api${path.replace(/^\/api/, '')}` : `${API_URL}${path}`;
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch {
-    throw new ApiError(
-      0,
-      'NETWORK_ERROR',
-      'Cannot reach the API server. Start the backend (npm start in Backend/) and refresh. ' +
-        'If it is already running, this page’s origin is probably not allowed by the server’s ' +
-        'CORS config (CLIENT_ORIGIN in Backend/.env) — open the app on http://localhost:3000.'
-    );
-  }
+  const isStateChanging = method !== 'GET';
+  // One retry only, and only for a stale CSRF token (see below).
+  let retried = false;
 
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    /* empty body */
-  }
+  for (;;) {
+    // State-changing calls carry the double-submit token (New audit #20).
+    // GETs never need it. Server-side calls never reach here — every
+    // request() caller is a client component.
+    if (isStateChanging && typeof window !== 'undefined') {
+      headers[CSRF_HEADER] = await ensureCsrfToken();
+    }
 
-  if (!response.ok) {
-    const errorPayload = (payload as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new ApiError(
-      response.status,
-      errorPayload?.code || 'REQUEST_FAILED',
-      errorPayload?.message || `Request failed with status ${response.status}`
-    );
-  }
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        credentials: 'include',
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch {
+      throw new ApiError(
+        0,
+        'NETWORK_ERROR',
+        'Cannot reach the API server. Start the backend (npm start in Backend/) and refresh. ' +
+          'If it is already running, this page’s origin is probably not allowed by the server’s ' +
+          'CORS config (CLIENT_ORIGIN in Backend/.env) — open the app on http://localhost:3000.'
+      );
+    }
 
-  return payload as T;
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      /* empty body */
+    }
+
+    if (!response.ok) {
+      const errorPayload = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+      // The token went stale (e.g. its 24 h expired while the tab was
+      // open). The server rejected the call before running the handler,
+      // so retrying once with a fresh token is safe.
+      if (!retried && response.status === 403 && errorPayload?.code === 'CSRF_TOKEN_INVALID') {
+        csrfTokenCache = null;
+        retried = true;
+        continue;
+      }
+      throw new ApiError(
+        response.status,
+        errorPayload?.code || 'REQUEST_FAILED',
+        errorPayload?.message || `Request failed with status ${response.status}`
+      );
+    }
+
+    return payload as T;
+  }
 }
 
 /* ── Payload types ─────────────────────────────────────────────────── */
