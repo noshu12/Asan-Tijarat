@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description: 'Choose a new password for your Asan Tijarat account. It must be at least 8 characters long and is stored securely, hashed, never in plain text.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/reset-password',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

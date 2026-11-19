@@ -25,6 +25,10 @@ export const metadata: Metadata = {
     description: 'Buy and sell bulk kiryana goods across Pakistan on Asan Tijarat. Suppliers list wholesale lots with MOQ and pack price; shopkeepers order direct, no middleman.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/',
+  },
 };
 
 export default function HomePage() {

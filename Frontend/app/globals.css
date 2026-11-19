@@ -117,6 +117,16 @@ body {
   from { opacity: 0; transform: translateY(-20px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+/* FIX (New audit #19, Batch 7 Item 1) — Modal entrance: the exact values
+   the old framer-motion panel used (opacity 0, y +20px, scale 0.95 ->
+   opacity 1, y 0, scale 1, 0.3s). asan-pop-in drops from -20px, so it
+   does not match the modal's old rise-from-below motion; this one does.
+   NO fill, like the other enter keyframes, so the `closing` transition
+   classes can take over for the exit. */
+@keyframes asan-modal-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .animate-asan-rise-in { animation: asan-rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .animate-asan-rise-in-plain { animation: asan-rise-in-plain 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -124,3 +134,4 @@ body {
 .animate-asan-drawer-in { animation: asan-drawer-in 0.25s ease-out; }
 .animate-asan-menu-in { animation: asan-menu-in 0.18s ease-out; }
 .animate-asan-pop-in { animation: asan-pop-in 0.2s ease-out; }
+.animate-asan-modal-in { animation: asan-modal-in 0.3s cubic-bezier(0.22, 1, 0.36, 1); }

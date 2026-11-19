@@ -62,7 +62,10 @@ jobs:
       # Install exactly the versions in package-lock.json.
       - name: Install dependencies
         run: npm ci
-      # Syntax-check every backend file (no test or lint script exists yet —
-      # if `npm test` is added later, add a `run: npm test` step here).
+      # Syntax-check every backend file.
       - name: Syntax check
         run: for f in $(find server.js src -name '*.js'); do node --check "$f" || exit 1; done
+      # Run the backend test suite (node:test, built-in — no extra deps,
+      # no MongoDB, no network). Starter coverage: fee math + CSRF.
+      - name: Test
+        run: npm test

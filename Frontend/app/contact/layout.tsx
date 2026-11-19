@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description: 'Questions about buying or selling wholesale on Asan Tijarat? Send us a message through the contact form and our team will get back to you soon.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/contact',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description: 'Create your free Asan Tijarat account in 3 steps. Suppliers list wholesale lots; shopkeepers order bulk kiryana goods direct from suppliers.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/getstarted',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description: 'Locked out of your Asan Tijarat supplier or shopkeeper account? Enter your registered email address and we will send a secure password reset link.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/forgot-password',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
