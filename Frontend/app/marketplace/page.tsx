@@ -1,10 +1,10 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
 import { Footer } from '@/components/Footer';
-import { Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
 type SortOption = 'price-asc' | 'price-desc';
@@ -90,6 +90,33 @@ function MarketplaceContent() {
   const [cities, setCities] = useState<string[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
+
+  // Category dropdown (custom, not a native <select>): the button sits in
+  // the search row next to the Price sort; the list opens right under the
+  // button as an overlay (absolute, z-50) over the filters/products
+  // below, and closes on any tap/click outside or Escape.
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const categoryMenuRef = useRef<HTMLDivElement>(null);
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!isCategoryOpen) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (categoryMenuRef.current && !categoryMenuRef.current.contains(e.target as Node)) {
+        setIsCategoryOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsCategoryOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isCategoryOpen]);
 
   // Debounced search so we don't hit the API on every keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
@@ -232,15 +259,9 @@ function MarketplaceContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-asan-accent dark:text-asan-accent-light">
-                Wholesale Commodities Directory
-              </span>
               <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
                 Public Marketplace
               </h1>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Direct wholesale rates from verified Pakistani farmers, millers & factories
-              </p>
             </div>
 
             {/* Quick Stats Badges */}
@@ -254,48 +275,92 @@ function MarketplaceContent() {
             </div>
           </div>
 
-          {isInitialLoading && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-              <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-200 border-t-asan-accent animate-spin" />
-              Loading catalogue from the backend…
-            </div>
-          )}
+          {/* Search Bar + Sort + Category dropdown (CATEGORY DROPDOWN,
+              Batch 10 follow-up #5 — search this marker to confirm the
+              new file is the one applied). The Category button sits next
+              to the Price sort; its list opens right under the button as
+              an overlay, and closes on any tap outside. */}
+          <div>
+            <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative flex-1 w-full">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  aria-label="Search marketplace products"
+                  type="text"
+                  placeholder="Search products, suppliers, cities (e.g. Basmati Rice, Faisalabad Cotton, Multan)..."
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear marketplace search"
+                    onClick={() => { setSearchQuery(''); setPage(1); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
 
-          {/* Search Bar + Sort */}
-          <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                aria-label="Search marketplace products"
-                type="text"
-                placeholder="Search products, suppliers, cities (e.g. Basmati Rice, Faisalabad Cotton, Multan)..."
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  aria-label="Clear marketplace search"
-                  onClick={() => { setSearchQuery(''); setPage(1); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                {/* Category dropdown — button + overlay list anchored
+                    right under it (absolute, z-50, over the content
+                    below — not pushing it down). */}
+                <div ref={categoryMenuRef} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isCategoryOpen}
+                    onClick={() => setIsCategoryOpen((o) => !o)}
+                    className={`${inputCls} flex items-center gap-2 whitespace-nowrap`}
+                  >
+                    <span className="truncate max-w-36 sm:max-w-52">
+                      Category: {MARKETPLACE_CATEGORIES.find((c) => c.id === selectedCategory)?.name ?? 'All'}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${isCategoryOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isCategoryOpen && (
+                    <div
+                      role="listbox"
+                      aria-label="Categories"
+                      className="absolute left-0 sm:left-auto sm:right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-[190px] overflow-y-auto py-1"
+                    >
+                      {MARKETPLACE_CATEGORIES.map((cat) => {
+                        const isSelected = selectedCategory === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => { setSelectedCategory(cat.id); setPage(1); setIsCategoryOpen(false); }}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition ${
+                              isSelected
+                                ? 'bg-asan-dark text-white font-bold'
+                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold'
+                            }`}
+                          >
+                            {cat.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                {/* Sort By Dropdown */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => { setSortBy(e.target.value as SortOption); setPage(1); }}
+                  className={inputCls}
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+                  <option value="price-asc">Price: Low to High</option>
+                  <option value="price-desc">Price: High to Low</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* Sort By Dropdown */}
-              <select
-                value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value as SortOption); setPage(1); }}
-                className={inputCls}
-              >
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-              </select>
-            </div>
           </div>
 
           {/* Extra filters: city, price range, in-stock */}
@@ -351,27 +416,6 @@ function MarketplaceContent() {
             )}
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {MARKETPLACE_CATEGORIES.map((cat) => {
-              const isSelected = selectedCategory === cat.id;
-              return (
-                <button
-                  type="button"
-                  aria-pressed={isSelected}
-                  key={cat.id}
-                  onClick={() => { setSelectedCategory(cat.id); setPage(1); }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                    isSelected
-                      ? 'bg-asan-dark text-white shadow-md'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700'
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 

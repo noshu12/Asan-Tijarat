@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
+import { notFound } from 'next/navigation';
 import ProductDetailClient from './ProductDetailClient';
 import type { Product } from '@/lib/types';
 import { fileUrl } from '@/lib/api';
@@ -19,6 +21,32 @@ import { formatPKR } from '@/lib/utils';
  * its loading / "Product not found" / "Couldn't load this product" states
  * — the server fetch below is ONLY for metadata, so a metadata failure
  * can never break the page itself.
+ *
+ * M2 (Round-4 Batch 10): an invalid id used to return HTTP 200 with a
+ * "Product not found" body (a soft-404). Now, when the metadata fetch
+ * DEFINITIVELY finds no product — the API answers 404, or answers 400
+ * (malformed id: Mongoose CastError → the error handler's 400; a GET
+ * /api/products/:id has no request body, so its only 400 is an invalid
+ * id format, and an invalid id can never be a real product), or answers
+ * 200 with a null/empty/malformed product — the page component below
+ * calls notFound(), so Next serves the styled app/not-found.tsx page
+ * with a real HTTP 404. The distinction is deliberate: if the fetch
+ * THROWS (backend down / cold Render) or the API answers any other
+ * error status, the result is 'unknown' and the page keeps its old
+ * behaviour (fallback metadata + the client's own states, HTTP 200) —
+ * a real product is NEVER 404'd just because the backend was
+ * unreachable. ProductDetailClient.tsx is unchanged.
+ *
+ * Implementation note (verified by testing, do not "simplify"): the
+ * notFound() call lives in the PAGE component, NOT in generateMetadata().
+ * Calling notFound() inside generateMetadata() does set HTTP 404, but
+ * Next 14.2.35 then serves only a bare `__next_error__` shell with no
+ * page content in the HTML — the styled 404 page would only appear
+ * after client-side JS runs, so crawlers and no-JS users get a blank
+ * page. notFound() in the page component renders the full styled 404
+ * page server-side, exactly like a 404 for an unknown route.
+ * generateMetadata() and the page share one fetch via React cache(),
+ * so the backend is still hit only once per request.
  */
 
 const SITE_URL = 'https://asan-tijarat.vercel.app';
@@ -41,24 +69,62 @@ function backendOrigin(): string {
   }
 }
 
-/** Fetch one product for metadata only. null = not found OR backend down. */
-async function fetchProductForMetadata(id: string): Promise<Product | null> {
+/**
+ * Result of the metadata-only product fetch.
+ *
+ * - 'found': the API returned a real product — build its metadata.
+ * - 'not-found': the API DEFINITIVELY says no such product exists
+ *   (HTTP 404, HTTP 400 for a malformed id, or HTTP 200 with a
+ *   null/empty/malformed product). Only this case may 404 the page.
+ * - 'unknown': the fetch threw (backend down / network error) or the API
+ *   answered an unexpected error status (500, 502, ...). We do NOT know
+ *   whether the product exists, so the page must keep its old fallback
+ *   behaviour (fallback metadata, HTTP 200) — never 404 a real product
+ *   just because the backend was unreachable.
+ */
+type MetadataFetchResult =
+  | { status: 'found'; product: Product }
+  | { status: 'not-found' }
+  | { status: 'unknown' };
+
+/** Fetch one product for metadata only. Cached per request: generateMetadata
+ * and the page component below share this one call, so the backend is hit
+ * only once per request. */
+const fetchProductForMetadata = cache(async (id: string): Promise<MetadataFetchResult> => {
+  let res: Response;
   try {
-    const res = await fetch(`${backendOrigin()}/api/products/${encodeURIComponent(id)}`, {
+    res = await fetch(`${backendOrigin()}/api/products/${encodeURIComponent(id)}`, {
       next: { revalidate: 60 },
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { product?: Product } | null;
-    const product = data?.product;
-    // Guard against a malformed payload — never build metadata from junk.
-    if (!product || typeof product.name !== 'string' || !product.name) return null;
-    return product;
   } catch {
-    // Backend down / network error: metadata falls back, the client UI
-    // still shows its own "Couldn't load this product" state.
-    return null;
+    // Backend down / network error: we know nothing about this product.
+    return { status: 'unknown' };
   }
-}
+
+  // A 404 from the API is a definitive "no such product" answer.
+  // So is a 400: this endpoint has no request body, so its only 400 is
+  // an invalid id format (Mongoose CastError), and a malformed id can
+  // never belong to a real product (all ids are 24-hex ObjectIds).
+  if (res.status === 404 || res.status === 400) return { status: 'not-found' };
+  // Any other error status (500, 502, ...) is NOT definitive — the
+  // product may well exist and the backend is just having trouble.
+  if (!res.ok) return { status: 'unknown' };
+
+  let data: { product?: Product } | null;
+  try {
+    data = (await res.json()) as { product?: Product } | null;
+  } catch {
+    // Unparseable body: cannot confirm anything about the product.
+    return { status: 'unknown' };
+  }
+  const product = data?.product;
+  // HTTP 200 but no usable product in the body: the API answered, and
+  // the answer is "there is no product here" — definitive.
+  if (!product || typeof product.name !== 'string' || !product.name) {
+    return { status: 'not-found' };
+  }
+  return { status: 'found', product };
+});
 
 const FALLBACK_DESCRIPTION =
   'Browse wholesale lots from verified suppliers across Pakistan. Compare price per pack, MOQ and stock, then order bulk kiryana goods direct from suppliers.';
@@ -69,11 +135,17 @@ export async function generateMetadata({
   params: { id: string };
 }): Promise<Metadata> {
   const { id } = params;
-  const product = await fetchProductForMetadata(id);
+  const result = await fetchProductForMetadata(id);
 
-  if (!product) {
-    // Unknown id → "Product not found" title; backend down → same generic
-    // fallback. Either way nothing is invented about a product we do not have.
+  if (result.status !== 'found') {
+    // 'not-found' → the page component below calls notFound(), so this
+    // fallback metadata is discarded and the styled 404 page is served
+    // instead (see the note at the top of this file for why notFound()
+    // must NOT be called here). 'unknown' (backend down / unexpected
+    // error) → we do NOT know whether the product exists, so keep the
+    // old fallback (generic metadata, HTTP 200) and let the client show
+    // its own "Couldn't load this product" state. Nothing is invented
+    // about a product we do not have.
     return {
       title: 'Product not found | Asan Tijarat',
       description: FALLBACK_DESCRIPTION,
@@ -100,6 +172,8 @@ export async function generateMetadata({
       alternates: { canonical: `${SITE_URL}/product/${id}` },
     };
   }
+
+  const product = result.product;
 
   const title = `${product.name} | Asan Tijarat`;
   // Real fields only: the product's own description when it has one,
@@ -138,6 +212,19 @@ export async function generateMetadata({
   };
 }
 
-export default function ProductDetailPage({ params }: { params: { id: string } }) {
+export default async function ProductDetailPage({ params }: { params: { id: string } }) {
+  const result = await fetchProductForMetadata(params.id);
+
+  if (result.status === 'not-found') {
+    // Definitive "no such product" (API 404, or 200 with no product):
+    // serve the real 404 page + HTTP 404 (app/not-found.tsx) instead of
+    // a 200 "Product not found" page. notFound() throws, so the client
+    // below never mounts for this case. 'unknown' (backend down /
+    // unexpected error) deliberately falls through to the client, which
+    // shows its own "Couldn't load this product" state with HTTP 200 —
+    // a real product is never 404'd because the backend was unreachable.
+    notFound();
+  }
+
   return <ProductDetailClient id={params.id} />;
 }

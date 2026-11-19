@@ -168,11 +168,32 @@ const nextConfig = {
   // FIX (Audit fix #7) — security headers, har route pe.
   // CSP report-only hai (enforce nahi), is liye galat rule se bhi
   // site nahi tootegi — sirf console me report aayegi.
+  //
+  // FIX (Round-4 M4, Batch 10) — Access-Control-Allow-Origin.
+  // Live site pe har Vercel response par `ACAO: *` aa raha tha (audit
+  // 2026-11-20, curl se verify: /, /robots.txt, /logo.png, 404). Repo
+  // code me kahin `*` set nahi hota — poora repo grep kiya: sirf
+  // Backend/server.js ke comments me ACAO ka zikr hai, backend khud
+  // allow-listed origins ko hi ACAO deta hai (CLIENT_ORIGIN, `*`
+  // explicitly filter hota hai), Frontend/vercel.json me koi headers
+  // block nahi, aur next.config.mjs pehle koi ACAO set nahi karta tha.
+  // Is liye yahan explicit restrictive origin set kiya hai — site ka
+  // apna origin, wildcard nahi.
+  // HARD CONSTRAINT: /backend-api/* ko ye header NAHI lagna chahiye —
+  // backend apni allow-list ke mutabiq khud ACAO set karta hai, aur API
+  // response par EXACTLY ONE ACAO hona chahiye (backend wala). Is liye
+  // pehle stub-backend test se verify kiya gaya ke Next.js ke headers()
+  // rewritten responses par apply NAHI hote (dekho FIX-NOTE.md, M4
+  // section) — is entry ke bawajood /backend-api/* par sirf backend ka
+  // ACAO aata hai. Agar kabhi Next.js ka version badle to ye test dobara
+  // chalana lazmi hai; agar do ACAO nazar aayen to ye header yahan se
+  // hata kar middleware wala tareeqa use karo (FIX-NOTE me likha hai).
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
+          { key: 'Access-Control-Allow-Origin', value: 'https://asan-tijarat.vercel.app' },
           { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
