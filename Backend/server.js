@@ -49,6 +49,7 @@ const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const connectDB = require('./src/config/db');
 const { checkDb } = require('./src/middleware/auth');
+const { csrfProtection } = require('./src/middleware/csrf');
 const { notFound, errorHandler } = require('./src/middleware/errorHandler');
 
 const app = express();
@@ -177,6 +178,13 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth', authLimiter);
 
+// FIX (New audit #20) — CSRF double-submit token. Mounted after the rate
+// limiters (so a flood is still rate-limited) and after cookieParser (the
+// token is read from req.cookies). Verifies x-csrf-token == asan_csrf
+// cookie on every state-changing /api call; GETs just get a token issued.
+// Runs before checkDb so the token is available even while the DB is down.
+app.use(csrfProtection);
+
 // Sirf product images public hain. KYC folder yahan se HATA diya gaya hai,
 // warna /uploads/kyc/<file> bina login ke khul jata tha.
 // Admin ke liye KYC preview baad mein ek authenticated route se wapas
@@ -198,6 +206,19 @@ app.get('/api/health', (req, res) => {
     time: new Date().toISOString(),
     db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   });
+});
+
+// FIX (New audit #20) — CSRF token endpoint, defined here (next to
+// /api/health) instead of auth.routes.js on purpose: it must work even
+// while the DB is down, and checkDb below 503s every router-mounted
+// route when Mongo is unreachable. The csrfProtection middleware above
+// already set the asan_csrf cookie on this GET and exposed the value as
+// req.csrfToken; this returns the same value in JSON for the cross-origin
+// case (the Vercel frontend cannot read the Render cookie from
+// document.cookie). Public — the token is useless without the matching
+// cookie, which only this browser holds.
+app.get('/api/auth/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken || '' });
 });
 
 // Fast 503 while the DB is down — no slow mongoose timeouts.

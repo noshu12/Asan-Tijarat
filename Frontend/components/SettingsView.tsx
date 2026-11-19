@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
 import { api, ApiError } from '@/lib/api';
+import { TwoFactorSettings } from '@/components/TwoFactorSettings';
 import { useAuth } from '@/context/AuthProvider';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
 import { Check, MapPin, Eye, EyeOff, ChevronDown } from 'lucide-react';
@@ -739,6 +740,10 @@ export function SettingsView({ role }: SettingsViewProps) {
           </Button>
         </form>
       </div>
+
+      {/* Two-factor authentication — optional TOTP 2FA (New audit #15).
+          Same setup/verify/disable flow as the admin security page. */}
+      <TwoFactorSettings role={role} />
 
       {/* Notification channels — stored per account */}
       <div className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-6">

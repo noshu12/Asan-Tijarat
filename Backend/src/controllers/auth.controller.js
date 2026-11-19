@@ -487,6 +487,19 @@ async function login(req, res, next) {
     // FIX (Batch 02) — yahan admin 2FA ka block bhi DEAD CODE tha (upar
     // USE_ADMIN_PORTAL return ki wajah se). Admin 2FA sirf adminLogin()
     // me hota hai, jo { requires2FA: true, tempToken } deta hai.
+    // FIX (New audit #15) — 2FA is OPTIONAL for shopkeeper/supplier
+    // accounts. If this account enabled it, the password alone is not
+    // enough: return the same { requires2FA: true, tempToken } adminLogin()
+    // returns, and POST /api/auth/2fa/login finishes the sign-in. Accounts
+    // WITHOUT 2FA sail straight past this block — their login is unchanged.
+    if (user.twoFactorEnabled) {
+      const tempToken = jwt.sign(
+        { id: user._id, purpose: '2fa' },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requires2FA: true, tempToken });
+    }
     // Single-session: a fresh login kills the previous session on any other
     // device/browser. The bump sits here (not above) so a password-only
     // attempt never logs the real user out before the 2FA code is verified.
@@ -507,7 +520,9 @@ async function login(req, res, next) {
  *  - rejects every non-admin role (suppliers/shopkeepers use /login),
  *  - issues the host-only `asan_admin_token` cookie instead of asan_token.
  * Turnstile-protected like the regular login (see auth.routes.js).
- * 2FA flow is identical: { requires2FA:true, tempToken } →
+ * 2FA is mandatory for admin + subadmin: a first sign-in without 2FA
+ * returns { requires2FASetup:true, tempToken } (first-time setup page);
+ * with 2FA enabled it returns { requires2FA:true, tempToken } →
  * POST /api/auth/admin/2fa/login.
  */
 async function adminLogin(req, res, next) {
@@ -563,8 +578,13 @@ async function adminLogin(req, res, next) {
     user.lockUntil = undefined;
     await user.save();
 
-    // Sub-admin 2FA is MANDATORY — first-time setup via the tempToken.
-    if (user.role === 'subadmin' && !user.twoFactorEnabled) {
+    // FIX (New audit #5) — 2FA is MANDATORY for the main admin too, not just
+    // the sub-admin. No domain is bought yet, so /admin/* stays on the main
+    // host and the login itself must be hardened: a main admin signing in
+    // without 2FA gets requires2FASetup (the same first-time setup flow as
+    // the sub-admin) instead of a session. Once 2FA is enabled, the
+    // requires2FA code step below applies.
+    if ((user.role === 'admin' || user.role === 'subadmin') && !user.twoFactorEnabled) {
       const setupToken = jwt.sign(
         { id: user._id, purpose: '2fa-setup' },
         process.env.JWT_SECRET,
@@ -679,17 +699,21 @@ async function logout(req, res, next) {
 }
 
 /**
- * POST /api/auth/2fa/setup  (protected, admin only)
+ * POST /api/auth/2fa/setup  (protected, admin + supplier + shopkeeper)
  * Generates a fresh TOTP secret, stores it as the PENDING secret and returns
  * the otpauth URL + a QR data URL for the authenticator app. 2FA is NOT
  * enabled until POST /api/auth/2fa/verify-setup confirms the first code —
- * so a wrongly scanned QR can never lock the admin out.
+ * so a wrongly scanned QR can never lock the account out.
+ * FIX (New audit #15) — suppliers and shopkeepers use this same endpoint
+ * (optional 2FA, enabled from their portal settings). Sub-admins do NOT
+ * use it — their first-time setup is mandatory and goes through
+ * POST /api/auth/2fa/setup-first.
  */
 async function setupTwoFactor(req, res, next) {
   try {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin' && req.user.role !== 'shopkeeper' && req.user.role !== 'supplier') {
       return res.status(403).json({
-        error: { code: 'FORBIDDEN', message: 'Two-factor setup is available for admin accounts only.' },
+        error: { code: 'FORBIDDEN', message: 'Two-factor setup is available for admin, supplier and shopkeeper accounts only.' },
       });
     }
     if (req.user.twoFactorEnabled) {
@@ -709,15 +733,15 @@ async function setupTwoFactor(req, res, next) {
 }
 
 /**
- * POST /api/auth/2fa/verify-setup  (protected, admin only)
+ * POST /api/auth/2fa/verify-setup  (protected, admin + supplier + shopkeeper)
  * Body: { token } — the 6-digit code from the authenticator app.
- * Confirms the pending secret and enables 2FA for the admin.
+ * Confirms the pending secret and enables 2FA for the account.
  */
 async function verifyTwoFactorSetup(req, res, next) {
   try {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin' && req.user.role !== 'shopkeeper' && req.user.role !== 'supplier') {
       return res.status(403).json({
-        error: { code: 'FORBIDDEN', message: 'Two-factor setup is available for admin accounts only.' },
+        error: { code: 'FORBIDDEN', message: 'Two-factor setup is available for admin, supplier and shopkeeper accounts only.' },
       });
     }
     const { token } = req.body || {};
@@ -749,15 +773,15 @@ async function verifyTwoFactorSetup(req, res, next) {
 }
 
 /**
- * POST /api/auth/2fa/disable  (protected, admin only)
+ * POST /api/auth/2fa/disable  (protected, admin + supplier + shopkeeper)
  * Body: { password } — disabling 2FA requires the current password, so a
  * stolen session alone cannot strip the second factor.
  */
 async function disableTwoFactor(req, res, next) {
   try {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin' && req.user.role !== 'shopkeeper' && req.user.role !== 'supplier') {
       return res.status(403).json({
-        error: { code: 'FORBIDDEN', message: 'Two-factor settings are available for admin accounts only.' },
+        error: { code: 'FORBIDDEN', message: 'Two-factor settings are available for admin, supplier and shopkeeper accounts only.' },
       });
     }
     const { password } = req.body || {};
@@ -784,12 +808,15 @@ async function disableTwoFactor(req, res, next) {
 
 /**
  * POST /api/auth/2fa/setup-first  (public — carries the setup tempToken)
- * First-time 2FA setup for SUB-ADMINS. Body: { tempToken } — the 5-minute
- * JWT login() returned with requires2FASetup:true (purpose '2fa-setup').
- * The sub-admin has no session yet, so this is gated by the tempToken, not
- * by protect(). Generates a fresh TOTP secret, stores it as the PENDING
- * secret and returns the otpauth URL + QR data URL. 2FA is NOT enabled until
- * POST /api/auth/2fa/verify-setup-first confirms the first code.
+ * First-time 2FA setup for ADMIN + SUB-ADMINS. Body: { tempToken } — the
+ * 5-minute JWT adminLogin() returned with requires2FASetup:true (purpose
+ * '2fa-setup'). FIX (New audit #5) — the main admin uses this same flow:
+ * 2FA is mandatory for the main admin too, so a first sign-in without it
+ * routes here exactly like a sub-admin's. The account has no session yet,
+ * so this is gated by the tempToken, not by protect(). Generates a fresh
+ * TOTP secret, stores it as the PENDING secret and returns the otpauth URL
+ * + QR data URL. 2FA is NOT enabled until POST /api/auth/2fa/verify-setup-first
+ * confirms the first code.
  */
 async function setupTwoFactorFirst(req, res, next) {
   try {
@@ -813,7 +840,7 @@ async function setupTwoFactorFirst(req, res, next) {
       });
     }
     const user = await User.findById(payload.id);
-    if (!user || user.role !== 'subadmin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
       return res.status(401).json({
         error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid setup session. Please sign in again.' },
       });
@@ -838,8 +865,8 @@ async function setupTwoFactorFirst(req, res, next) {
  * POST /api/auth/2fa/verify-setup-first  (public — carries the setup tempToken)
  * Body: { tempToken, token } — token is the 6-digit code from the
  * authenticator app. Confirms the pending secret and enables 2FA for the
- * sub-admin. After this, normal sign-in works: password → requires2FA →
- * 6-digit code → session.
+ * admin / sub-admin. After this, normal sign-in works: password →
+ * requires2FA → 6-digit code → session.
  */
 async function verifyTwoFactorSetupFirst(req, res, next) {
   try {
@@ -863,7 +890,7 @@ async function verifyTwoFactorSetupFirst(req, res, next) {
       });
     }
     const user = await User.findById(payload.id).select('+twoFactorTempSecret');
-    if (!user || user.role !== 'subadmin' || !user.twoFactorTempSecret) {
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin') || !user.twoFactorTempSecret) {
       return res.status(400).json({
         error: { code: 'TWO_FACTOR_SETUP_NOT_STARTED', message: 'Start setup first to get a QR code.' },
       });
@@ -889,6 +916,9 @@ async function verifyTwoFactorSetupFirst(req, res, next) {
  * Body: { tempToken, token } — tempToken is the 5-minute JWT login() returned
  * with requires2FA:true; token is the 6-digit authenticator code.
  * On success issues the normal asan_token cookie, exactly like login().
+ * FIX (New audit #15) — this endpoint now completes the sign-in for
+ * shopkeeper/supplier accounts with 2FA enabled. Admin/subadmin accounts
+ * must still use POST /api/auth/admin/2fa/login (host-only admin cookie).
  */
 async function verifyTwoFactorLogin(req, res, next) {
   try {
@@ -912,7 +942,7 @@ async function verifyTwoFactorLogin(req, res, next) {
       });
     }
     const user = await User.findById(payload.id).select('+twoFactorSecret');
-    if (!user || (user.role !== 'admin' && user.role !== 'subadmin') || !user.twoFactorEnabled || !user.twoFactorSecret) {
+    if (!user || (user.role !== 'shopkeeper' && user.role !== 'supplier') || !user.twoFactorEnabled || !user.twoFactorSecret) {
       return res.status(401).json({
         error: { code: 'INVALID_TWO_FACTOR_TOKEN', message: 'Invalid two-factor session. Please sign in again.' },
       });

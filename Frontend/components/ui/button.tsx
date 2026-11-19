@@ -2,7 +2,9 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { motion, HTMLMotionProps } from 'framer-motion';
+
+// FIX (New audit #19) — the framer-motion import here was dead: this
+// component renders a plain <button> and never used `motion`.
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';

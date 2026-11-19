@@ -7,7 +7,6 @@ import { formatPKR } from '@/lib/utils';
 import { MapPin, Plus, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ProductImage } from '@/components/ProductImage';
-import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthProvider';
 import { addToCart } from '@/lib/cart';
@@ -62,10 +61,10 @@ export function ProductCard({ product }: { product: Product }) {
   };
 
   return (
-      <motion.div
-        whileHover={{ y: -4 }}
-        transition={{ duration: 0.2 }}
-        className="group rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 transition-all flex flex-col justify-between"
+      // FIX (New audit #19) — the old motion.div only did whileHover y:-4
+      // (0.2s). Same lift via CSS: hover:-translate-y-1 + duration-200.
+      <div
+        className="group rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-1 flex flex-col justify-between"
       >
         <div>
           <Link
@@ -141,6 +140,6 @@ export function ProductCard({ product }: { product: Product }) {
             </span>
           )}
         </div>
-      </motion.div>
+      </div>
   );
 }

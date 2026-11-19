@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, Menu, X, LayoutDashboard, ShieldCheck, ShoppingCart, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+// FIX (New audit #19) — the mobile menu + search modal were framer-motion
+// (AnimatePresence + motion.div/nav). Same motion in plain CSS now: the
+// entrance is a keyframe (animate-asan-menu-in / animate-asan-pop-in /
+// animate-asan-fade-in, globals.css) and the exit is a `closing` state
+// that flips transition classes; the panel stays mounted for the close
+// duration so the exit can play, exactly like AnimatePresence's exit did.
+// Timings kept: menu 180 ms, search modal 200 ms. Both panels' state is
+// local to this component, so the exit lifecycle is fully contained here.
 import { useAuth } from '@/context/AuthProvider';
 import { cartCount, CART_UPDATED_EVENT } from '@/lib/cart';
 
@@ -18,8 +25,62 @@ export function Navbar() {
   const router = useRouter();
 
   const { user, loading, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  // FIX (New audit #19) — `rendered` keeps a panel mounted while its
+  // exit transition plays; `closing` flips the transition classes to the
+  // hidden state. (Replaces AnimatePresence; same timings as before.)
+  const [menuRendered, setMenuRendered] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
+  const menuCloseTimer = useRef<number | null>(null);
+  const [searchRendered, setSearchRendered] = useState(false);
+  const [searchClosing, setSearchClosing] = useState(false);
+  const searchCloseTimer = useRef<number | null>(null);
+
+  const openMenu = () => {
+    if (menuCloseTimer.current) {
+      window.clearTimeout(menuCloseTimer.current);
+      menuCloseTimer.current = null;
+    }
+    setMenuClosing(false);
+    setMenuRendered(true);
+  };
+  const closeMenu = () => {
+    if (!menuRendered || menuClosing) return;
+    setMenuClosing(true);
+    menuCloseTimer.current = window.setTimeout(() => {
+      setMenuRendered(false);
+      setMenuClosing(false);
+      menuCloseTimer.current = null;
+    }, 180);
+  };
+  const toggleMenu = () => {
+    if (menuRendered && !menuClosing) closeMenu();
+    else openMenu();
+  };
+  const openSearch = () => {
+    if (searchCloseTimer.current) {
+      window.clearTimeout(searchCloseTimer.current);
+      searchCloseTimer.current = null;
+    }
+    setSearchClosing(false);
+    setSearchRendered(true);
+  };
+  const closeSearch = () => {
+    if (!searchRendered || searchClosing) return;
+    setSearchClosing(true);
+    searchCloseTimer.current = window.setTimeout(() => {
+      setSearchRendered(false);
+      setSearchClosing(false);
+      searchCloseTimer.current = null;
+    }, 200);
+  };
+
+  // Never leave a pending close timer behind on unmount.
+  useEffect(() => {
+    return () => {
+      if (menuCloseTimer.current) window.clearTimeout(menuCloseTimer.current);
+      if (searchCloseTimer.current) window.clearTimeout(searchCloseTimer.current);
+    };
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   // FIX (Batch 03) — cart badge reactive nahi tha: cartCount() render ke
   // waqt localStorage parhta tha, is liye cart add karne pe badge tab tak
@@ -65,22 +126,22 @@ export function Navbar() {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     router.push(`/marketplace?search=${encodeURIComponent(searchQuery.trim())}`);
-    setSearchOpen(false);
+    closeSearch();
   };
 
   // Closes the mobile navigation panel on outside click or Escape. The
   // hamburger button is excluded so its own toggle click isn't swallowed.
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    if (!menuRendered) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
       const insidePanel = mobileMenuRef.current?.contains(target) ?? false;
       const insideButton = mobileButtonRef.current?.contains(target) ?? false;
-      if (!insidePanel && !insideButton) setMobileMenuOpen(false);
+      if (!insidePanel && !insideButton) closeMenu();
     };
     const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileMenuOpen(false);
+      if (event.key === 'Escape') closeMenu();
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -89,21 +150,27 @@ export function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [mobileMenuOpen]);
+    // closeMenu only reads refs + stable setters, so depending on it
+    // would re-subscribe on every render for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuRendered]);
 
   // FIX (Batch 03) — search modal pe "ESC to close" likha tha, lekin Escape
   // ka koi handler tha hi nahi — sirf overlay click se band hota tha. Ab
   // Escape dabane se search modal waqai band ho jata hai.
   useEffect(() => {
-    if (!searchOpen) return;
+    if (!searchRendered) return;
     const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSearchOpen(false);
+      if (event.key === 'Escape') closeSearch();
     };
     document.addEventListener('keydown', handleEscapeKey);
     return () => {
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [searchOpen]);
+    // closeSearch only reads refs + stable setters, so depending on it
+    // would re-subscribe on every render for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchRendered]);
 
   return (
     <>
@@ -155,7 +222,7 @@ export function Navbar() {
             <button
               type="button"
               aria-label="Search products"
-              onClick={() => setSearchOpen(true)}
+              onClick={openSearch}
               className="flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition"
               title="Search products"
             >
@@ -226,36 +293,34 @@ export function Navbar() {
               ref={mobileButtonRef}
               type="button"
               aria-label="Toggle navigation menu"
-              aria-expanded={mobileMenuOpen}
-              onClick={() => setMobileMenuOpen((open) => !open)}
+              aria-expanded={menuRendered}
+              onClick={toggleMenu}
               className="lg:hidden flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {menuRendered ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
       </header>
 
       {/* Mobile navigation panel */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 z-[1040] lg:hidden bg-black/30 backdrop-blur-sm"
-            />
-            <motion.nav
-              ref={mobileMenuRef}
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.18 }}
-              aria-label="Mobile navigation"
-              className="fixed inset-x-0 top-16 z-[1050] lg:hidden border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto"
-            >
+      {menuRendered && (
+        <>
+          <div
+            onClick={closeMenu}
+            className={cn(
+              'fixed inset-0 z-[1040] lg:hidden bg-black/30 backdrop-blur-sm transition-opacity duration-[180ms] animate-asan-fade-in',
+              menuClosing ? 'opacity-0' : 'opacity-100'
+            )}
+          />
+          <nav
+            ref={mobileMenuRef}
+            aria-label="Mobile navigation"
+            className={cn(
+              'fixed inset-x-0 top-16 z-[1050] lg:hidden border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto transition-all duration-[180ms] animate-asan-menu-in',
+              menuClosing ? 'opacity-0 -translate-y-3' : 'opacity-100 translate-y-0'
+            )}
+          >
               <div className="px-4 py-4 space-y-1">
                 {navLinks.map((link) => {
                   const isActive = pathname === link.href;
@@ -263,7 +328,7 @@ export function Navbar() {
                     <Link
                       key={link.name}
                       href={link.href}
-                      onClick={() => setMobileMenuOpen(false)}
+                      onClick={closeMenu}
                       className={cn(
                         'block px-4 py-3 rounded-xl text-sm font-semibold transition-all',
                         isActive
@@ -281,14 +346,14 @@ export function Navbar() {
                     <>
                       <Link
                         href="/signin"
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={closeMenu}
                         className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                       >
                         Sign In
                       </Link>
                       <Link
                         href="/getstarted"
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={closeMenu}
                         className="block px-4 py-3 rounded-xl text-sm font-bold text-center bg-asan-accent hover:bg-asan-accent-hover text-white shadow-sm transition"
                       >
                         Get Started
@@ -301,7 +366,7 @@ export function Navbar() {
                       {user.role === 'shopkeeper' && (
                         <Link
                           href="/shopkeeper/cart"
-                          onClick={() => setMobileMenuOpen(false)}
+                          onClick={closeMenu}
                           className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                         >
                           🛒 My Cart ({cartItemCount})
@@ -309,7 +374,7 @@ export function Navbar() {
                       )}
                       <Link
                         href={userHome}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={closeMenu}
                         className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark bg-asan-accent-light dark:bg-asan-dark/50 dark:text-asan-accent-light transition"
                       >
                         {user.role === 'admin' ? 'Admin Panel' : user.role === 'supplier' ? 'Supplier Portal' : 'My Dashboard'}
@@ -325,29 +390,27 @@ export function Navbar() {
                   )}
                 </div>
               </div>
-            </motion.nav>
-          </>
-        )}
-      </AnimatePresence>
+          </nav>
+        </>
+      )}
 
       {/* Global Search Modal Overlay */}
-      <AnimatePresence>
-        {searchOpen && (
-          <div className="fixed inset-0 z-[1100] flex items-start justify-center pt-20 px-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSearchOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            />
+      {searchRendered && (
+        <div className="fixed inset-0 z-[1100] flex items-start justify-center pt-20 px-4">
+          <div
+            onClick={closeSearch}
+            className={cn(
+              'fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-asan-fade-in',
+              searchClosing ? 'opacity-0' : 'opacity-100'
+            )}
+          />
 
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-10"
-            >
+          <div
+            className={cn(
+              'relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-10 transition-all duration-300 animate-asan-pop-in',
+              searchClosing ? 'opacity-0 -translate-y-5 scale-95' : 'opacity-100 translate-y-0 scale-100'
+            )}
+          >
               <form onSubmit={handleSearchSubmit} className="flex items-center gap-3">
                 <Search className="w-5 h-5 text-slate-400" />
                 <input
@@ -370,10 +433,9 @@ export function Navbar() {
                 <span>Popular: Super Kernel Basmati, Faisalabad Cotton, Red Chilli</span>
                 <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-[10px]">ESC to close</kbd>
               </div>
-            </motion.div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </>
   );
 }

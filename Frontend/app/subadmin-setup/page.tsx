@@ -9,10 +9,12 @@ import { api } from '@/lib/api';
 
 /**
  * /subadmin-setup — PUBLIC page for the mandatory first-time 2FA setup.
- * Reached only from sign-in when login() answers { requires2FASetup: true }.
- * The short-lived setup token comes from sessionStorage (never the URL).
- * After the first code is confirmed, the sub-admin signs in normally:
- * password → requires2FA → 6-digit code → session.
+ * Reached only from /admin/login when adminLogin() answers
+ * { requires2FASetup: true } — for the MAIN ADMIN as well as sub-admins
+ * (FIX New audit #5: 2FA is mandatory for the main admin too). The
+ * short-lived setup token comes from sessionStorage (never the URL).
+ * After the first code is confirmed, sign in normally: password →
+ * requires2FA → 6-digit code → session.
  */
 export default function SubadminSetupPage() {
   const [phase, setPhase] = useState<'loading' | 'no-token' | 'scan' | 'done'>('loading');
@@ -76,7 +78,7 @@ export default function SubadminSetupPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
         <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">Setup session missing</p>
         <p className="text-sm text-slate-500 max-w-sm">
-          {error || 'Please sign in with your sub-admin account first — you will land here automatically.'}
+          {error || 'Please sign in with your admin account first — you will land here automatically.'}
         </p>
         <Link href="/signin" className="text-sm font-medium text-emerald-700 underline">
           Go to sign-in
@@ -92,7 +94,7 @@ export default function SubadminSetupPage() {
           Two-factor authentication enabled ✓
         </p>
         <p className="text-sm text-slate-500 max-w-sm">
-          Your reviewer account is now secured. Sign in with your email + password, then enter the
+          Your account is now secured. Sign in with your email + password, then enter the
           6-digit code from your authenticator app.
         </p>
         <Link href="/signin">
@@ -106,10 +108,10 @@ export default function SubadminSetupPage() {
     <div className="flex flex-col items-center min-h-[60vh] gap-5 px-6 py-10">
       <div className="text-center max-w-md">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-          Secure your reviewer account
+          Secure your account
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          Two-factor authentication is <strong>mandatory</strong> for reviewer accounts. Scan the QR
+          Two-factor authentication is <strong>mandatory</strong> for admin accounts. Scan the QR
           code with Google Authenticator (or any authenticator app), then enter the 6-digit code
           below to finish setup.
         </p>

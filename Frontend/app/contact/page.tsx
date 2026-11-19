@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Footer } from '@/components/Footer';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { API_URL } from '@/lib/api';
+import { API_URL, csrfHeaders } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import { MapPin, Send } from 'lucide-react';
@@ -117,7 +117,9 @@ export default function ContactPage() {
     try {
       const response = await fetch(`${API_URL}/api/public/contact`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // FIX (New audit #20) — the one direct fetch() POST outside lib/api.ts;
+        // it carries the same double-submit token as every other call.
+        headers: { 'Content-Type': 'application/json', ...(await csrfHeaders()) },
         body: JSON.stringify({
           name: formData.fullName.trim(),
           email: formData.email.trim(),
