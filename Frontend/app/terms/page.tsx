@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: 'Terms of Service | Asan Tijarat',
   description: 'Read the terms of service for using Asan Tijarat: accounts, KYC, orders, payments, disputes, and the responsibilities of suppliers and shopkeepers.',
   robots: { index: false, follow: false },
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/terms',
+  },
 };
 
 export default function TermsPage() {

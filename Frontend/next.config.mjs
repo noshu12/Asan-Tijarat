@@ -128,6 +128,19 @@ const PERMISSIONS_POLICY = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // FIX — dev-only: admin.localhost se aane wale /_next/* requests par
+  // Next.js 14.2.35 warning deta tha ("Cross origin request detected from
+  // admin.localhost"). Wajah: dev server ka default allowed list sirf
+  // 'localhost' hai; usme '*.localhost' likha to hai, lekin Next.js ka
+  // matcher wildcard ko aakhri 2 segments me invalid manta hai, is liye
+  // 'admin.localhost' kabhi match nahi hota (code parh kar verify kiya:
+  // block-cross-site.js + csrf-protection.js). Entry sirf hostname hoti
+  // hai (port nahi), kyunke check origin ke hostname se hota hai.
+  // NOTE: ye set karte hi mode warn se block ho jata hai — list se bahar
+  // ka origin dev server par 403 hoga. localhost + admin.localhost dono
+  // allowed hain, is liye dev kaam karta rahega. Production par iska
+  // koi asar nahi (ye check sirf dev server ka hai).
+  allowedDevOrigins: ['admin.localhost'],
   async rewrites() {
     const backend =
       process.env.BACKEND_INTERNAL_URL ||

@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: 'Privacy Policy | Asan Tijarat',
   description: 'How Asan Tijarat collects, uses and protects your data: CNIC and KYC documents, order history and account security, explained in plain words.',
   robots: { index: false, follow: false },
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/privacy',
+  },
 };
 
 export default function PrivacyPage() {

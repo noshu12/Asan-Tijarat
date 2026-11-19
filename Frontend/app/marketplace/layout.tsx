@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description: 'Browse wholesale lots from verified suppliers across Pakistan. Compare price per pack, MOQ and stock, then order bulk kiryana goods direct from suppliers.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/marketplace',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

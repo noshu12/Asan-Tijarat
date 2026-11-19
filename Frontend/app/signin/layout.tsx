@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description: 'Sign in to your Asan Tijarat account to manage orders, products and payments. Separate portals for suppliers and shopkeepers across Pakistan.',
     images: ['/og-image.png'],
   },
+
+  alternates: {
+    canonical: 'https://asan-tijarat.vercel.app/signin',
+  },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
