@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, Menu, X, LayoutDashboard, ShieldCheck, ShoppingCart, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -178,7 +179,7 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
 
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-            <img
+            <Image
               src="/logo.png"
               alt="Asan Tijarat logo"
               width={40}
@@ -189,7 +190,7 @@ export function Navbar() {
               <span className="font-bold text-xl leading-none text-asan-dark dark:text-asan-accent-light tracking-tight">
                 Asan Tijarat
               </span>
-              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-400 tracking-wide uppercase">
+              <span className="text-xs font-medium text-slate-400 dark:text-slate-400 tracking-wide uppercase">
                 B2B Marketplace PK
               </span>
             </div>
@@ -203,7 +204,10 @@ export function Navbar() {
                   key={link.name}
                   href={link.href}
                   className={cn(
-                    "px-3.5 py-2 rounded-lg text-sm font-medium transition-all",
+                    // FIX (Round-4 Batch 11, M6) — nav links were 36px tall
+                    // (py-2 + text-sm). py-3 makes each link a full 44px
+                    // tap target; the h-16 header has room, look unchanged.
+                    "px-3.5 py-3 rounded-lg text-sm font-medium transition-all",
                     isActive
                       ? "text-asan-dark font-semibold bg-asan-accent-light dark:bg-asan-dark/50 dark:text-asan-accent-light"
                       : "text-slate-600 hover:text-asan-dark hover:bg-slate-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800"
@@ -239,14 +243,14 @@ export function Navbar() {
               <>
                 <Link
                   href="/signin"
-                  className="hidden sm:inline-flex px-4 py-2 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
+                  className="hidden sm:inline-flex px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                 >
                   Sign In
                 </Link>
 
                 <Link
                   href="/getstarted"
-                  className="hidden sm:inline-flex px-4 py-2 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition"
+                  className="hidden sm:inline-flex px-4 py-3 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition"
                 >
                   Get Started
                 </Link>
@@ -272,7 +276,7 @@ export function Navbar() {
 
                 <Link
                   href={userHome}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
                 >
                   {user.role === 'admin' ? <ShieldCheck className="w-4 h-4" /> : <LayoutDashboard className="w-4 h-4" />}
                   {user.role === 'admin' ? 'Admin' : user.role === 'supplier' ? 'Supplier Portal' : 'Dashboard'}
@@ -281,7 +285,7 @@ export function Navbar() {
                 <button
                   type="button"
                   onClick={logout}
-                  className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                  className="hidden sm:inline-flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
                 >
                   <LogOut className="w-4 h-4 shrink-0" /> Logout
                 </button>
@@ -424,7 +428,7 @@ export function Navbar() {
                 />
                 <button
                   type="submit"
-                  className="px-3 py-1.5 rounded-lg bg-asan-accent text-white text-xs font-semibold shrink-0"
+                  className="flex items-center justify-center min-h-[44px] px-4 py-2 rounded-lg bg-asan-accent text-white text-sm font-semibold shrink-0"
                 >
                   Search
                 </button>

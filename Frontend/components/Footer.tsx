@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { MapPin } from 'lucide-react';
 
 // Same marketplace filter slugs as the marketplace page categories.
@@ -44,7 +45,7 @@ export function Footer() {
           
           <div className="space-y-4 md:col-span-1">
             <div className="flex items-center gap-2.5">
-              <img
+              <Image
                 src="/logo.png"
                 alt="Asan Tijarat logo"
                 width={40}
@@ -60,23 +61,30 @@ export function Footer() {
 
           <div className="space-y-3">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Quick Links</h4>
-            <ul className="space-y-2 text-xs text-asan-text-light">
-              <li><Link href="/" className="hover:text-asan-accent transition">Home</Link></li>
-              <li><Link href="/marketplace" className="hover:text-asan-accent transition">Browse Marketplace</Link></li>
-              <li><Link href="/about" className="hover:text-asan-accent transition">About Our Mission</Link></li>
-              <li><Link href="/contact" className="hover:text-asan-accent transition">Contact & Support</Link></li>
+            {/* FIX (Round-4 Batch 11, M6) — footer links were ~17px tall
+                (text-xs, no padding). Each link is now a 36px tap target
+                (min-h-[36px]) at text-sm. Full 44px rows would make the
+                14-link category column 668px tall and the footer taller
+                than most page content, so 36px is the largest size that
+                keeps the footer layout intact (still above the WCAG 2.2
+                AA 24px minimum). Bottom-bar links below are full 44px. */}
+            <ul className="space-y-1 text-sm text-asan-text-light">
+              <li><Link href="/" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">Home</Link></li>
+              <li><Link href="/marketplace" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">Browse Marketplace</Link></li>
+              <li><Link href="/about" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">About Our Mission</Link></li>
+              <li><Link href="/contact" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">Contact & Support</Link></li>
             </ul>
           </div>
 
           <div className="space-y-3">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Top Categories</h4>
-            <ul className="space-y-2 text-xs text-asan-text-light">
+            <ul className="space-y-1 text-sm text-asan-text-light">
               {categories.map((category) => {
                 const slug = CATEGORY_SLUG[category];
                 const href = slug ? `/marketplace?cat=${slug}` : '/marketplace';
                 return (
                   <li key={category}>
-                    <Link href={href} className="hover:text-asan-accent transition">
+                    <Link href={href} className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">
                       {category}
                     </Link>
                   </li>
@@ -93,7 +101,7 @@ export function Footer() {
                 <span>FUUAST Campus, Gulshan-e-Iqbal, Karachi, Pakistan</span>
               </p>
               <p>
-                <Link href="/contact" className="hover:text-asan-accent transition">
+                <Link href="/contact" className="inline-flex items-center min-h-[36px] text-sm hover:text-asan-accent transition">
                   Contact & Support →
                 </Link>
               </p>
@@ -104,8 +112,8 @@ export function Footer() {
         <div className="mt-12 pt-8 border-t border-asan-border flex flex-col sm:flex-row items-center justify-between text-xs text-asan-text-light gap-4">
           <p>© 2026 Asan Tijarat. Final Year Project — Federal Urdu University (FUUAST).</p>
           <div className="flex items-center gap-5">
-            <Link href="/terms" className="hover:text-asan-accent transition">Terms &amp; Conditions</Link>
-            <Link href="/privacy" className="hover:text-asan-accent transition">Privacy Policy</Link>
+            <Link href="/terms" className="inline-flex items-center min-h-[44px] hover:text-asan-accent transition">Terms &amp; Conditions</Link>
+            <Link href="/privacy" className="inline-flex items-center min-h-[44px] hover:text-asan-accent transition">Privacy Policy</Link>
           </div>
           <p className="text-xs">Cutting Out The Middle, Scaling Up The Profit</p>
         </div>

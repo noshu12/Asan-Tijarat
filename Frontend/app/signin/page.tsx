@@ -1,7 +1,8 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/types';
 import { Input } from '@/components/ui/input';
@@ -157,7 +158,7 @@ export default function SignInPage() {
         
         <div>
           <Link href="/" className="inline-flex items-center gap-2.5">
-            <img
+            <Image
               src="/logo.png"
               alt="Asan Tijarat logo"
               width={40}
@@ -274,13 +275,20 @@ export default function SignInPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                className="pr-14"
               />
+              {/* FIX (Round-4 Batch 11, M6) — toggle was a bare 16px icon.
+                  Now a full 44x44 tap target: the input is h-11 (44px)
+                  starting 22px down (16px label + 6px gap), so top-[22px]
+                  spans it exactly; pr-14 keeps typed text clear of it.
+                  Button is transparent, so the look is unchanged. */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-1 top-[22px] flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
 
