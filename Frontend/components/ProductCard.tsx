@@ -114,7 +114,7 @@ export function ProductCard({ product }: { product: Product }) {
               Min: {product.moq} {pack}
             </div>
             {weight && (
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
                 1 {pack} = {weight}
               </div>
             )}
@@ -125,7 +125,7 @@ export function ProductCard({ product }: { product: Product }) {
               type="button"
               onClick={handleAdd}
               aria-label={`Add ${product.name} to cart`}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
+              className={`flex items-center gap-1.5 min-h-[40px] px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
                 added
                   ? 'bg-asan-accent text-white'
                   : 'bg-asan-accent hover:bg-asan-accent-hover text-white'
@@ -135,7 +135,7 @@ export function ProductCard({ product }: { product: Product }) {
               <span>{added ? 'Added' : 'Add'}</span>
             </button>
           ) : (
-            <span className="text-[11px] font-medium text-slate-400 px-3 py-1.5">
+            <span className="text-xs font-medium text-slate-400 px-3 py-1.5">
               Supplier listing
             </span>
           )}

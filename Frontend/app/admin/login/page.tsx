@@ -118,14 +118,19 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                className="pr-14"
               />
+              {/* FIX (Round-4 Batch 11, M6) — toggle was a bare 16px icon;
+                  now a full 44x44 tap target over the h-11 input
+                  (top-[22px] = 16px label + 6px gap); pr-14 keeps typed
+                  text clear of it. Look unchanged (transparent button). */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                className="absolute right-1 top-[22px] flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
 

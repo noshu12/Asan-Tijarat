@@ -7,6 +7,26 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Privacy Policy | Asan Tijarat',
   description: 'How Asan Tijarat collects, uses and protects your data: CNIC and KYC documents, order history and account security, explained in plain words.',
+  openGraph: {
+    type: 'website',
+    url: 'https://asan-tijarat.vercel.app/privacy',
+    title: 'Privacy Policy | Asan Tijarat',
+    description: 'How Asan Tijarat collects, uses and protects your data: CNIC and KYC documents, order history and account security, explained in plain words.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Asan Tijarat — B2B Wholesale Marketplace Pakistan',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Privacy Policy | Asan Tijarat',
+    description: 'How Asan Tijarat collects, uses and protects your data: CNIC and KYC documents, order history and account security, explained in plain words.',
+    images: ['/og-image.png'],
+  },
   robots: { index: false, follow: false },
   alternates: {
     canonical: 'https://asan-tijarat.vercel.app/privacy',

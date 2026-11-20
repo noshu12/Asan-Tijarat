@@ -32,10 +32,10 @@
  *   connect: self + backend origin + Turnstile; frames: Turnstile + blob:.
  * - Backend origin: NEXT_PUBLIC_API_URL / BACKEND_INTERNAL_URL se liya
  *   jata hai (rewrites() wala pattern). Production backend Render pe hai,
- *   is liye https://*.onrender.com safety net ke tor pe bhi hai — agar env
- *   var build time pe set nahi tha to bhi API calls report-only me block
- *   nahi hongi. Deploy ke baad console reports check kar ke connect-src /
- *   img-src ko exact Render origin pe tight karo, phir enforce karo.
+ *   is liye Batch 11 (M3) me connect-src / img-src ko exact Render origin
+ *   https://asan-tijarat.onrender.com pe tight kar diya gaya hai (pehle
+ *   https://*.onrender.com wildcard tha). Deploy ke baad console reports
+ *   2-3 din observe karo, phir enforce karo.
  */
 
 /** Backend ka origin — CSP ke connect-src / img-src ke liye. */
@@ -59,9 +59,9 @@ const BACKEND_ORIGIN = backendOrigin();
  * fileUrl() backend origin ke against resolve karta hai (dev me
  * http://localhost:5000, production me Render URL). Bina is pattern ke
  * next/image un images ko optimize karne se inkar kar deta hai ("hostname is
- * not configured"). `*.onrender.com` safety net hai — agar build time pe env
- * var set nahi tha to bhi Render-hosted images kaam karengi (CSP wali hi
- * approach).
+ * not configured"). Batch 11 (M3) me exact hostname
+ * asan-tijarat.onrender.com use ho raha hai (pehle `*.onrender.com`
+ * wildcard tha, CSP wali hi approach).
  */
 function backendRemotePattern() {
   try {
@@ -83,9 +83,9 @@ const CSP_REPORT_ONLY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://plus.unsplash.com https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev ${BACKEND_ORIGIN} https://*.onrender.com`,
+  `img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://plus.unsplash.com https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com`,
   "font-src 'self' data:",
-  `connect-src 'self' ${BACKEND_ORIGIN} https://*.onrender.com https://challenges.cloudflare.com`,
+  `connect-src 'self' ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com https://challenges.cloudflare.com`,
   'frame-src https://challenges.cloudflare.com blob:',
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -160,9 +160,9 @@ const nextConfig = {
       { protocol: 'https', hostname: 'pub-940ccf6255b54fa799a9b01050e6c227.r2.dev' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       // FIX (New audit #7) — backend origin (product photos /uploads/*)
-      // + *.onrender.com safety net (agar build-time env var missing ho).
+      // + exact Render hostname (Batch 11 M3 — pehle *.onrender.com tha).
       ...(BACKEND_REMOTE_PATTERN ? [BACKEND_REMOTE_PATTERN] : []),
-      { protocol: 'https', hostname: '*.onrender.com' },
+      { protocol: 'https', hostname: 'asan-tijarat.onrender.com' },
     ],
   },
   // FIX (Audit fix #7) — security headers, har route pe.
