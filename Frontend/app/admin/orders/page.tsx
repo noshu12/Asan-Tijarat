@@ -45,7 +45,7 @@ export default function AdminOrdersPage() {
 
     let mounted = true;
 
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
       if (mounted) setLoading(false);
       return;
     }
@@ -60,7 +60,7 @@ export default function AdminOrdersPage() {
     return () => { mounted = false; };
     // FIX (Batch 03) — deps me debouncedSearch add kiya, taake typing se
     // refetch ho. Pehle deps sirf [user, activeTab] thay.
-  }, [user, activeTab, debouncedSearch, refreshKey]);
+  }, [user, activeTab, debouncedSearch, refreshKey, authLoading]);
 
   const getVariant = (s: OrderStatus) => {
     switch (s) {
@@ -126,8 +126,10 @@ export default function AdminOrdersPage() {
         return (
           <>
             <p className="text-xs font-bold text-slate-900 dark:text-white">Refunded</p>
-            {o.refundAmount != null && o.refundAmount > 0 && (
+            {o.refundAmount != null && o.refundAmount > 0 ? (
               <p className="text-[11px] text-slate-400 whitespace-nowrap">{formatPKR(o.refundAmount)} returned</p>
+            ) : (
+              <p className="text-[11px] text-slate-400">No payment was made — nothing to refund</p>
             )}
           </>
         );
@@ -183,12 +185,12 @@ export default function AdminOrdersPage() {
     );
   }
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
     return (
       <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
         <ShieldCheck className="w-10 h-10 text-red-400 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-slate-900 dark:text-white">Admins only</h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Sign in with an admin account to manage platform orders.</p>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Sign in with an admin or sub-admin account to manage platform orders.</p>
       </div>
     );
   }

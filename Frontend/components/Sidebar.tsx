@@ -78,9 +78,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     { name: 'Sub-Admins', href: '/admin/subadmins', icon: UserCog },
   ];
 
-  // Sub-admins see Users & KYC + Messages (full options on both).
+  // Sub-admins see Users & KYC + Orders + Messages + Disputes (full access
+  // on these — Batch 02 decision; AdminGate allows these paths).
   const subadminNav = [
     { name: 'Users & KYC', href: '/admin/users', icon: Users },
+    { name: 'Orders', href: '/admin/orders', icon: Package },
     { name: 'Messages', href: '/admin/messages', icon: Mail },
     // Batch 05 — sub-admins have full access (Batch 02 decision).
     { name: 'Disputes', href: '/admin/disputes', icon: Scale },

@@ -312,9 +312,11 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
           {(order.payoutAmount ?? 0) > 0 && (
             <p className="text-slate-500">Paid to supplier: <span className="font-bold text-slate-900 dark:text-white">{formatPKR(order.payoutAmount ?? 0)}</span></p>
           )}
-          {(order.refundAmount ?? 0) > 0 && (
+          {(order.refundAmount ?? 0) > 0 ? (
             <p className="text-slate-500">Refunded: <span className="font-bold text-slate-900 dark:text-white">{formatPKR(order.refundAmount ?? 0)}</span></p>
-          )}
+          ) : order.paymentStatus === 'refunded' ? (
+            <p className="text-slate-500">No payment was made — nothing to refund</p>
+          ) : null}
           {order.paymentReference && (
             <p className="text-slate-500">Reference: <span className="font-mono font-bold text-slate-900 dark:text-white break-all">{order.paymentReference}</span></p>
           )}

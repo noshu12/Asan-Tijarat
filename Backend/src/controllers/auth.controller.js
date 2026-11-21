@@ -4,7 +4,7 @@ const User = require('../models/User');
 const { CATEGORIES } = require('../constants/categories');
 const { saveKycDocuments, deleteStoredFiles, deleteStoredUploads, KycUploadError } = require('../utils/kycStorage');
 const { sanitizeLocation } = require('../utils/location');
-const { sendEmail } = require('../utils/sendEmail');
+const { sendEmail, isEmailConfigured } = require('../utils/sendEmail');
 const { otpEmail, pendingVerificationEmail, resetPasswordEmail } = require('../utils/emailTemplates');
 const { authenticator } = require('otplib');
 const QRCode = require('qrcode');
@@ -297,6 +297,16 @@ async function sendOtp(req, res, next) {
     if (!email) {
       return res.status(400).json({
         error: { code: 'MISSING_FIELDS', message: 'email is required.' },
+      });
+    }
+    // Batch 12 — fail LOUD when email is not configured. Checked BEFORE
+    // the user lookup, so the 503 is identical whether or not the account
+    // exists (no account enumeration). Without this, the generic success
+    // message below would promise an OTP that can never arrive.
+    if (!isEmailConfigured()) {
+      console.error('[auth] BREVO_API_KEY is NOT set — cannot send OTP email. Set BREVO_API_KEY in the backend environment.');
+      return res.status(503).json({
+        error: { code: 'EMAIL_NOT_CONFIGURED', message: 'Email service is not configured, so the OTP cannot be sent. Please try again later.' },
       });
     }
     const user = await User.findOne({ email: String(email).toLowerCase().trim() }).select('+otpHash');
@@ -977,11 +987,11 @@ async function verifyTwoFactorLogin(req, res, next) {
 }
 
 /**
- * GET /api/auth/me  (protected)
- * Returns the currently authenticated user.
+ * GET /api/auth/me  (optionalProtect — guests get 200 { user: null })
+ * Returns the currently authenticated user, or null for a guest.
  */
 async function me(req, res) {
-  res.json({ user: req.user.toSafeJSON() });
+  res.json({ user: req.user ? req.user.toSafeJSON() : null });
 }
 
 /**
@@ -998,6 +1008,16 @@ async function forgotPassword(req, res, next) {
     if (!email) {
       return res.status(400).json({
         error: { code: 'MISSING_FIELDS', message: 'email is required.' },
+      });
+    }
+    // Batch 12 — same loud failure as send-otp above: checked BEFORE the
+    // user lookup, so the 503 is identical whether or not the account
+    // exists (no account enumeration). Otherwise the generic success
+    // message below would promise reset instructions that never arrive.
+    if (!isEmailConfigured()) {
+      console.error('[auth] BREVO_API_KEY is NOT set — cannot send password-reset email. Set BREVO_API_KEY in the backend environment.');
+      return res.status(503).json({
+        error: { code: 'EMAIL_NOT_CONFIGURED', message: 'Email service is not configured, so the reset instructions cannot be sent. Please try again later.' },
       });
     }
     const user = await User.findOne({ email: String(email).toLowerCase().trim() }).select('+otpHash');

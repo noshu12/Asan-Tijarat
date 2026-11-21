@@ -14,9 +14,14 @@
  *   data" rule ke khilaf tha). Unsplash/R2 hosts waise hi rakhe hain.
  *
  * FIX (Audit fix #7) — Security headers.
- * - Content-Security-Policy REPORT-ONLY pehle (enforce nahi) — CSP galat
- *   ho to bhi site nahi tootegi, sirf browser console me report aayegi.
- *   Deploy ke baad console check karo, phir enforce mode me badlo.
+ * - Content-Security-Policy ENFORCED (Batch 12, M3). REVERT: agar enforce
+ *   ke baad koi page toote to header key wapas
+ *   'Content-Security-Policy-Report-Only' kar do (neeche headers() me) —
+ *   policy directives waise hi rahenge.
+ * - NOTE (2026-11-21): enforce ne localhost DEV tood diya tha — Next.js
+ *   dev mode (React Refresh) ko 'unsafe-eval' chahiye, is liye dev me
+ *   script-src me 'unsafe-eval' add hai (neeche IS_DEV). Production
+ *   build eval use nahi karta, is liye production policy strict hi hai.
  * - X-Frame-Options DENY + frame-ancestors 'none': site ko iframe me
  *   nahi khola ja sakta (clickjacking band).
  * - X-Content-Type-Options nosniff, Referrer-Policy
@@ -34,8 +39,13 @@
  *   jata hai (rewrites() wala pattern). Production backend Render pe hai,
  *   is liye Batch 11 (M3) me connect-src / img-src ko exact Render origin
  *   https://asan-tijarat.onrender.com pe tight kar diya gaya hai (pehle
- *   https://*.onrender.com wildcard tha). Deploy ke baad console reports
- *   2-3 din observe karo, phir enforce karo.
+ *   https://*.onrender.com wildcard tha). NOTE (Batch 12, M3): observation
+ *   sirf ~1 din ki hui (deploy 2026-11-20 ~18:23, enforce 2026-11-21) —
+ *   poore 2–3 din nahi — kyunki user ne sab kuch abhi theek karne ko kaha.
+ *   Deploy ke baad console par CSP blocks par nazar rakho; agar koi page
+ *   toote to header key wapas 'Content-Security-Policy-Report-Only' kar do.
+ *   UPDATE (2026-11-21): localhost DEV par EvalError mila — dev ko
+ *   'unsafe-eval' chahiye (neeche IS_DEV fix); production strict hai.
  */
 
 /** Backend ka origin — CSP ke connect-src / img-src ke liye. */
@@ -79,9 +89,17 @@ function backendRemotePattern() {
 
 const BACKEND_REMOTE_PATTERN = backendRemotePattern();
 
-const CSP_REPORT_ONLY = [
+// Next.js dev mode (React Refresh / webpack HMR) runtime par strings ko
+// evaluate karta hai — use 'unsafe-eval' chahiye. Production build eval
+// use nahi karta, is liye production me policy strict rehti hai. Agar ye
+// na ho to dev server par React hydrate hi nahi hota: Turnstile widget
+// nahi aata aur Sign In button dead rehta hai (2026-11-21 localhost par
+// dekha gaya: Uncaught EvalError, script-src ne 'unsafe-eval' block kiya).
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
+const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+  `script-src 'self' 'unsafe-inline'${IS_DEV ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com`,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://plus.unsplash.com https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com`,
   "font-src 'self' data:",
@@ -96,18 +114,20 @@ const CSP_REPORT_ONLY = [
 
 // Permissions-Policy: sab band, sirf geolocation khula (self) —
 // useDeviceLocation.ts GPS use karta hai (registration + settings).
+// NOTE (2026-11-21): 6 features hata di gayi — Chrome unhe pehchanta hi
+// nahi ("Error with Permissions-Policy header: Unrecognized feature"):
+// ambient-light-sensor, battery, document-domain,
+// execution-while-not-rendered, execution-while-out-of-viewport,
+// navigation-override. Ye spec se nikal chuki / kabhi standard nahi bani,
+// is liye Chrome inhe waise bhi ignore karta tha — hatane se security
+// mein koi farq nahi padta, sirf console warnings khatam hoti hain.
 const PERMISSIONS_POLICY = [
   'accelerometer=()',
-  'ambient-light-sensor=()',
   'autoplay=()',
-  'battery=()',
   'camera=()',
   'cross-origin-isolated=()',
   'display-capture=()',
-  'document-domain=()',
   'encrypted-media=()',
-  'execution-while-not-rendered=()',
-  'execution-while-out-of-viewport=()',
   'fullscreen=()',
   'geolocation=(self)',
   'gyroscope=()',
@@ -115,7 +135,6 @@ const PERMISSIONS_POLICY = [
   'magnetometer=()',
   'microphone=()',
   'midi=()',
-  'navigation-override=()',
   'payment=()',
   'picture-in-picture=()',
   'publickey-credentials-get=()',
@@ -166,8 +185,9 @@ const nextConfig = {
     ],
   },
   // FIX (Audit fix #7) — security headers, har route pe.
-  // CSP report-only hai (enforce nahi), is liye galat rule se bhi
-  // site nahi tootegi — sirf console me report aayegi.
+  // CSP ENFORCED hai (Batch 12, M3 — pehle Report-Only thi). REVERT:
+  // agar enforce ke baad koi page toote to neeche header key wapas
+  // 'Content-Security-Policy-Report-Only' kar do.
   //
   // FIX (Round-4 M4, Batch 10) — Access-Control-Allow-Origin.
   // Live site pe har Vercel response par `ACAO: *` aa raha tha (audit
@@ -194,7 +214,7 @@ const nextConfig = {
         source: '/:path*',
         headers: [
           { key: 'Access-Control-Allow-Origin', value: 'https://asan-tijarat.vercel.app' },
-          { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
+          { key: 'Content-Security-Policy', value: CSP },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

@@ -154,11 +154,11 @@ function buildDocument(orders: Order[]): string {
   <title>${orders.length === 1 ? `Invoice ${escapeHtml(orders[0].orderNumber)}` : `${orders.length} Invoices`} — Asan Tijarat</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: ${BRAND.surface}; color: ${BRAND.ink}; padding: 24px; }
+    body { font-family: Poppins, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: ${BRAND.surface}; color: ${BRAND.ink}; padding: 24px; }
     .receipt { max-width: 800px; margin: 0 auto 28px; background: #fff; border: 1px solid ${BRAND.border}; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(17,24,39,.08); }
-    .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 26px; background: ${BRAND.dark}; color: #fff; }
+    .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 26px; background: ${BRAND.dark}; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .brand { display: flex; gap: 12px; align-items: center; }
-    .logo-mark { width: 44px; height: 44px; border-radius: 12px; background: ${BRAND.accent}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; letter-spacing: .5px; color: #fff; }
+    .logo-mark { width: 44px; height: 44px; border-radius: 12px; background: ${BRAND.accent}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; letter-spacing: .5px; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .brand h1 { font-size: 19px; letter-spacing: -.2px; }
     .brand p { font-size: 10.5px; opacity: .75; margin-top: 2px; }
     .invoice-tag { font-size: 10px; letter-spacing: 2px; opacity: .7; }

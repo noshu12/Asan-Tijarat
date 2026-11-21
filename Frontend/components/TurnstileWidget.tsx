@@ -35,15 +35,18 @@ export default function TurnstileWidget({ onVerify, onExpire }: Props) {
   useEffect(() => {
     if (!SITE_KEY || !ref.current) return;
     let cancelled = false;
+    // Capture the container node now — reading ref.current inside the
+    // cleanup runs after unmount, when the ref may already be cleared.
+    const container = ref.current;
 
     const renderWidget = () => {
-      if (cancelled || !ref.current || widgetId.current !== null) return;
+      if (cancelled || !container || widgetId.current !== null) return;
       const w = (window as any).turnstile;
       if (!w || typeof w.render !== 'function') {
         setTimeout(renderWidget, 200);
         return;
       }
-      widgetId.current = w.render(ref.current, {
+      widgetId.current = w.render(container, {
         sitekey: SITE_KEY,
         size: 'compact',
         callback: (token: string) => cbRef.current.onVerify(token),
@@ -58,9 +61,15 @@ export default function TurnstileWidget({ onVerify, onExpire }: Props) {
       });
     };
 
-    if (!(window as any).turnstile) {
+    // The api.js script is shared by every widget on the page — append it
+    // only once. Without this check React StrictMode's double effect (dev)
+    // appends a second <script>, and Cloudflare warns "Turnstile already
+    // has been loaded. Was api.js imported multiple times?" (seen after
+    // logout 2026-11-21).
+    const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    if (!(window as any).turnstile && !document.querySelector(`script[src="${SCRIPT_SRC}"]`)) {
       const s = document.createElement('script');
-      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+      s.src = SCRIPT_SRC;
       s.async = true;
       s.defer = true;
       s.onload = renderWidget;
@@ -73,7 +82,14 @@ export default function TurnstileWidget({ onVerify, onExpire }: Props) {
       cancelled = true;
       const w = (window as any).turnstile;
       if (w && widgetId.current !== null) {
-        try { w.remove(widgetId.current); } catch { /* already gone */ }
+        // Only remove while the widget iframe is still in our container.
+        // After a route change Turnstile may already have dropped it, and
+        // remove() then only logs "Cannot find Widget … consider using
+        // turnstile.remove()" warnings (seen after logout 2026-11-21).
+        const stillThere = container.querySelector('iframe');
+        if (stillThere) {
+          try { w.remove(widgetId.current); } catch { /* already gone */ }
+        }
         widgetId.current = null;
       }
     };
