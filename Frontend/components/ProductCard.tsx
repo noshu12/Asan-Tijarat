@@ -10,6 +10,7 @@ import { ProductImage } from '@/components/ProductImage';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthProvider';
 import { addToCart } from '@/lib/cart';
+import { trackAddToCart } from '@/lib/analytics';
 
 /**
  * Turns the product's free-text unit into buyer-friendly pack lines.
@@ -37,7 +38,7 @@ export function parsePack(unit: string): { pack: string; weight: string | null }
   return { pack: text || 'unit', weight: null };
 }
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product, isNew }: { product: Product; isNew?: boolean }) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [added, setAdded] = useState(false);
@@ -56,6 +57,10 @@ export function ProductCard({ product }: { product: Product }) {
     }
     if (user.role !== 'shopkeeper') return;
     addToCart(product);
+    // Batch 16 — B8 GA4: card adds the MOQ by default (lib/cart), so the
+    // event reports the same quantity. Stock 0 pe addToCart kuch nahi
+    // karta, is liye event bhi tabhi fire hota hai jab add waqai hua ho.
+    if (product.stock > 0) trackAddToCart(product.id, Math.max(product.moq, 1));
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1400);
   };
@@ -80,6 +85,11 @@ export function ProductCard({ product }: { product: Product }) {
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
             />
+            {isNew && (
+              <div className="absolute top-2.5 left-2.5">
+                <Badge variant="confirmed">New</Badge>
+              </div>
+            )}
             {product.status === 'Low Stock' && (
               <div className="absolute top-2.5 right-2.5">
                 <Badge variant="warning">Low Stock</Badge>
@@ -125,7 +135,9 @@ export function ProductCard({ product }: { product: Product }) {
               type="button"
               onClick={handleAdd}
               aria-label={`Add ${product.name} to cart`}
-              className={`flex items-center gap-1.5 min-h-[40px] px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
+              // Batch 13 (B3 top-up) — Add button was min-h-[40px]; the audit
+              // expects a 44px tap target.
+              className={`flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
                 added
                   ? 'bg-asan-accent text-white'
                   : 'bg-asan-accent hover:bg-asan-accent-hover text-white'

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { PortalHeader } from '@/components/PortalHeader';
 import { StatsCard } from '@/components/StatsCard';
@@ -16,6 +16,7 @@ import { api, AdminStats, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, Product } from '@/lib/types';
 import { formatPKR, formatDate } from '@/lib/utils';
+import { ACCOUNT_EVENT_TYPES, ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -29,10 +30,23 @@ export default function AdminDashboardPage() {
   const [pendingUsers, setPendingUsers] = useState<AdminUser[]>([]);
   const [verifyBusyId, setVerifyBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Batch 13 — live stats + counts: a matching event (or a reconnect
+  // sync) bumps refreshKey; the fetch effect below refetches silently on
+  // a bump, so the stats stay visible and nothing on the page resets.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved', ...ACCOUNT_EVENT_TYPES],
+    () => setRefreshKey((k) => k + 1),
+  );
 
   useEffect(() => {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
     if (authLoading) return;
+
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
 
     let mounted = true;
 
@@ -48,7 +62,7 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
 
     Promise.allSettled([
@@ -81,7 +95,7 @@ export default function AdminDashboardPage() {
     });
 
     return () => { mounted = false; };
-  }, [authLoading, user]);
+  }, [authLoading, user, refreshKey]);
 
   /** Approve a pending registration — the trader can sign in immediately after. */
   const verifyAccount = async (u: AdminUser) => {
@@ -229,7 +243,7 @@ export default function AdminDashboardPage() {
                         ['Submitted', u.createdAt ? formatDate(u.createdAt) : '—'],
                       ] as const).map(([label, value]) => (
                         <div key={label}>
-                          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</dt>
+                          <dt className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</dt>
                           <dd className="text-xs font-semibold text-slate-700 dark:text-slate-200 break-words">{value}</dd>
                         </div>
                       ))}
@@ -305,10 +319,10 @@ export default function AdminDashboardPage() {
                       <p className="text-xs font-bold text-slate-900 dark:text-white truncate" title={p.name}>
                         {p.name}
                       </p>
-                      <p className="text-[10px] text-slate-400 truncate">
+                      <p className="text-xs text-slate-400 truncate">
                         {formatPKR(p.price)} / {p.unit}
                       </p>
-                      <p className="text-[10px] text-slate-400 truncate" title={p.supplierName}>
+                      <p className="text-xs text-slate-400 truncate" title={p.supplierName}>
                         by {p.supplierName}
                       </p>
                     </div>

@@ -267,7 +267,7 @@ export function Navbar() {
                   >
                     <ShoppingCart className="w-5 h-5" />
                     {cartItemCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-asan-accent text-[10px] font-bold text-white flex items-center justify-center">
+                      <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-asan-accent text-xs font-bold text-white flex items-center justify-center">
                         {cartItemCount}
                       </span>
                     )}
@@ -435,7 +435,7 @@ export function Navbar() {
               </form>
               <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 flex items-center justify-between">
                 <span>Popular: Super Kernel Basmati, Faisalabad Cotton, Red Chilli</span>
-                <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-[10px]">ESC to close</kbd>
+                <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border text-xs">ESC to close</kbd>
               </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthProvider';
 import { Order, OrderStatus, PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { formatPKR, formatDate } from '@/lib/utils';
+import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 const TABS: ('All' | OrderStatus)[] = ['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 
@@ -32,6 +33,14 @@ export default function AdminOrdersPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Batch 13 — live list: a matching event (or a reconnect sync) bumps
+  // refreshKey; the fetch effect below refetches silently on a bump, so
+  // the table, scroll, search text and tabs never reset.
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
+    () => setRefreshKey((k) => k + 1),
+  );
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
@@ -43,6 +52,10 @@ export default function AdminOrdersPage() {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
     if (authLoading) return;
 
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
+
     let mounted = true;
 
     if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
@@ -50,7 +63,7 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     api.admin
       .orders({ status: activeTab === 'All' ? undefined : activeTab, search: debouncedSearch || undefined })

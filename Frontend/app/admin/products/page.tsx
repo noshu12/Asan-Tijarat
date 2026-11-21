@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Product } from '@/lib/types';
 import { formatDate, formatFileSize, formatPKR } from '@/lib/utils';
+import { useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function AdminProductsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -28,6 +29,13 @@ export default function AdminProductsPage() {
   const [message, setMessage] = useState<string | null>(null);
   // The listing whose uploaded photo is open in the full-size viewer.
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+  // Batch 13 — no product event type exists in the agreed SSE list, so
+  // this page only refetches on a reconnect / tab-visible sync (bump
+  // below); the fetch effect refetches silently on a bump, so an open
+  // photo preview and the search text never reset.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey([], () => setRefreshKey((k) => k + 1));
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
@@ -38,6 +46,10 @@ export default function AdminProductsPage() {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
     if (authLoading) return;
 
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
+
     let mounted = true;
 
     if (!user || user.role !== 'admin') {
@@ -45,7 +57,7 @@ export default function AdminProductsPage() {
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     api.admin
       .products({ status: statusFilter, search: debouncedSearch || undefined })
@@ -55,7 +67,7 @@ export default function AdminProductsPage() {
     return () => { mounted = false; };
     // FIX (Batch 03) — deps me debouncedSearch add kiya, taake typing se
     // refetch ho. Pehle deps sirf [user, statusFilter] thay.
-  }, [user, statusFilter, debouncedSearch]);
+  }, [user, statusFilter, debouncedSearch, refreshKey, authLoading]);
 
   const removeProduct = (p: Product) => {
     if (!window.confirm(`Delete "${p.name}" from the marketplace?`)) return;
@@ -285,7 +297,7 @@ export default function AdminProductsPage() {
                 ],
               ] as const).map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</dt>
+                  <dt className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</dt>
                   <dd className="text-xs font-semibold text-slate-700 dark:text-slate-200 break-words">{value}</dd>
                 </div>
               ))}

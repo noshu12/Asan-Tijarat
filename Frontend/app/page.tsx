@@ -32,5 +32,19 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <HomeClient />;
+  // B9 (Round-4 Batch 13) — Organization JSON-LD. Static data only
+  // (name / url / logo); no fetch, nothing invented.
+  const orgJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Asan Tijarat',
+    url: 'https://asan-tijarat.vercel.app',
+    logo: 'https://asan-tijarat.vercel.app/logo.png',
+  });
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: orgJsonLd }} />
+      <HomeClient />
+    </>
+  );
 }

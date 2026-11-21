@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Store, ArrowRight, Trash2, Minus, Plus, Check, MapPin, Crosshair } from 'lucide-react';
@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Loader } from '@/components/ui/loader';
 import { ProductImage } from '@/components/ProductImage';
+import { useRealtime } from '@/hooks/useRealtime';
+import { trackCheckoutStart, trackOrderPlaced } from '@/lib/analytics';
 
 export default function ShopkeeperCartPage() {
   const { user, loading: authLoading } = useAuth();
@@ -42,6 +44,46 @@ export default function ShopkeeperCartPage() {
     setError(null);
   }, [authLoading]);
 
+  // Batch 13 — live stock warning. The cart is a localStorage snapshot,
+  // so its quantities can go stale when a supplier sells down stock. On
+  // page load and on every reconnect / tab-visible sync, each cart item's
+  // live stock is re-checked: if the cart quantity now exceeds stock, the
+  // user is WARNED — the quantity is NEVER changed silently (and never
+  // reduced for them). Checkout still validates server-side as the final
+  // authority. No stock event type exists in the agreed SSE list, so this
+  // runs on sync, not on a live event.
+  const [stockWarnings, setStockWarnings] = useState<{ productId: string; name: string; stock: number; quantity: number }[]>([]);
+  const checkStock = useCallback(async () => {
+    const current = getCart();
+    if (current.length === 0) {
+      setStockWarnings([]);
+      return;
+    }
+    const results = await Promise.all(
+      current.map(async (entry) => {
+        try {
+          const res = await api.product(entry.product.id);
+          const live = res.product;
+          if (!live || entry.quantity <= live.stock) return null;
+          return { productId: entry.product.id, name: live.name, stock: live.stock, quantity: entry.quantity };
+        } catch {
+          return null; // A failed check warns about nothing — checkout validates anyway.
+        }
+      }),
+    );
+    setStockWarnings(results.filter((w): w is NonNullable<typeof w> => w !== null));
+  }, []);
+  useEffect(() => {
+    void checkStock();
+  }, [checkStock]);
+  const { syncKey } = useRealtime();
+  const lastSyncKeyRef = useRef(0);
+  useEffect(() => {
+    if (lastSyncKeyRef.current === syncKey) return;
+    lastSyncKeyRef.current = syncKey;
+    void checkStock();
+  }, [syncKey, checkStock]);
+
   const refresh = () => setItems(getCart());
 
   const subtotal = items.reduce((sum, entry) => sum + entry.product.price * entry.quantity, 0);
@@ -63,6 +105,9 @@ export default function ShopkeeperCartPage() {
       });
       clearCart();
       setCreatedOrders(res.orders);
+      // Batch 16 — B8 GA4: one order per supplier, so one event per
+      // order — order id + total amount only, no PII.
+      res.orders.forEach((o) => trackOrderPlaced(o.id, o.totalAmount));
       setItems([]);
       setCheckoutOpen(false);
     } catch (err) {
@@ -73,6 +118,8 @@ export default function ShopkeeperCartPage() {
   };
 
   const openCheckout = () => {
+    // Batch 16 — B8 GA4: checkout modal opens = order placement starts.
+    trackCheckoutStart();
     setCheckoutOpen(true);
     autoPromptLocation();
   };
@@ -114,6 +161,17 @@ export default function ShopkeeperCartPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4 text-sm text-red-700 dark:text-red-300">
           ⚠️ {error}
+        </div>
+      )}
+      {stockWarnings.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4 text-sm text-amber-700 dark:text-amber-300 space-y-1">
+          <p className="font-bold">⚠️ Stock changed since you added these to your cart:</p>
+          {stockWarnings.map((w) => (
+            <p key={w.productId} className="text-xs">
+              {w.name} — only {w.stock} left in stock, but you have {w.quantity} in your cart.
+              Please reduce the quantity before checkout — it has not been changed for you.
+            </p>
+          ))}
         </div>
       )}
       {createdOrders && createdOrders.length > 0 && (

@@ -2,7 +2,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { CATEGORIES } = require('../constants/categories');
 const { toClient } = require('../utils/serialize');
-const { saveProductImages, deleteStoredFiles, deleteStoredUploads, deleteProductStoredFiles, ProductImageError } = require('../utils/productImageStorage');
+const { saveProductImages, deleteStoredUploads, deleteProductStoredFiles, ProductImageError } = require('../utils/productImageStorage');
 
 /** Auto-derive listing status from stock & MOQ (matches frontend behaviour). */
 function deriveStatus(stock, moq) {
@@ -91,6 +91,24 @@ function validateListingFields(b, isUpdate) {
 function checkMoqAgainstStock(moq, stock) {
   if (stock > 0 && moq > stock) {
     return { code: 'MOQ_EXCEEDS_STOCK', message: 'MOQ cannot be larger than the available stock.' };
+  }
+  return null;
+}
+
+/**
+ * Listing ownership — a supplier may only edit/delete their OWN
+ * listings. Returns { code, message } when the product belongs to
+ * another supplier, or null when the caller owns it. Used by
+ * updateProduct and deleteProduct, and unit-tested directly
+ * (test/productAuth.test.js) — the guard must never depend on which
+ * handler called it.
+ */
+function checkProductOwnership(product, user, action = 'edit') {
+  if (String(product.supplierId) !== String(user._id)) {
+    return {
+      code: 'NOT_YOUR_PRODUCT',
+      message: `You can only ${action} your own product listings.`,
+    };
   }
   return null;
 }
@@ -225,6 +243,15 @@ async function getProducts(req, res, next) {
       .sort(sortClause)
       .skip((safePage - 1) * limit)
       .limit(limit)
+      // Batch 14 (item 7) — field selection: only the fields the list
+      // consumers actually read. Card/marketplace/home/supplier rows use
+      // name/category/price/unit/moq/stock/supplierId/supplierName/
+      // supplierCity/image/status (+ _id → id); the sitemap needs
+      // updatedAt. Dropped: description, additionalImages, imageUploads
+      // (detail page only, via GET /api/products/:id) and createdAt
+      // (no list consumer reads it). The $or search above still scans
+      // description server-side — projection never affects the filter.
+      .select('_id name category price unit moq stock supplierId supplierName supplierCity image status updatedAt')
       .lean();
     res.json({
       products: toClient(products),
@@ -425,9 +452,10 @@ async function updateProduct(req, res, next) {
         error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' },
       });
     }
-    if (String(product.supplierId) !== String(req.user._id)) {
+    const ownershipError = checkProductOwnership(product, req.user);
+    if (ownershipError) {
       return res.status(403).json({
-        error: { code: 'NOT_YOUR_PRODUCT', message: 'You can only edit your own product listings.' },
+        error: ownershipError,
       });
     }
 
@@ -530,9 +558,10 @@ async function deleteProduct(req, res, next) {
         error: { code: 'PRODUCT_NOT_FOUND', message: 'No product matches that id.' },
       });
     }
-    if (String(product.supplierId) !== String(req.user._id)) {
+    const ownershipError = checkProductOwnership(product, req.user, 'delete');
+    if (ownershipError) {
       return res.status(403).json({
-        error: { code: 'NOT_YOUR_PRODUCT', message: 'You can only delete your own product listings.' },
+        error: ownershipError,
       });
     }
 
@@ -550,3 +579,4 @@ async function deleteProduct(req, res, next) {
 
 module.exports = { getProducts, getProductCities, getProduct, getProductMarketSale, createProduct, updateProduct, deleteProduct };
 module.exports.deriveStatus = deriveStatus;
+module.exports.checkProductOwnership = checkProductOwnership;

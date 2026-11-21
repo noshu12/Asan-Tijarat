@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
 import type { ChatMessage, Dispute, DisputeReason, Order, PaymentChannel, Rating } from '@/lib/types';
 import { PAYMENT_METHOD_LABEL } from '@/lib/types';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader } from '@/components/ui/loader';
 import { ProductImage } from '@/components/ProductImage';
+import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
 
 /**
  * Shared order-detail screen for the shopkeeper + supplier portals
@@ -119,6 +120,39 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
+
+  // Batch 13 — live order detail (no page reset: load() never touches the
+  // `loading` spinner, and typed drafts / open forms are separate state).
+  // FIX — every matching event, chat included, refetches the thread:
+  // the notification payload carries only a title + a truncated
+  // "Name: text" summary, so hand-building a bubble from it showed the
+  // wrong sender ("New message — AT-...") and cut the text at 120 chars.
+  // load() returns the real message (sender, role, full text).
+  // - a reconnect / tab-visible sync refetches the same way.
+  const chatListRef = useRef<HTMLDivElement | null>(null);
+  const chatAtBottomRef = useRef(true);
+  useRealtimeEvent(
+    ['chat_message', ...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
+    (event) => {
+      if (event.orderId && event.orderId !== orderId) return;
+      void load();
+    },
+  );
+  const { syncKey } = useRealtime();
+  const lastSyncKeyRef = useRef(0);
+  useEffect(() => {
+    if (lastSyncKeyRef.current === syncKey) return;
+    lastSyncKeyRef.current = syncKey;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey]);
+
+  // Auto-scroll the chat ONLY when the user is already at the bottom —
+  // reading older messages must never yank the scroll away.
+  useEffect(() => {
+    const el = chatListRef.current;
+    if (el && chatAtBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   const run = async (fn: () => Promise<void>, okMessage: string) => {
     setError(null);
@@ -415,13 +449,20 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
       <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
         <h3 className="text-base font-bold text-slate-900 dark:text-white">Chat with {isBuyer ? 'Supplier' : 'Shopkeeper'}</h3>
         <p className="text-[11px] text-slate-400">Talk here first — this thread is step 1 of the dispute flow, and the admin can read it as evidence.</p>
-        <div className="space-y-2 max-h-72 overflow-y-auto">
+        <div
+          ref={chatListRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            chatAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+          className="space-y-2 max-h-72 overflow-y-auto"
+        >
           {messages.length === 0 && <p className="text-xs text-slate-500">No messages yet.</p>}
           {messages.map((m) => (
             <div key={m.id} className={`p-3 rounded-xl text-xs max-w-[85%] ${m.senderRole === role ? 'bg-asan-accent-light dark:bg-asan-dark/40 ml-auto text-right' : 'bg-slate-50 dark:bg-slate-800/60'}`}>
               <p className="font-bold text-slate-900 dark:text-white">{m.senderName || m.senderRole}</p>
               <p className="text-slate-600 dark:text-slate-300 mt-0.5 break-words">{m.text}</p>
-              <p className="text-[10px] text-slate-400 mt-1">{formatDate(m.createdAt)}</p>
+              <p className="text-xs text-slate-400 mt-1">{formatDate(m.createdAt)}</p>
             </div>
           ))}
         </div>

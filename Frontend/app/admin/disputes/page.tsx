@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
 import { PortalHeader } from '@/components/PortalHeader';
 import { useAuth } from '@/context/AuthProvider';
@@ -9,6 +9,7 @@ import { PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { formatPKR, formatDate } from '@/lib/utils';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
+import { useLiveRefreshKey, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
 
 /**
  * Admin dispute queue (Batch 05).
@@ -41,6 +42,14 @@ export default function AdminDisputesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Batch 13 — live queue: dispute_opened / dispute_resolved (or a
+  // reconnect sync) bumps refreshKey; the fetch effect below refetches
+  // silently on a bump, so typed decision notes and open evidence stay put.
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    ['dispute_opened', 'dispute_resolved'],
+    () => setRefreshKey((k) => k + 1),
+  );
   const [decisionById, setDecisionById] = useState<Record<string, DisputeDecision>>({});
   const [refundById, setRefundById] = useState<Record<string, string>>({});
   const [noteById, setNoteById] = useState<Record<string, string>>({});
@@ -53,10 +62,49 @@ export default function AdminDisputesPage() {
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
+  // Remaining-fixes — live evidence chat thread: the thread used to load
+  // once in loadEvidence() and never update, so a message sent while the
+  // admin had the evidence open never appeared. Same pattern as
+  // OrderDetail: on chat_message for this order, refetch the messages
+  // (never hand-build a bubble — the notification payload carries only a
+  // truncated "Name: text" summary with the wrong sender). A reconnect /
+  // tab-visible sync refetches the same way, for messages missed while
+  // away. Only the message list is replaced — the open panel, order
+  // summary and typed decision notes stay put, and a failed live refetch
+  // never clears the thread or shows an error.
+  const evidenceOrderIdRef = useRef<string | null>(null);
+  const reloadEvidenceMessages = useCallback(async (orderId: string) => {
+    try {
+      const msgRes = await api.messages.list(orderId);
+      if (evidenceOrderIdRef.current !== orderId) return;
+      setEvidenceMessages(msgRes.messages ?? []);
+    } catch {
+      // Live refetch only — keep the thread already on screen.
+    }
+  }, []);
+  useRealtimeEvent(['chat_message'], (event) => {
+    const orderId = evidenceOrderIdRef.current;
+    if (!orderId) return;
+    if (event.orderId && event.orderId !== orderId) return;
+    void reloadEvidenceMessages(orderId);
+  });
+  const { syncKey } = useRealtime();
+  const lastEvidenceSyncKeyRef = useRef(syncKey);
+  useEffect(() => {
+    if (lastEvidenceSyncKeyRef.current === syncKey) return;
+    lastEvidenceSyncKeyRef.current = syncKey;
+    const orderId = evidenceOrderIdRef.current;
+    if (!orderId) return;
+    void reloadEvidenceMessages(orderId);
+  }, [syncKey, reloadEvidenceMessages]);
+
   useEffect(() => {
     if (authLoading) return;
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
     let mounted = true;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     api.admin
       .disputes({ status: activeTab === 'all' ? undefined : activeTab, limit: 50 })
@@ -97,6 +145,7 @@ export default function AdminDisputesPage() {
       setEvidenceOrder(null);
       setEvidenceMessages([]);
       setEvidenceError(null);
+      evidenceOrderIdRef.current = null;
       return;
     }
     setEvidenceId(d.id);
@@ -113,10 +162,12 @@ export default function AdminDisputesPage() {
       ]);
       setDisputes((prev) => prev.map((x) => (x.id === d.id ? disputeRes.dispute : x)));
       setEvidenceOrder(orderRes.order);
+      evidenceOrderIdRef.current = orderRes.order.id;
       setEvidenceMessages(msgRes.messages ?? []);
     } catch (err) {
       setEvidenceError(err instanceof Error ? err.message : 'Failed to load evidence.');
       setEvidenceOrder(null);
+      evidenceOrderIdRef.current = null;
       setEvidenceMessages([]);
     } finally {
       setEvidenceLoading(false);

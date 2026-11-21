@@ -1,5 +1,6 @@
 "use client";
 
+import Link from 'next/link';
 import React, { useState } from 'react';
 import { Product } from '@/lib/types';
 import { formatPKR } from '@/lib/utils';
@@ -29,18 +30,22 @@ export function AIRecommendationCard({ product }: { product: Product }) {
   return (
     <div className="rounded-2xl border border-asan-accent/30 bg-gradient-to-b from-asan-accent-light/50 to-white dark:from-asan-accent/20 dark:to-slate-900 p-4 shadow-sm hover:shadow-md transition">
       <div className="flex gap-3.5">
-        <ProductImage
-          src={product.image}
-          alt={product.name}
-          className="w-20 h-20 rounded-xl object-cover shrink-0 border border-slate-100 dark:border-slate-800"
-          width={80}
-          height={80}
-        />
+        <Link href={`/product/${product.id}`} aria-label={`View ${product.name}`} className="shrink-0">
+          <ProductImage
+            src={product.image}
+            alt={product.name}
+            className="w-20 h-20 rounded-xl object-cover border border-slate-100 dark:border-slate-800"
+            width={80}
+            height={80}
+          />
+        </Link>
         <div className="flex flex-col justify-between flex-1 min-w-0">
           <div>
-            <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
-              {product.name}
-            </h4>
+            <Link href={`/product/${product.id}`} className="block">
+              <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate hover:text-asan-accent dark:hover:text-asan-accent-light">
+                {product.name}
+              </h4>
+            </Link>
             <p className="text-[11px] text-slate-400 truncate">{product.supplierName}</p>
           </div>
           <div className="flex items-center justify-between mt-2">

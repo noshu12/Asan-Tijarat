@@ -82,4 +82,18 @@ const productSchema = new mongoose.Schema(
 // place for $text queries and for the sort/filter paths above.
 productSchema.index({ name: 'text', description: 'text', category: 'text', supplierName: 'text', supplierCity: 'text' });
 
+// B11 (Round-4 Batch 13) — the two indexes the list endpoint's actual
+// query shape was missing. getProducts (product.controller.js) ALWAYS
+// filters `status` on the public list (`$ne: 'Out of Stock'`, no
+// supplierId) and sorts `createdAt: -1` by default, so a compound
+// { status, createdAt } serves that whole path (filter + sort) instead
+// of a status-only index plus an in-memory sort. The supplier's own
+// list filters `supplierId` and sorts the same way, so it gets the
+// matching { supplierId, createdAt } compound. No single-field status /
+// createdAt indexes: the compounds cover both shapes and keep the
+// index count down. Price sorts (price_asc / price_desc) keep using
+// the existing single-field price index.
+productSchema.index({ status: 1, createdAt: -1 });
+productSchema.index({ supplierId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Product', productSchema);

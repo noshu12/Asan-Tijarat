@@ -261,6 +261,7 @@ export default function SignInPage() {
             <Input
               label="Phone or Email"
               type="text"
+              autoComplete="username"
               placeholder="+92 300 1234567"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
@@ -271,6 +272,7 @@ export default function SignInPage() {
               <Input
                 label="Password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

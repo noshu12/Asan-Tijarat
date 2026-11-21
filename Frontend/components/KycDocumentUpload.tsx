@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { AlertCircle, FileText, RefreshCw, UploadCloud, X } from 'lucide-react';
 import { cn, formatFileSize } from '@/lib/utils';
 import { UPLOAD_ACCEPT, isImageFile, validateUploadFile } from '@/lib/uploads';
@@ -81,7 +82,7 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
 
       <input
         ref={inputRef}
@@ -112,15 +113,18 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
         >
           <UploadCloud className="w-6 h-6 text-slate-400 mx-auto mb-1" />
           <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Upload {label}</p>
-          <p className="text-[10px] text-slate-400">{hint}</p>
-          <p className="text-[10px] text-slate-400">PNG, JPG or PDF • max 5MB • click or drop a file</p>
+          <p className="text-xs text-slate-400">{hint}</p>
+          <p className="text-xs text-slate-400">PNG, JPG or PDF • max 5MB • click or drop a file</p>
         </button>
       ) : (
         <div className="p-3 rounded-2xl border-2 border-asan-border dark:border-asan-mid bg-asan-accent-light/60 dark:bg-asan-dark/20 flex items-center gap-3">
           {value.isImage ? (
-            <img
+            <Image
               src={value.previewUrl}
               alt={`${label} preview`}
+              width={56}
+              height={56}
+              unoptimized
               className="w-14 h-14 rounded-xl object-cover border border-asan-border dark:border-asan-mid bg-white shrink-0"
             />
           ) : (
@@ -131,7 +135,7 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
 
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{value.name}</p>
-            <p className="text-[10px] text-slate-500">
+            <p className="text-xs text-slate-500">
               {formatFileSize(value.size)} • {value.isImage ? 'Image ready' : 'PDF ready'}
             </p>
           </div>
@@ -158,7 +162,7 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
       )}
 
       {error && (
-        <p className="flex items-center gap-1 text-[10px] font-semibold text-red-500">
+        <p className="flex items-center gap-1 text-xs font-semibold text-red-500">
           <AlertCircle className="w-3 h-3 shrink-0" />
           {error}
         </p>

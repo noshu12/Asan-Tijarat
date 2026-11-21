@@ -22,6 +22,15 @@
  *   dev mode (React Refresh) ko 'unsafe-eval' chahiye, is liye dev me
  *   script-src me 'unsafe-eval' add hai (neeche IS_DEV). Production
  *   build eval use nahi karta, is liye production policy strict hi hai.
+ * - Batch 16 (B8 GA4): script-src me https://www.googletagmanager.com
+ *   (gtag loader), connect-src + img-src me
+ *   https://www.google-analytics.com (hits /g/collect + pixel fallback).
+ *   Hosts verify kiye gaye: 2026-11-22 ko live gtag/js fetch kar ke
+ *   parha — loader me sirf googletagmanager.com + g/collect endpoint hai,
+ *   koi region*.google-analytics.com subdomain nahi. Doubleclick hosts
+ *   (stats.g.doubleclick.net / ad.doubleclick.net) loader me zikr hain
+ *   lekin sirf Google Ads remarketing ke liye — wo feature on nahi hai,
+ *   is liye CSP me NAHI dale. Baaki policy pehle jaisi hi strict hai.
  * - X-Frame-Options DENY + frame-ancestors 'none': site ko iframe me
  *   nahi khola ja sakta (clickjacking band).
  * - X-Content-Type-Options nosniff, Referrer-Policy
@@ -99,11 +108,11 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${IS_DEV ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com`,
+  `script-src 'self' 'unsafe-inline'${IS_DEV ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://plus.unsplash.com https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com`,
+  `img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://plus.unsplash.com https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com https://www.google-analytics.com`,
   "font-src 'self' data:",
-  `connect-src 'self' ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com https://challenges.cloudflare.com`,
+  `connect-src 'self' ${BACKEND_ORIGIN} https://asan-tijarat.onrender.com https://challenges.cloudflare.com https://www.google-analytics.com`,
   'frame-src https://challenges.cloudflare.com blob:',
   "frame-ancestors 'none'",
   "base-uri 'self'",
