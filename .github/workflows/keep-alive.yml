@@ -1,0 +1,28 @@
+# Keep-alive — Asan Tijarat
+# Free Render instances sleep after ~15 minutes of no traffic, so the first
+# real request after a nap waits for a cold start. This workflow pings the
+# backend's lightweight health endpoint every 10 minutes to keep it awake.
+# Free tier only: no secrets, no deploys, no checkout — just a curl.
+# Target: GET /api/health always answers 200 (even with the DB down — see
+# Backend/server.js), so a 200 here means "the instance is up", nothing more.
+# A single failed ping must NOT fail the run noisily (Render restarts,
+# deploys and transient network blips happen) — see continue-on-error below.
+
+name: Keep-alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping backend health endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health
+        continue-on-error: true
+        run: curl --fail --silent --show-error --max-time 30 https://asan-tijarat.onrender.com/api/health

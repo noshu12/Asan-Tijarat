@@ -6,8 +6,11 @@
 //   set in Backend/.env as LOGO_URL (e.g. the Cloudinary URL of
 //   Frontend/public/logo.png). No attachment = no "logo.png" in the inbox
 //   list, and the logo still renders at the top of every email.
-// - If LOGO_URL is not set, a styled text header is used instead of a
-//   broken image. Set LOGO_URL in .env — the logo is mandatory for the brand.
+// - If LOGO_URL is not set, the site's own logo is used instead of a
+//   broken image: https://asan-tijarat.vercel.app/logo.png (the same file
+//   the frontend serves at /logo.png). The new AT logo is NOT on
+//   Cloudinary, so no Cloudinary URL is faked here — the site URL is the
+//   fallback. The styled text header is kept only as a last resort.
 // - Keeps all 9 template exports from v4 (incl. contactReplyEmail).
 
 /**
@@ -16,10 +19,17 @@
  * Upload Frontend/public/logo.png to Cloudinary once (Media Library ->
  * Upload) and paste the URL here. Gmail loads external images through its
  * own proxy, so this renders for every recipient.
+ * If LOGO_URL is not set, the site's own logo is used instead:
+ *   https://asan-tijarat.vercel.app/logo.png
+ * (the same file the frontend serves at /logo.png — the new AT logo is
+ * not on Cloudinary, so no Cloudinary URL is faked here).
  */
+const DEFAULT_LOGO_URL = 'https://asan-tijarat.vercel.app/logo.png';
+
 function logoUrl() {
   const u = (process.env.LOGO_URL || '').trim();
-  return u.startsWith('http://') || u.startsWith('https://') ? u : '';
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  return DEFAULT_LOGO_URL;
 }
 
 function baseUrl() {

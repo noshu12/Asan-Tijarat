@@ -12,6 +12,11 @@
  *
  * Interface is UNCHANGED: sendEmail({ to, subject, text, html }) → true/false.
  * Never throws — callers fall back to the terminal dev log on failure.
+ * One exception to the old silence (Batch 12): a missing BREVO_API_KEY
+ * used to return false with NO log at all, so OTP / reset / approval
+ * emails were silently never sent. It is now logged here with
+ * console.error naming the key, and /api/auth/send-otp +
+ * /api/auth/forgot-password answer 503 before looking the user up.
  */
 function isEmailConfigured() {
   return Boolean(process.env.BREVO_API_KEY);
@@ -19,6 +24,10 @@ function isEmailConfigured() {
 
 async function sendEmail({ to, subject, text, html }) {
   if (!isEmailConfigured()) {
+    // LOUD failure — never silent again. A missing key used to return
+    // false with no log, so OTP / reset / approval emails were silently
+    // never sent and the caller still reported success.
+    console.error('[email] BREVO_API_KEY is NOT set — email NOT sent. Set BREVO_API_KEY in the backend environment (Brevo dashboard → SMTP & API → API Keys). Until then no OTP, password-reset or approval email can go out.');
     return false;
   }
   try {

@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
-const { protect, requireRole } = require('../middleware/auth');
+const { protect, optionalProtect, requireRole } = require('../middleware/auth');
 const { requireTurnstile } = require('../utils/turnstile');
 const rateLimit = require('express-rate-limit');
 
@@ -54,7 +54,11 @@ router.post('/admin/2fa/login', adminVerifyTwoFactorLogin);
 router.post('/2fa/setup-first', setupTwoFactorFirst);
 router.post('/2fa/verify-setup-first', verifyTwoFactorSetupFirst);
 router.post('/logout', protect, logout);
-router.get('/me', protect, me);
+// Session check — optionalProtect, NOT protect: guests (no/invalid/
+// expired token) get 200 { user: null } instead of a 401, so public
+// pages don't log a red console error on every load (M7, Round-4 audit).
+// PATCH /me and /me/password below still use protect() and still 401.
+router.get('/me', optionalProtect, me);
 // Self-service profile + password management (settings pages).
 router.patch('/me', protect, updateMe);
 router.patch('/me/password', protect, changePassword);

@@ -40,6 +40,28 @@ async function protect(req, res, next) {
 }
 
 /**
+ * Same session check as protect(), but never rejects: a missing, invalid
+ * or expired token just means req.user = null and the request continues.
+ * Used ONLY by GET /api/auth/me — the session check every public page
+ * runs on load. Guests used to get a 401 there, which Chrome logs in red
+ * (M7, Round-4 audit); a guest is not an error, so /me answers
+ * 200 { user: null } instead. Every other route keeps protect() and
+ * still 401s — this must never be used on a route that requires a user.
+ */
+async function optionalProtect(req, res, next) {
+  try {
+    const token = req.cookies ? req.cookies.asan_admin_token || req.cookies.asan_token : null;
+    const { user, error } = await verifySession(token);
+    // Any session failure (no token, invalid/expired token, deleted or
+    // invalidated account, pending verification) = guest, not an error.
+    req.user = error ? null : user;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Verifies one session token and returns { user } or { error }.
  * Shared by protect() and protectAdmin() — the only difference is which
  * cookie the token comes from.
@@ -135,4 +157,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { checkDb, protect, protectAdmin, requireAuth: protect, requireRole };
+module.exports = { checkDb, protect, optionalProtect, protectAdmin, requireAuth: protect, requireRole };
