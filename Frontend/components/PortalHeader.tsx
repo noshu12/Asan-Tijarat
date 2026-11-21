@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Bell, CheckCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import type { NotificationItem } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
+import { ALL_REALTIME_EVENT_TYPES, useRealtimeEvent } from '@/hooks/useRealtime';
 
 interface PortalHeaderProps {
   title: string;
@@ -34,16 +35,45 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
   const [bellOpen, setBellOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Batch 13 — ids already in the list, so a live event that replays (or
+  // arrives twice) upserts instead of double-counting the badge.
+  const knownIdsRef = useRef<Set<string> | null>(null);
 
   const loadNotifications = async () => {
     try {
       const res = await api.notifications.list({ limit: 20 });
       setNotifications(res.notifications ?? []);
       setUnreadCount(res.unreadCount ?? 0);
+      knownIdsRef.current = new Set((res.notifications ?? []).map((n) => n.id));
     } catch {
       /* offline or expired token — the bell just stays empty */
     }
   };
+
+  // Batch 13 — live bell: a new event is upserted by id (dedupe) at the
+  // top of the list and the badge increments; the dropdown, scroll and
+  // any open modal are untouched.
+  useRealtimeEvent(ALL_REALTIME_EVENT_TYPES, (event) => {
+    const item: NotificationItem = {
+      id: event.id,
+      type: event.type,
+      title: event.title,
+      message: event.message,
+      link: event.link,
+      orderId: event.orderId ?? null,
+      read: false,
+      createdAt: event.createdAt,
+    };
+    const known = knownIdsRef.current ?? new Set<string>();
+    knownIdsRef.current = known;
+    if (known.has(item.id)) {
+      setNotifications((prev) => prev.map((n) => (n.id === item.id ? item : n)));
+      return;
+    }
+    known.add(item.id);
+    setNotifications((prev) => [item, ...prev].slice(0, 20));
+    setUnreadCount((c) => c + 1);
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -123,7 +153,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
@@ -157,7 +187,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
                         {n.message && (
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
                         )}
-                        <p className="text-[10px] text-slate-400 mt-1">{formatDate(n.createdAt)}</p>
+                        <p className="text-xs text-slate-400 mt-1">{formatDate(n.createdAt)}</p>
                       </button>
                     </li>
                   ))}

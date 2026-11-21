@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { AlertCircle, Crown, ImagePlus, UploadCloud, X } from 'lucide-react';
 import { cn, formatFileSize } from '@/lib/utils';
 import {
@@ -136,14 +137,17 @@ export function ProductImageUpload({
             key={image.id}
             className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50"
           >
-            <img
+            <Image
               src={image.previewUrl}
               alt={`${image.name} preview`}
+              width={400}
+              height={128}
+              unoptimized
               className="w-full h-32 object-cover"
             />
 
             {index === 0 ? (
-              <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-asan-accent text-white text-[10px] font-bold shadow">
+              <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-asan-accent text-white text-xs font-bold shadow">
                 <Crown className="w-3 h-3" />
                 Main photo
               </span>
@@ -152,7 +156,7 @@ export function ProductImageUpload({
                 type="button"
                 onClick={() => makeCover(image.id)}
                 title="Use as the main product photo"
-                className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-bold opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 transition"
+                className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/60 text-white text-xs font-bold opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 transition"
               >
                 Make main
               </button>
@@ -169,10 +173,10 @@ export function ProductImageUpload({
             </button>
 
             <div className="px-2 py-1.5">
-              <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 truncate" title={image.name}>
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate" title={image.name}>
                 {image.name}
               </p>
-              <p className="text-[10px] text-slate-400">{formatFileSize(image.size)}</p>
+              <p className="text-xs text-slate-400">{formatFileSize(image.size)}</p>
             </div>
           </div>
         ))}
@@ -203,7 +207,7 @@ export function ProductImageUpload({
             <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
               {images.length === 0 ? 'Upload product photo' : 'Add another photo'}
             </span>
-            <span className="text-[10px] text-slate-400">
+            <span className="text-xs text-slate-400">
               Click or drop • JPG, PNG, WEBP • max 5MB • up to {MAX_PRODUCT_IMAGES}
             </span>
           </button>

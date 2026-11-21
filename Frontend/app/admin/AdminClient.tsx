@@ -8,24 +8,39 @@ import { RequireAuth } from '@/components/AuthGuard';
 import { useAuth } from '@/context/AuthProvider';
 
 /**
- * Sub-admins may open /admin/users, /admin/messages and /admin/orders —
- * every other admin page shows a not-authorized note. The backend
- * enforces the same boundary with 403s; this just keeps the UI honest.
- * Direct-URL access is covered because this gate wraps the whole
- * /admin subtree.
+ * Sub-admins may open /admin/users, /admin/messages, /admin/orders and
+ * /admin/disputes — every other admin page shows a not-authorized note.
+ * The backend enforces the same boundary with 403s; this just keeps the
+ * UI honest. Direct-URL access is covered because this gate wraps the
+ * whole /admin subtree.
  *
  * Orders is open to sub-admins per the Batch 02 decision (sub-admin
  * gets FULL access — everything the main admin can do): the backend
  * already allows them on GET /orders and POST
  * /orders/:id/confirm-payment, so the UI gate must not block them here.
+ *
+ * Disputes is open to sub-admins per Batch 15 (Noushad, 2026-11-22):
+ * disputes AND refunds are admin-or-sub-admin work. The refund itself
+ * is a dispute decision (refund_full / refund_partial / return_goods),
+ * and the backend already allows sub-admins on GET /api/admin/disputes
+ * and POST /api/admin/disputes/:id/decide — so the UI gate must not
+ * block them here either. Dashboard, Products, Security, Contacts,
+ * Audit Log and Sub-Admins stay main-admin-only (undecided) — the
+ * backend still 403s sub-admins on those, and this gate keeps them out.
  */
 function AdminGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
 
-  // Sub-admins may use Users & KYC, Messages and Orders; everything else under /admin stays blocked.
+  // Sub-admins may use Users & KYC, Messages, Orders and Disputes;
+  // everything else under /admin stays blocked. The disputes prefix
+  // covers a future /admin/disputes/[id] detail route too.
   const subadminAllowed =
-    pathname === '/admin/users' || pathname === '/admin/messages' || pathname === '/admin/orders';
+    pathname === '/admin/users' ||
+    pathname === '/admin/messages' ||
+    pathname === '/admin/orders' ||
+    pathname === '/admin/disputes' ||
+    pathname.startsWith('/admin/disputes/');
   if (user?.role === 'subadmin' && !subadminAllowed) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
@@ -33,7 +48,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
           Not authorized
         </p>
         <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-          Your support account can manage users, KYC, messages and orders only.
+          Your support account can manage users, KYC, messages, orders and disputes only.
         </p>
         <a
           href="/admin/users"

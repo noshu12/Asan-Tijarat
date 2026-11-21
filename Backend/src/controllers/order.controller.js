@@ -4,6 +4,8 @@ const Product = require('../models/Product');
 const Counter = require('../models/Counter');
 const { toClient } = require('../utils/serialize');
 const { sanitizeLocation, googleMapsLink } = require('../utils/location');
+const { calcLineTotal, sumLineTotals } = require('../utils/orderTotals');
+const { reserveStock } = require('../utils/stock');
 const { notifyUser, notifyOrderParties } = require('../utils/notify');
 
 /**
@@ -191,7 +193,7 @@ async function createOrder(req, res, next) {
         unit: product.unit,
         supplierName: product.supplierName,
         _supplierId: String(product.supplierId),
-        _lineTotal: product.price * item.quantity,
+        _lineTotal: calcLineTotal(product.price, item.quantity),
       });
     }
 
@@ -203,7 +205,9 @@ async function createOrder(req, res, next) {
       }
       const group = groups.get(line._supplierId);
       group.items.push(line);
-      group.subtotal += line._lineTotal;
+    }
+    for (const group of groups.values()) {
+      group.subtotal = sumLineTotals(group.items);
     }
 
     const buyer = req.user;
@@ -215,32 +219,17 @@ async function createOrder(req, res, next) {
     // group reserved+created in turn, so a later group's 409 left earlier
     // groups' orders orphaned in the DB.)
     //
-    // RACE-CONDITION FIX (kept): reserve stock ATOMICALLY. The filter itself
-    // demands enough stock ({ stock: { $gte: quantity } }), so two simultaneous
-    // checkouts can never oversell the same product — the loser gets
-    // modifiedCount 0.
-    const allReserved = [];
-    let failedLine = null;
-    for (const group of groups.values()) {
-      for (const line of group.items) {
-        const r = await Product.updateOne(
-          { _id: line.productId, stock: { $gte: line.quantity } },
-          { $inc: { stock: -line.quantity } }
-        );
-        if (r.modifiedCount === 0) {
-          failedLine = line;
-          break;
-        }
-        allReserved.push(line);
-      }
-      if (failedLine) break;
-    }
-    if (failedLine) {
-      // Another checkout grabbed the stock first — give back everything
-      // reserved so far, then fail cleanly with 409. No orders were created.
-      for (const line of allReserved) {
-        await Product.updateOne({ _id: line.productId }, { $inc: { stock: line.quantity } });
-      }
+    // RACE-CONDITION FIX (kept): reserve stock ATOMICALLY — see
+    // utils/stock.js. The filter itself demands enough stock
+    // ({ stock: { $gte: quantity } }), so two simultaneous checkouts can
+    // never oversell the same product — the loser gets modifiedCount 0.
+    // A failed line rolls back every reservation made so far, so no
+    // stock stays held and no orders were created yet.
+    const allLines = [];
+    for (const group of groups.values()) allLines.push(...group.items);
+    const reservation = await reserveStock(Product, allLines);
+    if (!reservation.ok) {
+      const failedLine = reservation.failedLine;
       return res.status(409).json({
         error: {
           code: 'INSUFFICIENT_STOCK',
@@ -253,8 +242,19 @@ async function createOrder(req, res, next) {
     const created = [];
     for (const group of groups.values()) {
       // Stock is reserved — now create the order.
-      // Strip internal fields before persisting the item snapshots.
-      const safeItems = group.items.map(({ _supplierId, _lineTotal, ...rest }) => rest);
+      // Strip internal fields before persisting the item snapshots —
+      // the schema only takes these 7 fields, so pick them explicitly
+      // (a rest-strip would leave _supplierId/_lineTotal flagged as
+      // unused by the linter).
+      const safeItems = group.items.map((line) => ({
+        productId: line.productId,
+        productName: line.productName,
+        productImage: line.productImage,
+        unitPrice: line.unitPrice,
+        quantity: line.quantity,
+        unit: line.unit,
+        supplierName: line.supplierName,
+      }));
 
       const order = await Order.create({
         orderNumber: await nextOrderNumber(),

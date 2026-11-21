@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Download, FileText, ImageOff, ZoomIn } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { API_URL, isAdminHost } from '@/lib/api';
@@ -124,12 +125,12 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
           Uploaded KYC Documents
         </p>
         <span
           className={cn(
-            'text-[10px] font-bold px-2 py-0.5 rounded-full border',
+            'text-xs font-bold px-2 py-0.5 rounded-full border',
             uploadedCount === slots.length
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
               : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
@@ -169,25 +170,25 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                 {!doc?.url ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
                     <ImageOff className="w-5 h-5" />
-                    <span className="text-[10px] font-semibold">Not uploaded</span>
+                    <span className="text-xs font-semibold">Not uploaded</span>
                   </span>
                 ) : loading && !url && !failed ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
-                    <span className="text-[10px] font-semibold">Loading document…</span>
+                    <span className="text-xs font-semibold">Loading document…</span>
                   </span>
                 ) : failed || !url ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
                     <ImageOff className="w-5 h-5" />
-                    <span className="text-[10px] font-semibold">Could not load document</span>
+                    <span className="text-xs font-semibold">Could not load document</span>
                   </span>
                 ) : isPdf(doc as KycDocument) ? (
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-500">
                     <FileText className="w-6 h-6 text-asan-accent" />
-                    <span className="text-[10px] font-bold">PDF document</span>
+                    <span className="text-xs font-bold">PDF document</span>
                   </span>
                 ) : (
                   <>
-                    <img src={url} alt={slot.label} className="w-full h-full object-cover" />
+                    <Image src={url} alt={slot.label} fill unoptimized className="object-cover" />
                     <span className="absolute bottom-1.5 right-1.5 p-1 rounded-lg bg-black/60 text-white">
                       <ZoomIn className="w-3.5 h-3.5" />
                     </span>
@@ -199,10 +200,10 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                 <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">{slot.label}</p>
                 {doc?.url ? (
                   <>
-                    <p className="text-[10px] text-slate-500 truncate" title={doc.originalName}>
+                    <p className="text-xs text-slate-500 truncate" title={doc.originalName}>
                       {doc.originalName || 'uploaded file'}
                     </p>
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-xs text-slate-400">
                       {formatFileSize(doc.size)}
                       {doc.uploadedAt ? ` • ${formatDate(doc.uploadedAt)}` : ''}
                     </p>
@@ -211,14 +212,14 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                         type="button"
                         disabled={!url}
                         onClick={() => url && setPreview({ key: slot.key, label: slot.label, doc })}
-                        className="text-[10px] font-bold text-asan-accent dark:text-asan-accent-light hover:underline disabled:opacity-40 disabled:no-underline"
+                        className="text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline disabled:opacity-40 disabled:no-underline"
                       >
                         View full size
                       </button>
                     </div>
                   </>
                 ) : (
-                  <p className="text-[10px] text-slate-400">No document submitted</p>
+                  <p className="text-xs text-slate-400">No document submitted</p>
                 )}
               </div>
             </div>
@@ -252,10 +253,13 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
                 <p className="text-xs text-slate-500">Document could not be loaded.</p>
               )
             ) : previewUrl ? (
-              <img
+              <Image
                 key={preview.key}
                 src={previewUrl}
                 alt={`${preview.label} full size`}
+                width={1200}
+                height={800}
+                unoptimized
                 className="w-full max-h-[55vh] sm:max-h-[60vh] object-contain rounded-xl bg-slate-100 dark:bg-slate-800"
               />
             ) : (

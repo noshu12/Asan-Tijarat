@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, MapPin, Minus, Plus, Check, Store, Package } from 'lucide-react';
@@ -12,7 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { Footer } from '@/components/Footer';
 import { useAuth } from '@/context/AuthProvider';
 import { addToCart } from '@/lib/cart';
+import { trackAddToCart, trackProductView } from '@/lib/analytics';
 import { parsePack } from '@/components/ProductCard';
+import { useRealtime } from '@/hooks/useRealtime';
 
 type MarketSale = {
   productId: string;
@@ -50,17 +52,56 @@ export default function ProductDetailClient({ id }: { id: string }) {
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
   const [marketSale, setMarketSale] = useState<MarketSale | null>(null);
+  // Batch 13 — live stock/price revalidation (small client wrapper, kept
+  // minimal on purpose: NO JSON-LD here — a later step adds it on top of
+  // this version). No product event type exists in the agreed SSE list,
+  // so this refetches on a reconnect / tab-visible sync only. The refetch
+  // is silent (no spinner, gallery selection and typed qty untouched);
+  // if the new stock is below the picked qty, the qty is clamped down
+  // and a note says so — the cart itself is never touched here.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [stockNotice, setStockNotice] = useState<string | null>(null);
+  const qtyRef = useRef(qty);
+  qtyRef.current = qty;
+  const { syncKey } = useRealtime();
+  const lastSyncKeyRef = useRef(0);
+  useEffect(() => {
+    if (lastSyncKeyRef.current === syncKey) return;
+    lastSyncKeyRef.current = syncKey;
+    setRefreshKey((k) => k + 1);
+  }, [syncKey]);
 
+  const prevRefreshKeyRef = useRef(refreshKey);
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
+    if (!silent) {
+      setLoading(true);
+      setLoadError(null);
+    }
     api
       .product(id)
       .then((data) => {
         if (cancelled) return;
         setProduct(data.product);
-        setQty(Math.max(data.product.moq, 1));
+        if (silent) {
+          const floor = Math.max(data.product.moq, 1);
+          const ceil = Math.max(data.product.stock, floor);
+          const clamped = Math.min(qtyRef.current, ceil);
+          if (clamped !== qtyRef.current) {
+            setQty(clamped);
+            setStockNotice(
+              data.product.stock <= 0
+                ? 'This listing just went out of stock.'
+                : `Stock updated — only ${data.product.stock} left, so the quantity was reduced to ${clamped}.`,
+            );
+          } else {
+            setStockNotice(null);
+          }
+        } else {
+          setQty(Math.max(data.product.moq, 1));
+        }
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -75,7 +116,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, refreshKey]);
 
   // Market-sale box: real delivered orders in the last 30 days. On any
   // failure the box simply stays hidden — it must never show a guessed
@@ -94,6 +135,16 @@ export default function ProductDetailClient({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
+  }, [product]);
+
+  // Batch 16 — B8 GA4 product_view: once per product, when it loads.
+  // The silent Batch 13 refetch re-sets `product` with a new object, so
+  // the ref guard stops the same product firing twice.
+  const viewedProductRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!product || viewedProductRef.current === product.id) return;
+    viewedProductRef.current = product.id;
+    trackProductView(product.id, product.category);
   }, [product]);
 
   if (loading) {
@@ -165,6 +216,9 @@ export default function ProductDetailClient({ id }: { id: string }) {
     }
     if (user.role !== 'shopkeeper') return;
     addToCart(product, qty);
+    // Batch 16 — B8 GA4: button is disabled when out of stock, so the
+    // add always happened here (same guards as the card).
+    trackAddToCart(product.id, qty);
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1400);
   };
@@ -246,25 +300,25 @@ export default function ProductDetailClient({ id }: { id: string }) {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Price</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Price</p>
                 <p className="text-sm font-extrabold text-asan-dark dark:text-asan-accent-light mt-1">
                   {formatPKR(product.price)} / {pack}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Minimum order</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Minimum order</p>
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                   {product.moq} {pack}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pack size</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Pack size</p>
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                   {weight ? `1 ${pack} = ${weight}` : product.unit}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Stock</p>
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                   {stock} {pack}
                 </p>
@@ -273,7 +327,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
 
             {marketSale && marketSale.bagsSold > 0 && (
               <div className="rounded-xl border border-asan-border bg-asan-accent-light dark:border-asan-mid dark:bg-asan-dark/30 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
                   Market sale — last 30 days
                 </p>
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
@@ -286,6 +340,9 @@ export default function ProductDetailClient({ id }: { id: string }) {
 
             {/* MOQ / pack breakdown + Add to Cart */}
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">
+              {stockNotice && (
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400">{stockNotice}</p>
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -369,7 +426,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
             <Store className="w-6 h-6 text-asan-accent" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sold by</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Sold by</p>
             <p className="font-bold text-slate-900 dark:text-white truncate">{product.supplierName}</p>
             <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-slate-400" />

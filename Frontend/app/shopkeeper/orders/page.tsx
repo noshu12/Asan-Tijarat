@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PortalHeader } from '@/components/PortalHeader';
 import { OrderTable } from '@/components/OrderTable';
 import { Order, OrderStatus } from '@/lib/types';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Loader } from '@/components/ui/loader';
+import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function ShopkeeperOrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,11 +18,25 @@ export default function ShopkeeperOrdersPage() {
   const [myId, setMyId] = useState<string | null>(null);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Batch 13 — live list: a matching event (or a reconnect sync) bumps
+  // refreshKey; the fetch effect below refetches silently on a bump, so
+  // the table, scroll and active tab never reset.
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
+    () => setRefreshKey((k) => k + 1),
+  );
   // Batch 04 — GET /api/orders is paginated (50/page); older orders load
   // via the "Load more" button below instead of one giant response.
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Remaining-fixes — mirror of `page` for the fetch effect: a live bump
+  // must re-fetch every chunk already loaded via "Load more" (pages 1..page).
+  // `page` itself can't be an effect dep (Load more would refetch and reset
+  // the list), so the effect reads the ref instead.
+  const pageRef = useRef(page);
+  useEffect(() => { pageRef.current = page; }, [page]);
 
   // Current session user — useAuth() is called at the top of the component
   // only, never inside useEffect. This effect only READS user/authLoading.
@@ -46,25 +61,37 @@ export default function ShopkeeperOrdersPage() {
   // stayed stuck on the spinner forever.
   useEffect(() => {
     if (!myId) return;
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
     let mounted = true;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
-    setPage(1);
-    api.orders({ limit: 50 })
-      .then((res) => {
+    // Remaining-fixes — a live bump refetches pages 1..page (the chunks
+    // already loaded via "Load more") so the list keeps its place; only a
+    // fresh load resets to page 1.
+    const pagesToLoad = silent ? Math.max(1, pageRef.current) : 1;
+    if (!silent) setPage(1);
+    Promise.all(
+      Array.from({ length: pagesToLoad }, (_, i) => api.orders({ limit: 50, page: i + 1 })),
+    )
+      .then((responses) => {
         if (mounted) {
           // Support both shopkeeper (buyerId) and supplier (supplierId) views.
-          const myOrders = res.orders.filter((o) =>
-            myRole === 'shopkeeper'
-              ? String(o.buyerId) === String(myId)
-              : String(o.supplierId) === String(myId)
-          );
-          // GET /api/orders is already scoped to the signed-in user by the
-          // backend, so if the local id shape doesn't line up (e.g. legacy
-          // mock session) fall back to the server-filtered list instead of
-          // silently showing an empty page.
-          setOrders(myOrders.length > 0 ? myOrders : res.orders);
-          setTotalPages(res.totalPages ?? 1);
+          const all = responses.flatMap((res) => {
+            const myOrders = res.orders.filter((o) =>
+              myRole === 'shopkeeper'
+                ? String(o.buyerId) === String(myId)
+                : String(o.supplierId) === String(myId)
+            );
+            // GET /api/orders is already scoped to the signed-in user by the
+            // backend, so if the local id shape doesn't line up (e.g. legacy
+            // mock session) fall back to the server-filtered list instead of
+            // silently showing an empty page.
+            return myOrders.length > 0 ? myOrders : res.orders;
+          });
+          setOrders(all);
+          setTotalPages(responses[responses.length - 1]?.totalPages ?? 1);
         }
       })
       .catch((err) => {

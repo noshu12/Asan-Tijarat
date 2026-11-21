@@ -994,7 +994,7 @@ export default function GetStartedPage() {
                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
                       Compliance Documents
                     </p>
-                    <span className="text-[10px] font-semibold text-slate-400">
+                    <span className="text-xs font-semibold text-slate-400">
                       {attachedCount}/3 attached
                     </span>
                   </div>

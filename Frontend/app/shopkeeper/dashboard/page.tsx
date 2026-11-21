@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { PortalHeader } from '@/components/PortalHeader';
 import { StatsCard } from '@/components/StatsCard';
@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthProvider';
 import { Order, Product } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { AIRecommendationCard } from '@/components/AIRecommendationCard';
+import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function ShopkeeperDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -21,10 +22,22 @@ export default function ShopkeeperDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Batch 13 — live KPIs + recent orders: a matching event (or a
+  // reconnect sync) bumps refreshKey; the fetch effect below refetches
+  // silently on a bump, so the stats stay visible and nothing resets.
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
+    () => setRefreshKey((k) => k + 1),
+  );
 
   useEffect(() => {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
     if (authLoading) return;
+
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
 
     let mounted = true;
 
@@ -33,7 +46,7 @@ export default function ShopkeeperDashboardPage() {
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
 
     // Batch 04 — KPIs come from the analytics API now (the single source of
@@ -74,7 +87,7 @@ export default function ShopkeeperDashboardPage() {
       .catch(() => {});
 
     return () => { mounted = false; };
-  }, [user, refreshKey]);
+  }, [user, refreshKey, authLoading]);
 
   if (loading) {
     return (

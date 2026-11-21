@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { MapsLink } from '@/components/MapsLink';
 import { api, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { cn, formatDate } from '@/lib/utils';
+import { ACCOUNT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 // Admin list se aane wale user me emailVerified ho sakta hai, lekin
 // AdminUser type me ye field lazmi nahi hai, isliye safe tareeqe se parha hai.
@@ -103,11 +105,36 @@ export default function AdminUsersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Batch 13 — live list: account_verified / account_suspended (or a
+  // reconnect sync) bumps refreshKey; the fetch effect below refetches
+  // silently on a bump, so expanded rows and filters never reset.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    ACCOUNT_EVENT_TYPES,
+    () => setRefreshKey((k) => k + 1),
+  );
 
-  const loadUsers = async () => {
+  // B13 (Round-4 Batch 13) — zero-warnings fix. loadUsers is called from
+  // three places: the fetch effect below, the Search button, and runAction
+  // after a mutation. The filters are applied ONLY when the user clicks
+  // Search — the effect must NOT refetch on every keystroke — so the
+  // naive fix (useCallback with [roleFilter, verifiedFilter, search]
+  // deps, added to the effect deps) would CHANGE behaviour: typing in
+  // the search box would refetch + flash the loader per keystroke.
+  // Instead the current filter values live in a ref that loadUsers reads
+  // at call time, and loadUsers itself is referentially stable, so the
+  // effect below runs exactly when it runs today: on authLoading / user /
+  // refreshKey changes only. All three call sites still read the latest
+  // filter values, exactly as the plain closure did.
+  const filtersRef = useRef({ roleFilter, verifiedFilter, search });
+  filtersRef.current = { roleFilter, verifiedFilter, search };
+
+  const loadUsers = useCallback(async () => {
+    const { roleFilter: role, verifiedFilter: verified, search: q } = filtersRef.current;
     setError(null);
     try {
-      const res = await api.admin.users({ role: roleFilter, verified: verifiedFilter, search: search.trim() || undefined });
+      const res = await api.admin.users({ role, verified, search: q.trim() || undefined });
       if (!res) return;
       const list = Array.isArray(res) ? res : ((res as { users?: AdminUser[] }).users || []);
       setUsers(list);
@@ -116,18 +143,21 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
     // Sub-admins share this page (verify/unverify + KYC view only).
     if (!user || (user.role !== 'admin' && user.role !== 'subadmin')) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!silent) setLoading(true);
     void loadUsers();
-  }, [authLoading, user]);
+  }, [authLoading, user, refreshKey, loadUsers]);
 
   const runAction = async (action: () => Promise<unknown>, ok: string) => {
     setBusyId('all');
@@ -300,7 +330,7 @@ export default function AdminUsersPage() {
                   <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                     {a.name}
                     {a.id === user?.id && (
-                      <span className="ml-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-asan-accent/15 text-asan-accent">You</span>
+                      <span className="ml-2 text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-asan-accent/15 text-asan-accent">You</span>
                     )}
                   </p>
                   <p className="text-xs text-slate-500 truncate">{a.email}</p>
@@ -336,7 +366,7 @@ export default function AdminUsersPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{s.name}</p>
                     <p className="text-xs text-slate-500 truncate">{s.email}</p>
-                    <span className={`inline-block mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${s.twoFactorEnabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}`}>
+                    <span className={`inline-block mt-1 text-xs font-bold uppercase px-2 py-0.5 rounded-full ${s.twoFactorEnabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}`}>
                       {s.twoFactorEnabled ? '2FA On' : '2FA Pending'}
                     </span>
                   </div>
@@ -431,7 +461,15 @@ export default function AdminUsersPage() {
                           className="flex items-center gap-2.5 text-left"
                         >
                           {u.avatar ? (
-                              <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover bg-slate-100" />
+                              // B13 (Round-4 Batch 13) — <img> → next/image.
+                              // `unoptimized`: avatar URLs are user-supplied
+                              // and can come from a host outside
+                              // images.remotePatterns, so Next must not try
+                              // to optimise them (an unlisted host would
+                              // 400). Unoptimized renders the same <img>
+                              // with the same src — byte-identical output,
+                              // 32×32 as before.
+                              <Image src={u.avatar} alt="" width={32} height={32} unoptimized className="w-8 h-8 rounded-full object-cover bg-slate-100" />
                             ) : (
                               <span className="w-8 h-8 shrink-0 rounded-full bg-asan-accent-light text-asan-accent-hover flex items-center justify-center text-xs font-bold">
                                 {(u.name || '?').trim().charAt(0).toUpperCase()}
@@ -571,7 +609,7 @@ export default function AdminUsersPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
                             {detailRows.map(({ label, value }) => (
                               <div key={label}>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p>
                                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 break-words">
                                   {value}
                                 </p>

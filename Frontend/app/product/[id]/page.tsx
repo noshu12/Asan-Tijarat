@@ -226,5 +226,47 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
     notFound();
   }
 
-  return <ProductDetailClient id={params.id} />;
+  // B9 (Round-4 Batch 13) — Product JSON-LD, reusing the metadata fetch
+  // above (no new data fetch). Only the fields the API already returns:
+  // name / image / description / price / category / supplierName /
+  // stock / status. Deliberately OMITTED: `sku` (no SKU field exists on
+  // the Product model — inventing one from the id would be fake data)
+  // and `aggregateRating` (there are no product-level ratings; ratings
+  // live per-supplier on delivered orders, not on the product). The
+  // `<` escape stops a `</script>` inside a description from breaking
+  // out of the script tag. 'unknown' renders no schema — a product we
+  // could not confirm must not get structured data.
+  const productJsonLd =
+    result.status === 'found'
+      ? JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: result.product.name,
+          image: result.product.image ? fileUrl(result.product.image) : `${SITE_URL}/og-image.png`,
+          description: result.product.description?.trim()
+            ? result.product.description.trim().slice(0, 160)
+            : `${result.product.name} — wholesale ${result.product.category} from ${result.product.supplierName}, ${result.product.supplierCity}. ${formatPKR(result.product.price)} per pack, minimum order ${result.product.moq}.`,
+          category: result.product.category,
+          brand: { '@type': 'Brand', name: result.product.supplierName },
+          offers: {
+            '@type': 'Offer',
+            url: `${SITE_URL}/product/${params.id}`,
+            priceCurrency: 'PKR',
+            price: result.product.price,
+            availability:
+              result.product.stock > 0 && result.product.status !== 'Out of Stock'
+                ? 'https://schema.org/InStock'
+                : 'https://schema.org/OutOfStock',
+          },
+        }).replace(/</g, '\\u003c')
+      : null;
+
+  return (
+    <>
+      {productJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: productJsonLd }} />
+      )}
+      <ProductDetailClient id={params.id} />
+    </>
+  );
 }

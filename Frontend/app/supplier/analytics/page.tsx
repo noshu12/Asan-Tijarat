@@ -141,14 +141,14 @@ export default function SupplierAnalyticsPage() {
             <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2">
               {data.dailyRevenue.map((d) => (
                 <div key={d.date} className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 w-14 shrink-0">{d.date.slice(5)}</span>
+                  <span className="text-xs text-slate-400 w-14 shrink-0">{d.date.slice(5)}</span>
                   <div className="flex-1 h-4 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <div
                       className="h-4 rounded bg-asan-accent"
                       style={{ width: `${maxDaily > 0 ? (d.revenue / maxDaily) * 100 : 0}%` }}
                     />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-28 text-right shrink-0 whitespace-nowrap">
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-28 text-right shrink-0 whitespace-nowrap">
                     {formatPKR(d.revenue)}
                   </span>
                 </div>

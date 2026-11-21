@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { formatPKR } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -14,6 +14,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Product } from '@/lib/types';
 import { PlusCircle, Edit, Trash2, Search, Save } from 'lucide-react';
+import { useLiveRefreshKey } from '@/hooks/useRealtime';
 
 interface EditProductFormState {
   name: string;
@@ -63,15 +64,25 @@ export default function SupplierMyProductsPage() {
   const [editForm, setEditForm] = useState<EditProductFormState>(EMPTY_EDIT_FORM);
   const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditProductFormState, string>>>({});
   const [isSaving, setIsSaving] = useState(false);
+  // Batch 13 — no product event type exists in the agreed SSE list, so
+  // this page only refetches on a reconnect / tab-visible sync (bump
+  // below); the fetch effect refetches silently on a bump, so an open
+  // edit modal and the search text never reset.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey([], () => setRefreshKey((k) => k + 1));
 
   useEffect(() => {
     if (authLoading) return;
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
     let mounted = true;
     if (!user) {
       if (mounted) setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     // Batch 04 — own listings only, via the backend supplierId filter
     // (incl. Out of Stock), so the list is never cut off by the catalogue
@@ -90,7 +101,7 @@ export default function SupplierMyProductsPage() {
         if (mounted) setLoading(false);
       });
     return () => { mounted = false; };
-  }, [authLoading, user]);
+  }, [authLoading, user, refreshKey]);
 
   useEffect(() => {
     if (!editingId) return;

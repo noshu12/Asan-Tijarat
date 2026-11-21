@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { PortalHeader } from '@/components/PortalHeader';
 import { StatsCard } from '@/components/StatsCard';
@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, Product, User } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
+import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function SupplierDashboardPage() {
   // Recent received orders (latest 3) + own listings. GET /api/orders and
@@ -27,10 +28,22 @@ export default function SupplierDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
+  // Batch 13 — live KPIs + recent orders: a matching event (or a
+  // reconnect sync) bumps refreshKey; the fetch effect below refetches
+  // silently on a bump, so the stats stay visible and nothing resets.
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey(
+    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'rating_received', 'dispute_opened', 'dispute_resolved'],
+    () => setRefreshKey((k) => k + 1),
+  );
 
   useEffect(() => {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
     if (authLoading) return;
+
+    // Batch 13 — silent on a live refreshKey bump (see above).
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
 
     let mounted = true;
 
@@ -39,7 +52,7 @@ export default function SupplierDashboardPage() {
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
 
     api.supplierAnalytics()
@@ -83,7 +96,7 @@ export default function SupplierDashboardPage() {
       });
 
     return () => { mounted = false; };
-  }, [user, refreshKey]);
+  }, [user, refreshKey, authLoading]);
 
   // KPI values come from the analytics API (non-cancelled orders only) —
   // the same definition as the shopkeeper dashboard and the admin Trade
@@ -194,7 +207,7 @@ export default function SupplierDashboardPage() {
                     {formatPKR(p.price)} / {p.unit} • {p.stock} in stock
                   </p>
                   <span
-                    className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${
                       p.status === 'Active'
                         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                         : p.status === 'Low Stock'

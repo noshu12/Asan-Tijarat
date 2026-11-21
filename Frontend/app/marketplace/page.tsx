@@ -7,6 +7,8 @@ import { Footer } from '@/components/Footer';
 import { Search, X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
+import { trackFilterUsed, trackSearch } from '@/lib/analytics';
+import { useRealtime } from '@/hooks/useRealtime';
 type SortOption = 'price-asc' | 'price-desc';
 
 const MARKETPLACE_CATEGORIES: { id: string; name: string }[] = [
@@ -90,6 +92,24 @@ function MarketplaceContent() {
   const [cities, setCities] = useState<string[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
+  // Batch 13 — live marketplace. No product event type exists in the
+  // agreed SSE list, so new listings arrive via a reconnect / tab-visible
+  // sync: the sync refetch MERGES instead of replacing — products that
+  // appeared since the last load are prepended with a "New" badge, and
+  // prices/stock on visible cards update in place. Filters, search text,
+  // sort, page and scroll are never touched.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [newIds, setNewIds] = useState<ReadonlySet<string>>(new Set());
+  const productsRef = useRef<Product[]>([]);
+  const syncRefreshRef = useRef(false);
+  const { syncKey } = useRealtime();
+  const lastSyncKeyRef = useRef(0);
+  useEffect(() => {
+    if (lastSyncKeyRef.current === syncKey) return;
+    lastSyncKeyRef.current = syncKey;
+    syncRefreshRef.current = true;
+    setRefreshKey((k) => k + 1);
+  }, [syncKey]);
 
   // Category dropdown (custom, not a native <select>): the button sits in
   // the search row next to the Price sort; the list opens right under the
@@ -125,6 +145,22 @@ function MarketplaceContent() {
     return () => window.clearTimeout(t);
   }, [searchQuery]);
 
+  // Batch 16 — B8 GA4 search event: once per debounced term, not per
+  // keystroke. Clearing the box resets the guard so typing the same term
+  // again fires again. Landing on ?search=... fires once — that IS a
+  // search view.
+  const searchTrackedRef = useRef('');
+  useEffect(() => {
+    const term = debouncedSearch.trim();
+    if (!term) {
+      searchTrackedRef.current = '';
+      return;
+    }
+    if (term === searchTrackedRef.current) return;
+    searchTrackedRef.current = term;
+    trackSearch(term);
+  }, [debouncedSearch]);
+
   // Min/max are debounced too — typing a price must not refetch per keystroke.
   const [debouncedMin, setDebouncedMin] = useState(minPrice);
   const [debouncedMax, setDebouncedMax] = useState(maxPrice);
@@ -136,6 +172,30 @@ function MarketplaceContent() {
     const t = window.setTimeout(() => setDebouncedMax(maxPrice), 400);
     return () => window.clearTimeout(t);
   }, [maxPrice]);
+
+  // Batch 16 — B8 GA4 filter_used for the price fields: the refs start
+  // at the current value, so mounting with ?min=/?max= in the URL does
+  // NOT fire — only a real change does. 'any' = field cleared.
+  const minTrackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (minTrackedRef.current === null) {
+      minTrackedRef.current = debouncedMin;
+      return;
+    }
+    if (minTrackedRef.current === debouncedMin) return;
+    minTrackedRef.current = debouncedMin;
+    trackFilterUsed('min_price', debouncedMin.trim() || 'any');
+  }, [debouncedMin]);
+  const maxTrackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (maxTrackedRef.current === null) {
+      maxTrackedRef.current = debouncedMax;
+      return;
+    }
+    if (maxTrackedRef.current === debouncedMax) return;
+    maxTrackedRef.current = debouncedMax;
+    trackFilterUsed('max_price', debouncedMax.trim() || 'any');
+  }, [debouncedMax]);
 
   // City options for the filter dropdown — distinct cities with live listings.
   useEffect(() => {
@@ -198,7 +258,39 @@ function MarketplaceContent() {
     })
       .then((data) => {
         if (cancelled) return;
-        setProducts(data.products);
+        // Batch 13 — sync refetch merges (see above); a filter/search/
+        // sort/page change replaces the list as before.
+        const merging = syncRefreshRef.current;
+        syncRefreshRef.current = false;
+        if (!merging) {
+          productsRef.current = data.products;
+          setProducts(data.products);
+        } else {
+          const prev = productsRef.current;
+          if (prev.length === 0) {
+            productsRef.current = data.products;
+            setProducts(data.products);
+          } else {
+            const prevIds = new Set(prev.map((p) => p.id));
+            const fresh = data.products.filter((p) => !prevIds.has(p.id));
+            const freshMap = new Map(data.products.map((p) => [p.id, p]));
+            if (fresh.length > 0) {
+              setNewIds((old) => {
+                const next = new Set(old);
+                fresh.forEach((p) => next.add(p.id));
+                return next;
+              });
+              const merged = [...fresh, ...prev.map((p) => freshMap.get(p.id) ?? p)];
+              productsRef.current = merged;
+              setProducts(merged);
+            } else {
+              // No new listings — update price/stock in place, keep order.
+              const merged = prev.map((p) => freshMap.get(p.id) ?? p);
+              productsRef.current = merged;
+              setProducts(merged);
+            }
+          }
+        }
         setTotal(data.total ?? data.products.length);
         setTotalPages(data.totalPages ?? 1);
         // The backend clamps out-of-range pages — mirror it so the UI stays truthful.
@@ -216,7 +308,7 @@ function MarketplaceContent() {
         setIsInitialLoading(false);
       });
     return () => { cancelled = true; };
-  }, [debouncedSearch, selectedCategory, sortBy, city, debouncedMin, debouncedMax, inStockOnly, page]);
+  }, [debouncedSearch, selectedCategory, sortBy, city, debouncedMin, debouncedMax, inStockOnly, page, refreshKey]);
 
   const resetFilters = () => {
     setSelectedCategory('all');
@@ -335,7 +427,7 @@ function MarketplaceContent() {
                             type="button"
                             role="option"
                             aria-selected={isSelected}
-                            onClick={() => { setSelectedCategory(cat.id); setPage(1); setIsCategoryOpen(false); }}
+                            onClick={() => { setSelectedCategory(cat.id); setPage(1); setIsCategoryOpen(false); trackFilterUsed('category', cat.name); }}
                             className={`w-full text-left px-3 py-2.5 text-xs transition ${
                               isSelected
                                 ? 'bg-asan-dark text-white font-bold'
@@ -352,7 +444,7 @@ function MarketplaceContent() {
                 {/* Sort By Dropdown */}
                 <select
                   value={sortBy}
-                  onChange={(e) => { setSortBy(e.target.value as SortOption); setPage(1); }}
+                  onChange={(e) => { setSortBy(e.target.value as SortOption); setPage(1); trackFilterUsed('sort', e.target.value); }}
                   className={inputCls}
                 >
                   <option value="price-asc">Price: Low to High</option>
@@ -368,7 +460,7 @@ function MarketplaceContent() {
             <select
               aria-label="Filter by supplier city"
               value={city}
-              onChange={(e) => { setCity(e.target.value); setPage(1); }}
+              onChange={(e) => { setCity(e.target.value); setPage(1); trackFilterUsed('city', e.target.value || 'all'); }}
               className={inputCls}
             >
               <option value="">All Cities</option>
@@ -400,7 +492,7 @@ function MarketplaceContent() {
               <input
                 type="checkbox"
                 checked={inStockOnly}
-                onChange={(e) => { setInStockOnly(e.target.checked); setPage(1); }}
+                onChange={(e) => { setInStockOnly(e.target.checked); setPage(1); trackFilterUsed('in_stock', e.target.checked ? 'only' : 'all'); }}
                 className="w-4 h-4 rounded accent-asan-accent"
               />
               In stock only
@@ -442,7 +534,7 @@ function MarketplaceContent() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
               {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} isNew={newIds.has(product.id)} />
               ))}
             </div>
 

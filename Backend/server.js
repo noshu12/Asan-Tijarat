@@ -42,6 +42,7 @@ if (process.env.NODE_ENV === 'production') {
 
 const path = require('path');
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
@@ -159,6 +160,12 @@ app.use(express.json({ limit: '1mb' }));
 // Is se pehle protect middleware cookie ko haath se parse kar raha tha.
 app.use(cookieParser());
 
+// Batch 14 (item 7) — gzip compress API responses. Render adds no
+// compression in front of the service, so the app must do it itself.
+// Defaults (gzip, threshold 1kb) — nothing to tune. Body parsing is
+// already done above; routers mount below.
+app.use(compression());
+
 // Rate limits: brute-force aur flood se bachao. Ye frontend ke
 // { error: { code, message } } format mein jawab deta hai.
 const apiLimiter = rateLimit({
@@ -235,6 +242,8 @@ app.use('/api/analytics', require('./src/routes/analytics.routes'));
 app.use('/api/notifications', require('./src/routes/notification.routes'));
 app.use('/api/disputes', require('./src/routes/dispute.routes'));
 app.use('/api/ratings', require('./src/routes/rating.routes'));
+// Batch 13 — realtime SSE stream (GET /api/realtime/stream).
+app.use('/api/realtime', require('./src/routes/realtime.routes'));
 
 
 // (Health check upar move kar diya hai — checkDb se pehle — taake Render
