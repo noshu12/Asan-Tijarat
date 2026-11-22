@@ -21,6 +21,13 @@
  * cannot be reserved, every reservation made so far is given back and
  * the call reports the failed line — so a failed checkout never leaves
  * stock held. Returns { ok: true } or { ok: false, failedLine }.
+ *
+ * Batch 19 (audit L6) — this loop deliberately stays one updateOne per
+ * line instead of a bulkWrite: the per-line modifiedCount IS the race
+ * gate (the loser gets 0), and a bulkWrite result only reports an
+ * aggregate modifiedCount, so it cannot say WHICH line failed without
+ * extra reads. The restore path below has no such gate — every line is
+ * unconditionally given back — so it takes the bulkWrite.
  */
 async function reserveStock(ProductModel, lines) {
   const reserved = [];
@@ -40,4 +47,24 @@ async function reserveStock(ProductModel, lines) {
   return { ok: true };
 }
 
-module.exports = { reserveStock };
+/**
+ * Gives stock back for every line in ONE bulkWrite (Batch 19, audit L6).
+ * Used by both cancel paths (buyer cancel in order.controller.js,
+ * admin cancel in admin.controller.js) — the old per-line updateOne
+ * loop cost one round trip per cart line. Every op is an unconditional
+ * $inc, so no per-line result is needed: a cancelled order's stock
+ * always goes back in full. No-op on an empty set.
+ */
+async function restoreStock(ProductModel, lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  return ProductModel.bulkWrite(
+    lines.map((line) => ({
+      updateOne: {
+        filter: { _id: line.productId },
+        update: { $inc: { stock: line.quantity } },
+      },
+    }))
+  );
+}
+
+module.exports = { reserveStock, restoreStock };

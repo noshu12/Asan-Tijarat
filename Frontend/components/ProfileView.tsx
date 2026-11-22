@@ -250,14 +250,14 @@ export function ProfileView({ role }: ProfileViewProps) {
             <p className="text-lg font-extrabold text-asan-dark dark:text-asan-accent-light capitalize">
               {ROLE_LABEL[role]}
             </p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {isSupplier
                 ? `${products.length} listing${products.length === 1 ? '' : 's'}`
                 : `${orders.length} order${orders.length === 1 ? '' : 's'} placed`}
             </p>
             {/* Batch 05 — supplier rating from delivered orders. */}
             {isSupplier && rating && rating.count > 0 && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1">
+              <p className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-1">
                 ★ {rating.average.toFixed(1)} · {rating.count} rating{rating.count === 1 ? '' : 's'}
               </p>
             )}
@@ -271,7 +271,7 @@ export function ProfileView({ role }: ProfileViewProps) {
           <Mail className="w-5 h-5 text-asan-accent shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-bold text-slate-900 dark:text-white">Email</p>
-            <p className="text-[11px] text-slate-400 truncate">{profile.email || '—'}</p>
+            <p className="text-xs text-slate-400 truncate">{profile.email || '—'}</p>
           </div>
         </div>
 
@@ -279,7 +279,7 @@ export function ProfileView({ role }: ProfileViewProps) {
           <Phone className="w-5 h-5 text-asan-accent shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-bold text-slate-900 dark:text-white">Phone</p>
-            <p className="text-[11px] text-slate-400 truncate">{profile.phone || '—'}</p>
+            <p className="text-xs text-slate-400 truncate">{profile.phone || '—'}</p>
           </div>
         </div>
 
@@ -287,7 +287,7 @@ export function ProfileView({ role }: ProfileViewProps) {
           <Building2 className="w-5 h-5 text-asan-accent shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-bold text-slate-900 dark:text-white">Account Type</p>
-            <p className="text-[11px] text-slate-400 truncate">{ROLE_LABEL[role]}</p>
+            <p className="text-xs text-slate-400 truncate">{ROLE_LABEL[role]}</p>
           </div>
         </div>
 
@@ -297,7 +297,7 @@ export function ProfileView({ role }: ProfileViewProps) {
             <p className="text-xs font-bold text-slate-900 dark:text-white">
               {profile.verified ? 'KYC Approved' : 'KYC Pending'}
             </p>
-            <p className="text-[11px] text-slate-400 truncate">
+            <p className="text-xs text-slate-400 truncate">
               {profile.createdAt ? `Member since ${formatDate(profile.createdAt)}` : '—'}
             </p>
           </div>

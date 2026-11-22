@@ -12,13 +12,18 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Product } from '@/lib/types';
 import { formatDate, formatFileSize, formatPKR } from '@/lib/utils';
-import { useLiveRefreshKey } from '@/hooks/useRealtime';
+import { idFromEventLink, PRODUCT_UPDATE_EVENT_TYPES, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
 
 export default function AdminProductsPage() {
   const { user, loading: authLoading } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+  // Batch 19 (Round-5 audit H2) — the table paginates (50/page) instead
+  // of only ever showing the first 500 listings.
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   // FIX (Batch 03) — search typing refetch nahi karta tha: fetch effect ki
   // deps me `search` tha hi nahi. Ab search 400ms debounce hoke
   // `debouncedSearch` me jata hai, aur fetch effect usi pe chalta hai.
@@ -29,13 +34,74 @@ export default function AdminProductsPage() {
   const [message, setMessage] = useState<string | null>(null);
   // The listing whose uploaded photo is open in the full-size viewer.
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
-  // Batch 13 — no product event type exists in the agreed SSE list, so
-  // this page only refetches on a reconnect / tab-visible sync (bump
-  // below); the fetch effect refetches silently on a bump, so an open
-  // photo preview and the search text never reset.
+  // Batch 13 — before Batch 24 no product event type existed in the
+  // agreed SSE list, so this page only refetched on a reconnect /
+  // tab-visible sync (bump below); the fetch effect refetches silently
+  // on a bump, so an open photo preview and the search text never
+  // reset. Batch 24 keeps that sync AND adds the live product events
+  // (Batch 23) below.
   const [refreshKey, setRefreshKey] = useState(0);
   const prevRefreshKeyRef = useRef(refreshKey);
   useLiveRefreshKey([], () => setRefreshKey((k) => k + 1));
+  const productsRef = useRef<Product[]>([]);
+  productsRef.current = products;
+  // Batch 24 hardening — in-flight prepend guard (same race as the
+  // marketplace page: Batch 23 sends product_created twice to admins,
+  // targeted + public). The second frame returns before fetching.
+  const pendingProductPrependRef = useRef(new Set<string>());
+  const totalRef = useRef(total);
+  totalRef.current = total;
+
+  // Batch 24 — live product events. product_created: GET that ONE
+  // product and prepend the row (page 1 only, and only when it matches
+  // the status filter / search the admin has set). product_updated /
+  // stock_updated / price_updated: GET the one product and replace its
+  // row in place, if it is on screen. No full refetch, no spinner, an
+  // open photo preview never closes. Single fetch uses the existing
+  // public GET /api/products/:id — the admin API has no single-product
+  // GET (list + delete only) and the shape is identical.
+  // A failed single fetch is live-only noise — the table stays as-is.
+  useRealtimeEvent(
+    ['product_created', ...PRODUCT_UPDATE_EVENT_TYPES],
+    (event) => {
+      const productId = idFromEventLink(event.link, 'product');
+      if (!productId) return;
+      if (event.type === 'product_created') {
+        if (productsRef.current.some((p) => p.id === productId)) return;
+        if (pendingProductPrependRef.current.has(productId)) return;
+        pendingProductPrependRef.current.add(productId);
+        void api.product(productId).then((data) => {
+          const p = data.product;
+          if (!p) return;
+          if (productsRef.current.some((x) => x.id === p.id)) return;
+          const newTotal = totalRef.current + 1;
+          setTotal(newTotal);
+          setTotalPages((prev) => Math.max(prev, Math.ceil(newTotal / 50)));
+          if (page !== 1) return;
+          if (statusFilter !== 'all' && p.status !== statusFilter) return;
+          const q = debouncedSearch.trim().toLowerCase();
+          if (q) {
+            const hay = `${p.name} ${p.category} ${p.supplierName}`.toLowerCase();
+            if (!hay.includes(q)) return;
+          }
+          setProducts((prev) => [p, ...prev]);
+        }).catch(() => {}).finally(() => {
+          pendingProductPrependRef.current.delete(productId);
+        });
+        return;
+      }
+      if (!productsRef.current.some((p) => p.id === productId)) return;
+      void api.product(productId).then((data) => {
+        const p = data.product;
+        if (!p) return;
+        setProducts((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+        // The updated row may no longer match the status filter — the
+        // silent sync refetch (reconnect / tab visible) corrects the
+        // list then; the row itself is never blanked live.
+        if (previewProduct && previewProduct.id === p.id) setPreviewProduct(p);
+      }).catch(() => {});
+    },
+  );
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
@@ -60,14 +126,24 @@ export default function AdminProductsPage() {
     if (!silent) setLoading(true);
     setError(null);
     api.admin
-      .products({ status: statusFilter, search: debouncedSearch || undefined })
-      .then((res) => { if (mounted) setProducts(res.products); })
+      .products({ status: statusFilter, search: debouncedSearch || undefined, page, limit: 50 })
+      .then((res) => {
+        if (!mounted) return;
+        setProducts(res.products);
+        setTotalPages(res.totalPages ?? 1);
+        setTotal(res.total ?? res.products?.length ?? 0);
+        // The backend clamps out-of-range pages (safePage): sync the UI
+        // to the page it actually served (e.g. after a filter narrows
+        // the list below the current page).
+        if (res.page !== undefined && res.page !== page) setPage(res.page);
+      })
       .catch((err) => { if (mounted) setError(err instanceof Error ? err.message : 'Failed to load products.'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
     // FIX (Batch 03) — deps me debouncedSearch add kiya, taake typing se
     // refetch ho. Pehle deps sirf [user, statusFilter] thay.
-  }, [user, statusFilter, debouncedSearch, refreshKey, authLoading]);
+    // Batch 19 — `page` bhi dep hai (Prev/Next refetch karta hai).
+  }, [user, statusFilter, debouncedSearch, refreshKey, authLoading, page]);
 
   const removeProduct = (p: Product) => {
     if (!window.confirm(`Delete "${p.name}" from the marketplace?`)) return;
@@ -147,7 +223,7 @@ export default function AdminProductsPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
           className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none"
         >
           <option value="all">All Status</option>
@@ -155,7 +231,7 @@ export default function AdminProductsPage() {
           <option value="Low Stock">Low Stock</option>
           <option value="Out of Stock">Out of Stock</option>
         </select>
-        <Button type="button" variant="outline" onClick={() => { setStatusFilter('all'); setSearch(''); }}>
+        <Button type="button" variant="outline" onClick={() => { setPage(1); setStatusFilter('all'); setSearch(''); }}>
           Reset
         </Button>
       </div>
@@ -200,7 +276,7 @@ export default function AdminProductsPage() {
                       </button>
                       <div className="min-w-0">
                         <p className="font-bold text-slate-900 dark:text-white text-xs truncate">{p.name}</p>
-                        <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <p className="text-xs text-slate-400 flex items-center gap-1">
                           {p.category}
                           {(p.additionalImages?.length || 0) > 0 && (
                             <span className="inline-flex items-center gap-0.5">
@@ -213,7 +289,7 @@ export default function AdminProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
                     {p.supplierName}
-                    <p className="text-[11px] text-slate-400">{p.supplierCity}</p>
+                    <p className="text-xs text-slate-400">{p.supplierCity}</p>
                   </td>
                   <td className="px-4 py-3 text-xs font-bold text-slate-900 dark:text-white">
                     {formatPKR(p.price)} / {p.unit}
@@ -230,7 +306,7 @@ export default function AdminProductsPage() {
                       title="Delete listing"
                       disabled={busyId !== null}
                       onClick={() => removeProduct(p)}
-                      className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition"
+                      className="p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -239,6 +315,24 @@ export default function AdminProductsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Batch 19 (audit H2) — page through products instead of only
+          ever seeing the first 500 listings. */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-500">
+            Page {page} of {totalPages} • {total} product{total === 1 ? '' : 's'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Previous
+            </Button>
+            <Button type="button" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Next
+            </Button>
+          </div>
         </div>
       )}
 

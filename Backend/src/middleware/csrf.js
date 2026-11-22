@@ -25,9 +25,11 @@
  *     and it cannot set a custom header cross-origin (preflight).
  *
  * The token is NOT tied to the session (plain double-submit) — no server
- * state, no DB call, nothing to rotate. It is issued once per browser and
- * re-issued only when missing/expired; the frontend retries once with a
- * fresh token on a 403 (safe: the 403 means the handler never ran).
+ * state, no DB call. It is issued once per browser and re-issued when
+ * missing/expired; since Batch 17 it is ALSO rotated on every login and
+ * logout (rotateCsrfToken, called from the auth controller), so a token
+ * leaked before a sign-in dies with the old session. The frontend drops
+ * its cached copy after login/logout and re-reads the fresh cookie.
  * Non-browser clients (curl/Postman) must GET /api/auth/csrf-token first
  * and send the value back as `x-csrf-token` with the cookie attached.
  */
@@ -48,6 +50,19 @@ function issueToken(res) {
     maxAge: 24 * 60 * 60 * 1000,
   });
   return token;
+}
+
+/**
+ * Batch 17 (L7) — rotate the double-submit token: issue a fresh value
+ * and set the cookie on this response. Called after a session is
+ * created (login / 2FA login) and after it is destroyed (logout), so a
+ * leaked token never survives a sign-in boundary. The old value stops
+ * matching the cookie immediately — the frontend clears its in-memory
+ * cache on login/logout and re-reads the cookie (or the 403 retry path
+ * fetches a fresh one).
+ */
+function rotateCsrfToken(res) {
+  return issueToken(res);
 }
 
 function safeEqual(a, b) {
@@ -84,4 +99,4 @@ function csrfProtection(req, res, next) {
   return next();
 }
 
-module.exports = { csrfProtection, CSRF_COOKIE, CSRF_HEADER };
+module.exports = { csrfProtection, rotateCsrfToken, CSRF_COOKIE, CSRF_HEADER };

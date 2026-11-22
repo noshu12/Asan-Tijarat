@@ -153,6 +153,13 @@ const userSchema = new mongoose.Schema(
     // Login lockout — 5 failed attempts → 15-min lock (enforced in login).
     loginAttempts: { type: Number, default: 0, min: 0 },
     lockUntil: { type: Date, default: undefined },
+    // TOTP lockout — Batch 17 (Round-5 audit M2): same 5-fails → 15-min
+    // pattern as the password login, but on its own fields so a TOTP
+    // lock never touches the password lock. Counted in
+    // adminVerifyTwoFactorLogin, verifyTwoFactorLogin and
+    // verifyTwoFactorSetupFirst (see utils/totpLock.js).
+    totpAttempts: { type: Number, default: 0, min: 0 },
+    totpLockUntil: { type: Date, default: undefined },
     // Admin 2FA (TOTP authenticator app) — setup / verify / disable live in
     // auth.controller.js. The secret is NEVER sent to the frontend
     // (select: false) and is only needed server-side to check the 6-digit code.

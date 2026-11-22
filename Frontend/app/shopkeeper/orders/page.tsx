@@ -37,6 +37,11 @@ export default function ShopkeeperOrdersPage() {
   // the list), so the effect reads the ref instead.
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
+  // Batch 20 (audit (c)-5) — every fetch run gets an id; a response
+  // that resolves AFTER a newer fetch started is ignored, so two rapid
+  // live events can no longer resolve out of order and let the stale
+  // list win. (`mounted` alone only guards unmount, not supersede.)
+  const fetchSeqRef = useRef(0);
 
   // Current session user — useAuth() is called at the top of the component
   // only, never inside useEffect. This effect only READS user/authLoading.
@@ -72,11 +77,13 @@ export default function ShopkeeperOrdersPage() {
     // fresh load resets to page 1.
     const pagesToLoad = silent ? Math.max(1, pageRef.current) : 1;
     if (!silent) setPage(1);
+    // Batch 20 (audit (c)-5) — see fetchSeqRef above.
+    const requestId = ++fetchSeqRef.current;
     Promise.all(
       Array.from({ length: pagesToLoad }, (_, i) => api.orders({ limit: 50, page: i + 1 })),
     )
       .then((responses) => {
-        if (mounted) {
+        if (mounted && requestId === fetchSeqRef.current) {
           // Support both shopkeeper (buyerId) and supplier (supplierId) views.
           const all = responses.flatMap((res) => {
             const myOrders = res.orders.filter((o) =>
@@ -95,10 +102,10 @@ export default function ShopkeeperOrdersPage() {
         }
       })
       .catch((err) => {
-        if (mounted) setError(err instanceof Error ? err.message : 'Failed to load orders');
+        if (mounted && requestId === fetchSeqRef.current) setError(err instanceof Error ? err.message : 'Failed to load orders');
       })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted && requestId === fetchSeqRef.current) setLoading(false);
       });
     return () => { mounted = false; };
   }, [myId, myRole, refreshKey]);

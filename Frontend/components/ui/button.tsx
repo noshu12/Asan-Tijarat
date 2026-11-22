@@ -25,8 +25,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizes = {
-      sm: "text-xs px-3 py-1.5 min-h-8 gap-1.5",
-      md: "text-sm px-4 py-2 min-h-10 gap-2",
+      // Batch 21 (audit f-2) — sm 32px -> 40px: the supplier order-workflow
+      // actions and admin table actions all use size="sm"; raising sm keeps
+      // those dense table rows readable instead of switching them to md
+      // (text-sm px-4), which would widen every table action.
+      sm: "text-xs px-3 py-1.5 min-h-10 gap-1.5",
+      // Batch 21 (audit f-1) — md 40px -> 44px: md is the default size and
+      // is used by 73 <Button usages, so every default primary action now
+      // meets the 44px tap-target rule.
+      md: "text-sm px-4 py-2 min-h-[44px] gap-2",
       lg: "text-base px-6 py-3 min-h-12 gap-2.5 font-semibold"
     };
 

@@ -3,15 +3,13 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Order, OrderStatus } from '@/lib/types';
-import { formatPKR, formatDate, orderGoogleMapsUrl } from '@/lib/utils';
+import { formatPKR, formatDate, capitalize, orderGoogleMapsUrl } from '@/lib/utils';
 import { printInvoice } from '@/lib/invoice';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { ProductImage } from '@/components/ProductImage';
 import { Eye, Truck, Download, MapPin, Navigation, X, ExternalLink } from 'lucide-react';
-
-const statusLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Batch 05 — detailsHref opens the full order page (payment, chat, dispute,
 // rating). When it is not passed (admin lists) the table keeps its old shape.
@@ -61,7 +59,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                 </td>
                 <td className="px-5 py-4">
                   <Badge variant={getStatusVariant(order.status)}>
-                    {statusLabel(order.status)}
+                    {capitalize(order.status)}
                   </Badge>
                 </td>
                 <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
@@ -72,7 +70,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     {onCancel && order.status === 'pending' && (
                       <button
                         onClick={() => onCancel(order)}
-                        className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                        className="p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
                         title="Cancel this order"
                       >
                         <X className="w-4 h-4" />
@@ -80,7 +78,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     )}
                     <button
                       onClick={() => setSelectedOrder(order)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-asan-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      className="p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-500 hover:text-asan-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                       title="View Order Details"
                     >
                       <Eye className="w-4 h-4" />
@@ -88,7 +86,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     {detailsHref && (
                       <Link
                         href={detailsHref(order)}
-                        className="p-1.5 rounded-lg text-asan-accent hover:text-asan-accent-hover hover:bg-asan-accent-light dark:hover:bg-asan-dark/40 transition"
+                        className="p-1.5 min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg text-asan-accent hover:text-asan-accent-hover hover:bg-asan-accent-light dark:hover:bg-asan-dark/40 transition"
                         title="Open order page — payment, chat, dispute, rating"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -115,7 +113,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
               <div>
                 <p className="text-xs text-slate-400">Status</p>
                 <Badge variant={getStatusVariant(selectedOrder.status)} className="mt-1">
-                  {statusLabel(selectedOrder.status)}
+                  {capitalize(selectedOrder.status)}
                 </Badge>
               </div>
             </div>
@@ -129,7 +127,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                     <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 shrink-0 rounded-lg object-cover" width={48} height={48} />
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.productName}</p>
-                      <p className="text-[11px] text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>
+                      <p className="text-xs text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>
                     </div>
                   </div>
                   <p className="text-sm font-bold text-slate-900 dark:text-white shrink-0">
@@ -171,7 +169,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                       <MapPin className="w-4 h-4" /> Shopkeeper&apos;s Live Location
                     </p>
                     {hasGps && selectedOrder.buyerLocation && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                         📍 {selectedOrder.buyerLocation.lat}, {selectedOrder.buyerLocation.lng}
                       </p>
                     )}
@@ -179,7 +177,7 @@ export function OrderTable({ orders, onCancel, detailsHref }: { orders: Order[];
                       href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white text-[11px] font-bold transition"
+                      className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white text-xs font-bold transition"
                       title="Opens Google Maps at the shopkeeper's exact location"
                     >
                       <Navigation className="w-3.5 h-3.5" />

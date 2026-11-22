@@ -97,7 +97,7 @@ export default function ShopkeeperAnalyticsPage() {
                   <p className="text-2xl font-bold text-slate-900 dark:text-white">
                     {data.ordersByStatus[s] ?? 0}
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-1">{prettyStatus(s)}</p>
+                  <p className="text-xs text-slate-500 mt-1">{prettyStatus(s)}</p>
                 </div>
               ))}
             </div>
@@ -112,7 +112,7 @@ export default function ShopkeeperAnalyticsPage() {
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
                 <table className="min-w-[480px] w-full text-sm">
                   <thead>
-                    <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr className="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200 dark:border-slate-800">
                       <th className="px-4 py-3 font-bold">Supplier</th>
                       <th className="px-4 py-3 font-bold text-right">Orders</th>
                       <th className="px-4 py-3 font-bold text-right">Spent</th>

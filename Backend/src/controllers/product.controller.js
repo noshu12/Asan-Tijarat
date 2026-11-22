@@ -2,7 +2,55 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { CATEGORIES } = require('../constants/categories');
 const { toClient } = require('../utils/serialize');
+const { queryString } = require('../utils/safeQuery');
 const { saveProductImages, deleteStoredUploads, deleteProductStoredFiles, ProductImageError } = require('../utils/productImageStorage');
+const { notifyUser, notifyAdmins, notifyPublic } = require('../utils/notify');
+
+// Batch 23 (TEAMLY realtime audit RT-2) — an order only counts as
+// "active" for product-change notifications while it can still be
+// affected by a price/stock change: pending/confirmed/processing/
+// shipped. Delivered/cancelled orders never hear about later edits.
+const ACTIVE_ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped'];
+
+/**
+ * Batch 23 — notifies the buyer + supplier of a product's ACTIVE orders
+ * about one price/stock change. Each distinct party is notified ONCE
+ * (a buyer with two active orders for the same product gets one row),
+ * with THEIR OWN link: the buyer opens the product page
+ * (`/product/:id` — they care about the listing), the supplier opens
+ * their order (`/supplier/orders/:id` — they care about the order).
+ * The acting supplier is skipped: the supplier of every active order
+ * here IS the editor, and notifyOrderParties' excludeUserId convention
+ * is that nobody is notified about their own action — so in practice
+ * the buyers are the recipients. FIRE-AND-FORGET, never throws: the
+ * Order query is inside the try/catch, and notifyUser never throws.
+ */
+async function notifyActiveOrderParties(product, { type, title, message, actorId }) {
+  try {
+    const orders = await Order.find(
+      { 'items.productId': String(product._id), status: { $in: ACTIVE_ORDER_STATUSES } },
+      { buyerId: 1, supplierId: 1 }
+    ).lean();
+    const parties = new Map(); // userId string -> { userId, link } (first order wins per party)
+    for (const order of orders) {
+      const buyerKey = String(order.buyerId);
+      if (!parties.has(buyerKey)) {
+        parties.set(buyerKey, { userId: order.buyerId, link: `/product/${product._id}` });
+      }
+      const supplierKey = String(order.supplierId);
+      if (!parties.has(supplierKey)) {
+        parties.set(supplierKey, { userId: order.supplierId, link: `/supplier/orders/${order._id}` });
+      }
+    }
+    await Promise.all(
+      [...parties.values()]
+        .filter(({ userId }) => !(actorId && String(userId) === String(actorId)))
+        .map(({ userId, link }) => notifyUser(userId, { type, title, message, link, orderId: null }))
+    );
+  } catch (err) {
+    console.log('[notify] failed:', err.message);
+  }
+}
 
 /** Auto-derive listing status from stock & MOQ (matches frontend behaviour). */
 function deriveStatus(stock, moq) {
@@ -184,13 +232,18 @@ async function getProducts(req, res, next) {
   try {
     const query = {};
 
-    const search = (req.query.search || '').trim();
+    // Batch 17 (L1) — every raw req.query value is String-coerced before
+    // it touches a filter: an operator object (?search[$ne]=x) used to
+    // crash .trim() with a 500, and ?supplierId[$ne]=x reached Mongoose
+    // as an operator. Objects now resolve to ''/null and are ignored
+    // (search/city) or rejected (supplierId).
+    const search = (queryString(req.query.search) || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
       query.$or = [{ name: rx }, { description: rx }, { category: rx }, { supplierName: rx }, { supplierCity: rx }];
     }
 
-    const category = (req.query.category || '').trim();
+    const category = (queryString(req.query.category) || '').trim();
     if (category && category !== 'all') {
       if (!CATEGORIES.includes(category)) {
         return res.status(400).json({ error: { code: 'INVALID_CATEGORY', message: 'Unknown category filter.' } });
@@ -199,7 +252,7 @@ async function getProducts(req, res, next) {
     }
 
     // City filter — exact supplier city (the /cities endpoint lists the valid values).
-    const city = (req.query.city || '').trim();
+    const city = (queryString(req.query.city) || '').trim();
     if (city) query.supplierCity = city;
 
     // Price range filter — invalid numbers are ignored; min > max is swapped, not rejected.
@@ -218,9 +271,20 @@ async function getProducts(req, res, next) {
     // In-stock filter — only listings with units actually available.
     if (String(req.query.inStock).toLowerCase() === 'true') query.stock = { $gt: 0 };
 
-    if (req.query.supplierId) {
-      query.supplierId = req.query.supplierId;
-    } else {
+    const supplierId = queryString(req.query.supplierId);
+    if (supplierId === null || (supplierId && !/^[0-9a-fA-F]{24}$/.test(supplierId))) {
+      return res.status(400).json({ error: { code: 'INVALID_SUPPLIER_ID', message: 'Unknown supplier filter.' } });
+    }
+    if (supplierId) {
+      query.supplierId = supplierId;
+    } else if (queryString(req.query.includeOutOfStock) !== 'true') {
+      // Batch 19 (Round-5 audit M7) — the sitemap passes
+      // ?includeOutOfStock=true so out-of-stock products (whose detail
+      // pages still return 200) are not orphaned from the sitemap. The
+      // marketplace never passes it, so shoppers still only see
+      // buyable listings. The flag only skips the status filter — it
+      // opens no other data: out-of-stock detail pages are public
+      // anyway, and the projection below still applies.
       query.status = { $ne: 'Out of Stock' };
     }
 
@@ -278,6 +342,36 @@ async function getProductCities(req, res, next) {
       a.localeCompare(b)
     );
     res.json({ cities: clean });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/products/categories — lightweight catalogue summary for the
+ * homepage (Batch 19, Round-5 audit L10).
+ *
+ * The homepage used to fetch 100 products just to derive its category
+ * list (and its "Products Listed" / "Suppliers" stats, which were then
+ * only as accurate as the first 100 rows). It now fetches 8 products
+ * for the cards plus this endpoint: distinct live categories, the live
+ * product count, and the distinct live-supplier count — three
+ * server-side distinct/count calls, no product documents at all.
+ * Categories come back sorted; only categories with a live (in-stock)
+ * listing are included, so a category never links to an empty page.
+ * Response: { categories: string[], total: number, suppliers: number }.
+ */
+async function getProductCategories(req, res, next) {
+  try {
+    const [categories, total, supplierIds] = await Promise.all([
+      Product.distinct('category', { status: { $ne: 'Out of Stock' } }),
+      Product.countDocuments({ status: { $ne: 'Out of Stock' } }),
+      Product.distinct('supplierId', { status: { $ne: 'Out of Stock' } }),
+    ]);
+    const clean = [...new Set(categories.map((c) => String(c || '').trim()).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+    res.json({ categories: clean, total, suppliers: supplierIds.length });
   } catch (err) {
     next(err);
   }
@@ -431,6 +525,21 @@ async function createProduct(req, res, next) {
       throw err;
     }
 
+    // Batch 23 (TEAMLY realtime audit RT-2) — admins learn a new listing
+    // exists, and marketplace + product-page viewers learn it live.
+    // FIRE-AND-FORGET: notifyAdmins/notifyPublic never throw, and the
+    // response must not wait on the bell or the stream. Runs AFTER the
+    // product is created, so a failed create sends nothing.
+    const createdPayload = {
+      type: 'product_created',
+      title: `New product listed — ${name}`,
+      message: `${supplier.businessName || supplier.name} listed "${name}" (${category}, Rs ${price} per ${unit}).`,
+      link: `/product/${product._id}`,
+      orderId: null,
+    };
+    notifyAdmins(createdPayload);
+    notifyPublic(createdPayload);
+
     res.status(201).json({ product });
   } catch (err) {
     next(err);
@@ -490,6 +599,11 @@ async function updateProduct(req, res, next) {
     }
 
     // Assign CLEANED values only. `status` stays out — it is re-derived below.
+    // Batch 23 — snapshot the pre-edit price/stock/status FIRST, so the
+    // notify block after the save can tell what actually changed.
+    const prevPrice = product.price;
+    const prevStock = product.stock;
+    const prevStatus = product.status;
     if (req.body.name !== undefined) product.name = String(req.body.name).trim();
     if (req.body.category !== undefined) product.category = String(req.body.category).trim();
     if (req.body.price !== undefined) product.price = Number(req.body.price);
@@ -541,6 +655,42 @@ async function updateProduct(req, res, next) {
       await deleteProductStoredFiles({ imageUploads: replacedUploads });
     }
 
+    // Batch 23 (TEAMLY realtime audit RT-2) — AFTER the save, so a failed
+    // update sends nothing. Every update tells the admins (product_updated);
+    // a price change and/or a stock/status change additionally tells the
+    // buyers/suppliers of ACTIVE orders and every live catalogue viewer.
+    // All FIRE-AND-FORGET: notifyAdmins/notifyPublic never throw, and
+    // notifyActiveOrderParties swallows its own failures.
+    const priceChanged = product.price !== prevPrice;
+    const stockChanged = product.stock !== prevStock || product.status !== prevStatus;
+    notifyAdmins({
+      type: 'product_updated',
+      title: `Product updated — ${product.name}`,
+      message: `${product.supplierName} updated "${product.name}".`,
+      link: `/product/${product._id}`,
+      orderId: null,
+    });
+    if (priceChanged) {
+      const pricePayload = {
+        type: 'price_updated',
+        title: `Price updated — ${product.name}`,
+        message: `"${product.name}" is now Rs ${product.price} per ${product.unit}.`,
+        link: `/product/${product._id}`,
+      };
+      notifyActiveOrderParties(product, { ...pricePayload, actorId: req.user._id });
+      notifyPublic(pricePayload);
+    }
+    if (stockChanged) {
+      const stockPayload = {
+        type: 'stock_updated',
+        title: `Stock updated — ${product.name}`,
+        message: `"${product.name}" stock is now ${product.stock} ${product.unit} (${product.status}).`,
+        link: `/product/${product._id}`,
+      };
+      notifyActiveOrderParties(product, { ...stockPayload, actorId: req.user._id });
+      notifyPublic(stockPayload);
+    }
+
     res.json({ product });
   } catch (err) {
     next(err);
@@ -577,6 +727,6 @@ async function deleteProduct(req, res, next) {
   }
 }
 
-module.exports = { getProducts, getProductCities, getProduct, getProductMarketSale, createProduct, updateProduct, deleteProduct };
+module.exports = { getProducts, getProductCities, getProductCategories, getProduct, getProductMarketSale, createProduct, updateProduct, deleteProduct };
 module.exports.deriveStatus = deriveStatus;
 module.exports.checkProductOwnership = checkProductOwnership;

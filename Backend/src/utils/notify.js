@@ -61,9 +61,42 @@ async function notifyAdmins({ type, title, message = '', link = '', orderId = nu
       { role: { $in: ['admin', 'subadmin'] } },
       { _id: 1 }
     ).lean();
-    for (const admin of admins) {
-      await notifyUser(admin._id, { type, title, message, link, orderId });
-    }
+    // Batch 19 (audit L8) — the old loop awaited each write in turn;
+    // one bulk fan-out is enough. notifyUser never throws (it logs and
+    // returns null), so Promise.all cannot fail the caller.
+    await Promise.all(
+      admins.map((admin) => notifyUser(admin._id, { type, title, message, link, orderId }))
+    );
+  } catch (err) {
+    console.log('[notify] failed:', err.message);
+  }
+}
+
+/**
+ * Pushes a PUBLIC catalogue event to every live SSE connection, with
+ * NO notification row (there is no single recipient to store it for).
+ *
+ * Batch 23 (TEAMLY realtime audit, public-catalogue fan-out) — the
+ * deliberate, documented exception to the userId-targeted rule. ONLY
+ * these three types may use it: product_created, stock_updated,
+ * price_updated. Marketplace + product-page viewers are not admins, so
+ * notifyAdmins cannot reach them, and a per-user row would be wrong.
+ * The payload is the same 7-field shape as a stored notification
+ * (id is null — there is no row), carrying catalogue data only.
+ * Order/user/KYC events must NEVER use this — those stay
+ * notifyUser/notifyAdmins only. Never throws.
+ */
+function notifyPublic({ type, title, message = '', link = '' }) {
+  try {
+    sseHub.broadcastToAll({
+      id: null,
+      type,
+      title,
+      message,
+      link,
+      orderId: null,
+      createdAt: new Date().toISOString(),
+    });
   } catch (err) {
     console.log('[notify] failed:', err.message);
   }
@@ -81,11 +114,13 @@ async function notifyOrderParties(order, { type, title, message = '', excludeUse
     { userId: order.buyerId, link: `/shopkeeper/orders/${order._id}` },
     { userId: order.supplierId, link: `/supplier/orders/${order._id}` },
   ];
-  for (const { userId, link } of targets) {
-    if (!userId) continue;
-    if (excludeUserId && String(userId) === String(excludeUserId)) continue;
-    await notifyUser(userId, { type, title, message, link, orderId: order._id });
-  }
+  // Batch 19 (audit L8) — both parties in parallel (same note as
+  // notifyAdmins: notifyUser never throws, so Promise.all is safe).
+  await Promise.all(
+    targets
+      .filter(({ userId }) => userId && !(excludeUserId && String(userId) === String(excludeUserId)))
+      .map(({ userId, link }) => notifyUser(userId, { type, title, message, link, orderId: order._id }))
+  );
 }
 
-module.exports = { notifyUser, notifyAdmins, notifyOrderParties };
+module.exports = { notifyUser, notifyAdmins, notifyPublic, notifyOrderParties };

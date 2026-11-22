@@ -14,7 +14,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Product } from '@/lib/types';
 import { PlusCircle, Edit, Trash2, Search, Save } from 'lucide-react';
-import { useLiveRefreshKey } from '@/hooks/useRealtime';
+import { idFromEventLink, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
 
 interface EditProductFormState {
   name: string;
@@ -64,13 +64,36 @@ export default function SupplierMyProductsPage() {
   const [editForm, setEditForm] = useState<EditProductFormState>(EMPTY_EDIT_FORM);
   const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditProductFormState, string>>>({});
   const [isSaving, setIsSaving] = useState(false);
-  // Batch 13 — no product event type exists in the agreed SSE list, so
-  // this page only refetches on a reconnect / tab-visible sync (bump
-  // below); the fetch effect refetches silently on a bump, so an open
-  // edit modal and the search text never reset.
+  // Batch 13 — before Batch 24 no product event type existed in the
+  // agreed SSE list, so this page only refetched on a reconnect /
+  // tab-visible sync (bump below); the fetch effect refetches silently
+  // on a bump, so an open edit modal and the search text never reset.
+  // Batch 24 keeps that sync AND adds the live product_approved /
+  // product_rejected listeners below.
   const [refreshKey, setRefreshKey] = useState(0);
   const prevRefreshKeyRef = useRef(refreshKey);
   useLiveRefreshKey([], () => setRefreshKey((k) => k + 1));
+  const productsRef = useRef<Product[]>([]);
+  productsRef.current = products;
+
+  // Batch 24 — product_approved / product_rejected (Batch 23 types).
+  // NOTE: no backend emits these yet — there is no approve/reject
+  // endpoint and Product.status is only Active / Low Stock / Out of
+  // Stock, so NO status value is invented here. When the flow is
+  // built and an event fires, the row is refreshed from a GET of that
+  // one product and replaced in place (whatever status the backend
+  // then reports); the open edit modal and search text never reset.
+  // A failed single fetch is live-only noise — the row stays as-is.
+  useRealtimeEvent(['product_approved', 'product_rejected'], (event) => {
+    const productId = idFromEventLink(event.link, 'product');
+    if (!productId) return;
+    if (!productsRef.current.some((p) => p.id === productId)) return;
+    void api.product(productId).then((data) => {
+      const p = data.product;
+      if (!p) return;
+      setProducts((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+    }).catch(() => {});
+  });
 
   useEffect(() => {
     if (authLoading) return;
@@ -242,7 +265,7 @@ export default function SupplierMyProductsPage() {
                     <ProductImage src={prod.image} alt={prod.name} className="w-12 h-12 rounded-xl object-cover" width={48} height={48} />
                     <div>
                       <p className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{prod.name}</p>
-                      <p className="text-[11px] text-slate-400">{prod.category} • {((prod as unknown as { ordersCount?: number }).ordersCount ?? 0)} total sales</p>
+                      <p className="text-xs text-slate-400">{prod.category} • {((prod as unknown as { ordersCount?: number }).ordersCount ?? 0)} total sales</p>
                     </div>
                   </div>
                 </td>
@@ -264,14 +287,14 @@ export default function SupplierMyProductsPage() {
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={() => openEditModal(prod)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-asan-accent hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      className="p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-500 hover:text-asan-accent hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                       title="Edit Product"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setDeleteModalId(prod.id)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 transition"
+                      className="p-1.5 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 transition"
                       title="Delete Product"
                     >
                       <Trash2 className="w-4 h-4" />

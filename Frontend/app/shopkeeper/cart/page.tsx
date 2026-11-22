@@ -243,7 +243,7 @@ export default function ShopkeeperCartPage() {
                     <ProductImage src={entry.product.image} alt={entry.product.name} className="w-14 h-14 rounded-lg object-cover shrink-0" width={56} height={56} />
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{entry.product.name}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {formatPKR(entry.product.price)} / {entry.product.unit} · MOQ {entry.product.moq}
                       </p>
                     </div>
@@ -253,7 +253,7 @@ export default function ShopkeeperCartPage() {
                       type="button"
                       aria-label="Decrease quantity"
                       onClick={() => { setQuantity(entry.product.id, entry.quantity - 1); refresh(); }}
-                      className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+                      className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
@@ -262,7 +262,7 @@ export default function ShopkeeperCartPage() {
                       type="button"
                       aria-label="Increase quantity"
                       onClick={() => { setQuantity(entry.product.id, entry.quantity + 1); refresh(); }}
-                      className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+                      className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -270,7 +270,7 @@ export default function ShopkeeperCartPage() {
                       type="button"
                       aria-label="Remove item"
                       onClick={() => { removeFromCart(entry.product.id); refresh(); }}
-                      className="ml-2 p-2 rounded-lg text-red-500 hover:bg-red-50 transition"
+                      className="ml-2 p-2 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -326,14 +326,14 @@ export default function ShopkeeperCartPage() {
             )}
             {coords && locationPreviewUrl && (
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-mono">
                   📍 {coords.lat}, {coords.lng}
                 </p>
                 <a
                   href={locationPreviewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
                 >
                   <MapPin className="w-3 h-3" />
                   Preview in Google Maps
@@ -341,10 +341,10 @@ export default function ShopkeeperCartPage() {
               </div>
             )}
             {locationNotice && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400">{locationNotice}</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">{locationNotice}</p>
             )}
             {!coords && !locating && !locationNotice && (
-              <p className="text-[11px] text-slate-400">
+              <p className="text-xs text-slate-400">
                 {user?.currentLocation
                   ? `Your saved location (${user?.currentLocation.lat}, ${user?.currentLocation.lng}) will be shared. Capture a fresh point to update it.`
                   : 'Capture your live location so the supplier receives a Google Maps link to your shop for delivery.'}
@@ -354,13 +354,13 @@ export default function ShopkeeperCartPage() {
               type="button"
               onClick={captureLocation}
               disabled={locating}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-dark hover:bg-asan-mid disabled:opacity-60 text-white text-[11px] font-bold transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-asan-dark hover:bg-asan-mid disabled:opacity-60 text-white text-xs font-bold transition"
             >
               <Crosshair className="w-3 h-3" />
               {coords ? 'Recapture my current location' : 'Use my current location'}
             </button>
             {!coords && !user?.currentLocation && !locating && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              <p className="text-xs text-amber-600 dark:text-amber-400">
                 ⚠ No location available — the supplier will only see the written shipping address.
               </p>
             )}
@@ -383,7 +383,7 @@ export default function ShopkeeperCartPage() {
               <span>
                 {/* Batch 06 — shared label (audit finding 9): same text as the order detail page. */}
                 <span className="font-bold text-slate-900 dark:text-white">{PAYMENT_METHOD_LABEL.online_advance}</span>
-                <span className="block text-[11px] text-slate-500">Money is held in escrow and releases to the supplier once delivery is confirmed.</span>
+                <span className="block text-xs text-slate-500">Money is held in escrow and releases to the supplier once delivery is confirmed.</span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-xs cursor-pointer">
@@ -396,7 +396,7 @@ export default function ShopkeeperCartPage() {
               />
               <span>
                 <span className="font-bold text-slate-900 dark:text-white">Pay online at delivery</span>
-                <span className="block text-[11px] text-slate-500">Check the goods first, then pay online when they arrive.</span>
+                <span className="block text-xs text-slate-500">Check the goods first, then pay online when they arrive.</span>
               </span>
             </label>
             <label className="block text-xs">

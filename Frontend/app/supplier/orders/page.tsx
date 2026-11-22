@@ -34,6 +34,11 @@ export default function SupplierOrdersPage() {
   // the list), so the effect reads the ref instead.
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
+  // Batch 20 (audit (c)-5) — every fetch run gets an id; a response
+  // that resolves AFTER a newer fetch started is ignored, so two rapid
+  // live events can no longer resolve out of order and let the stale
+  // list win. (`mounted` alone only guards unmount, not supersede.)
+  const fetchSeqRef = useRef(0);
   useLiveRefreshKey(
     [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
     () => setRefreshKey((k) => k + 1),
@@ -61,11 +66,13 @@ export default function SupplierOrdersPage() {
     // fresh load resets to page 1.
     const pagesToLoad = silent ? Math.max(1, pageRef.current) : 1;
     if (!silent) setPage(1);
+    // Batch 20 (audit (c)-5) — see fetchSeqRef above.
+    const requestId = ++fetchSeqRef.current;
     Promise.all(
       Array.from({ length: pagesToLoad }, (_, i) => api.orders({ limit: 50, page: i + 1 })),
     )
       .then((responses) => {
-        if (!mounted) return;
+        if (!mounted || requestId !== fetchSeqRef.current) return;
         // A buyer-cancelled pending order never reaches the supplier —
         // keep cancelled orders out of this list entirely.
         const notCancelled = (o: Order) => o.status !== 'cancelled';
@@ -79,10 +86,11 @@ export default function SupplierOrdersPage() {
         setTotalPages(responses[responses.length - 1]?.totalPages ?? 1);
       })
       .catch((err) => {
-        if (mounted) setError(err instanceof Error ? err.message : 'Failed to load orders');
+        if (!mounted || requestId !== fetchSeqRef.current) return;
+        setError(err instanceof Error ? err.message : 'Failed to load orders');
       })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted && requestId === fetchSeqRef.current) setLoading(false);
       });
     return () => { mounted = false; };
   }, [authLoading, user, refreshKey]);
@@ -90,12 +98,22 @@ export default function SupplierOrdersPage() {
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
       await api.updateOrderStatus(orderId, newStatus);
-      // Refresh orders
-      const res = await api.orders({ limit: 50 });
-      const mine = res.orders.filter((o: Order) => String(o.supplierId) === String(user?.id));
-      setOrders(mine.length > 0 ? mine : res.orders);
-      setPage(1);
-      setTotalPages(res.totalPages ?? 1);
+      // Batch 20 (audit (c)-6) — the supplier's OWN status change used
+      // to refetch only page 1 and force setPage(1), throwing away
+      // "Load more" pages — the same reset the remaining-fixes pageRef
+      // work removed from the live path. Now it reuses that pattern:
+      // refetch pages 1..page and keep the user's place.
+      const pagesToLoad = Math.max(1, pageRef.current);
+      const responses = await Promise.all(
+        Array.from({ length: pagesToLoad }, (_, i) => api.orders({ limit: 50, page: i + 1 })),
+      );
+      const notCancelled = (o: Order) => o.status !== 'cancelled';
+      const all = responses.flatMap((res) => {
+        const mine = res.orders.filter((o: Order) => String(o.supplierId) === String(user?.id) && notCancelled(o));
+        return mine.length > 0 ? mine : res.orders.filter(notCancelled);
+      });
+      setOrders(all);
+      setTotalPages(responses[responses.length - 1]?.totalPages ?? 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update order status');
     }

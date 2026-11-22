@@ -188,7 +188,8 @@ module.exports = {
   deleteStoredUploads,
   KycUploadError,
   DOCUMENT_FIELDS,
-  MAX_FILE_BYTES,
+  // Batch 22 (Round-5 audit h-L5) — MAX_FILE_BYTES and PUBLIC_PREFIX
+  // are NOT exported any more: no caller ever imported them; both
+  // constants stay defined above and are still used inside this file.
   UPLOAD_ROOT,
-  PUBLIC_PREFIX,
 };

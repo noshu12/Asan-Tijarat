@@ -157,4 +157,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { checkDb, protect, optionalProtect, protectAdmin, requireAuth: protect, requireRole };
+module.exports = { checkDb, protect, optionalProtect, protectAdmin, verifySession, requireRole };

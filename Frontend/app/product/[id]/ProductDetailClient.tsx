@@ -14,7 +14,7 @@ import { useAuth } from '@/context/AuthProvider';
 import { addToCart } from '@/lib/cart';
 import { trackAddToCart, trackProductView } from '@/lib/analytics';
 import { parsePack } from '@/components/ProductCard';
-import { useRealtime } from '@/hooks/useRealtime';
+import { idFromEventLink, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
 
 type MarketSale = {
   productId: string;
@@ -54,11 +54,14 @@ export default function ProductDetailClient({ id }: { id: string }) {
   const [marketSale, setMarketSale] = useState<MarketSale | null>(null);
   // Batch 13 — live stock/price revalidation (small client wrapper, kept
   // minimal on purpose: NO JSON-LD here — a later step adds it on top of
-  // this version). No product event type exists in the agreed SSE list,
-  // so this refetches on a reconnect / tab-visible sync only. The refetch
-  // is silent (no spinner, gallery selection and typed qty untouched);
-  // if the new stock is below the picked qty, the qty is clamped down
-  // and a note says so — the cart itself is never touched here.
+  // this version). Before Batch 24 no product event type existed in the
+  // agreed SSE list, so this refetched on a reconnect / tab-visible sync
+  // only. Batch 24 keeps that sync AND adds the live stock_updated /
+  // price_updated events (Batch 23): when the event's link id matches
+  // THIS product, the same silent refetch below runs — no spinner, no
+  // page reload, gallery selection and typed qty untouched; if the new
+  // stock is below the picked qty, the qty is clamped down and a note
+  // says so — the cart itself is never touched here.
   const [refreshKey, setRefreshKey] = useState(0);
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const qtyRef = useRef(qty);
@@ -70,6 +73,10 @@ export default function ProductDetailClient({ id }: { id: string }) {
     lastSyncKeyRef.current = syncKey;
     setRefreshKey((k) => k + 1);
   }, [syncKey]);
+  useRealtimeEvent(['stock_updated', 'price_updated'], (event) => {
+    if (idFromEventLink(event.link, 'product') !== id) return;
+    setRefreshKey((k) => k + 1);
+  });
 
   const prevRefreshKeyRef = useRef(refreshKey);
   useEffect(() => {
@@ -350,7 +357,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
                     aria-label="Decrease quantity"
                     disabled={outOfStock || qty <= Math.max(product.moq, 1)}
                     onClick={() => setQty((q) => clampQty(q - 1))}
-                    className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-40"
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-40"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -368,7 +375,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
                     aria-label="Increase quantity"
                     disabled={outOfStock || qty >= stock}
                     onClick={() => setQty((q) => clampQty(q + 1))}
-                    className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-40"
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-40"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -381,7 +388,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
                       type="button"
                       disabled={outOfStock}
                       onClick={handleAdd}
-                      className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition ${
+                      className={`flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl text-sm font-bold shadow-md shadow-asan-accent-hover/20 transition ${
                         added ? 'bg-asan-accent text-white' : 'bg-asan-accent hover:bg-asan-accent-hover text-white'
                       } disabled:opacity-40`}
                     >

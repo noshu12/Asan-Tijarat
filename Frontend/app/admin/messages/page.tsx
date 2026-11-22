@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Mail, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { api, ContactMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { formatDate } from '@/lib/utils';
+import { useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function AdminMessagesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -24,6 +25,31 @@ export default function AdminMessagesPage() {
   const [replyBody, setReplyBody] = useState('');
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  // Batch 24 (RT-6 — read the note below before "fixing" this page).
+  // This page is a CONTACT-FORM inbox (visitor messages + a Read modal
+  // + a Reply modal). It has NO chat thread list, NO open-thread view,
+  // NO unread count, and NO contact-message event type exists in the
+  // SSE enum — so there is no live event that belongs to this list.
+  // A `chat_message` subscription here would be DEAD CODE, twice over:
+  // (1) the backend only ever notifies the OTHER party of an order
+  // (message.controller.js sendMessage → notifyUser(otherId), link
+  // /supplier/orders/<id> or /shopkeeper/orders/<id>) — admins are
+  // never addressed a chat_message, and the backend forbids admins
+  // from sending in order chat at all; (2) even if one arrived, the
+  // payload carries only a truncated "Name: text" summary — appending
+  // a bubble from it would repeat the wrong-sender bug the live-chat
+  // fix already removed from OrderDetail. The admin's real chat view
+  // is the DISPUTES evidence thread, which is already live-wired
+  // (remaining-fixes batch: chat_message refetches ONLY the message
+  // list, panel + typed notes untouched), and OrderDetail (shopkeeper
+  // / supplier) already refetches its thread on chat_message with
+  // auto-scroll only when already at the bottom. So this page gets
+  // the same treatment every other no-event page got in Batch 13: a
+  // reconnect / tab-visible sync refetch only (silent — an open Read
+  // or Reply modal and the search text never reset).
+  const [refreshKey, setRefreshKey] = useState(0);
+  const prevRefreshKeyRef = useRef(refreshKey);
+  useLiveRefreshKey([], () => setRefreshKey((k) => k + 1));
 
   const loadContacts = async () => {
     setError(null);
@@ -45,9 +71,13 @@ export default function AdminMessagesPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Batch 24 — silent on a live refreshKey bump (reconnect sync):
+    // the inbox refetches, the open Read/Reply modal stays open.
+    const silent = prevRefreshKeyRef.current !== refreshKey;
+    prevRefreshKeyRef.current = refreshKey;
+    if (!silent) setLoading(true);
     void loadContacts();
-  }, [authLoading, user]);
+  }, [authLoading, user, refreshKey]);
 
   const removeContact = async (c: ContactMessage) => {
     const ok = window.confirm(`Delete the message from ${c.name} (${c.email})? This cannot be undone.`);
@@ -186,7 +216,7 @@ export default function AdminMessagesPage() {
                       title="Read the full message"
                     >
                       <p className="font-bold text-slate-900 dark:text-white text-xs">{c.name}</p>
-                      <p className="text-[11px] text-slate-400 truncate max-w-[220px]">{c.email}</p>
+                      <p className="text-xs text-slate-400 truncate max-w-[220px]">{c.email}</p>
                     </button>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
@@ -251,12 +281,12 @@ export default function AdminMessagesPage() {
           <div className="space-y-4">
             {selected.subject && (
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Subject</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Subject</p>
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{selected.subject}</p>
               </div>
             )}
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Message</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Message</p>
               <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 whitespace-pre-wrap break-words">{selected.message}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -299,7 +329,7 @@ export default function AdminMessagesPage() {
               </div>
             )}
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Subject</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Subject</label>
               <input
                 type="text"
                 value={replySubject}
@@ -309,7 +339,7 @@ export default function AdminMessagesPage() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Message</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Message</label>
               <textarea
                 value={replyBody}
                 onChange={(e) => setReplyBody(e.target.value)}
@@ -318,7 +348,7 @@ export default function AdminMessagesPage() {
                 placeholder={`Hello ${replyTarget.name},`}
                 className="mt-1 px-4 py-2 w-full rounded-xl border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
               />
-              <p className="text-[11px] text-slate-400 mt-1">{replyBody.length}/5000</p>
+              <p className="text-xs text-slate-400 mt-1">{replyBody.length}/5000</p>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -334,7 +364,7 @@ export default function AdminMessagesPage() {
                 Cancel
               </Button>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-400">
               The reply is sent from the Asan Tijarat email with branded formatting.
             </p>
           </div>

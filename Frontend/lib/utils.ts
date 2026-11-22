@@ -56,11 +56,27 @@ export function formatPKR(amount: number): string {
 }
 
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-GB', {
+  const parsed = new Date(dateString);
+  // Batch 22 (Round-5 audit h-L3) — NaN guard, carried over from the
+  // old invoice.ts copy: an unparseable date used to render as
+  // "Invalid Date". Return the input unchanged instead so callers
+  // never show that string (invoice.ts escapes it for its HTML).
+  if (Number.isNaN(parsed.getTime())) return dateString;
+  return parsed.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric'
   });
+}
+
+/**
+ * Capitalises one word — "pending" -> "Pending".
+ * Batch 22 (Round-5 audit h-L3) — the same one-liner lived in three
+ * places (invoice.ts, OrderTable.tsx, admin/orders/page.tsx); it now
+ * lives here and those three import it.
+ */
+export function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 /** 1.4 MB / 812 KB — used by the KYC upload previews and admin document cards. */

@@ -13,9 +13,13 @@ import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import { api, ApiError } from '@/lib/api';
+import { useAuth } from '@/context/AuthProvider';
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  // Batch 17 (L3) — the 2FA-setup tempToken travels in AuthProvider
+  // memory, never sessionStorage.
+  const { setTwoFactorSetupToken } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,10 +34,20 @@ export default function AdminLoginPage() {
   const [needs2FA, setNeeds2FA] = useState(false);
   const [tempToken, setTempToken] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  // Batch 17 (M3) — the 2FA code step has its OWN Turnstile widget: the
+  // login token above is single-use and already spent on step 1, and
+  // POST /api/auth/admin/2fa/login is Turnstile-guarded now.
+  const [twoFaTsToken, setTwoFaTsToken] = useState<string | null>(null);
+  const [twoFaTsKey, setTwoFaTsKey] = useState(0);
 
   const resetTs = () => {
     setTsToken(null);
     setTsKey((k) => k + 1);
+  };
+
+  const resetTwoFaTs = () => {
+    setTwoFaTsToken(null);
+    setTwoFaTsKey((k) => k + 1);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -47,7 +61,8 @@ export default function AdminLoginPage() {
       if ('requires2FASetup' in result) {
         // Admin/sub-admin first sign-in without 2FA — setup is mandatory
         // (FIX New audit #5: the main admin uses this same flow now).
-        sessionStorage.setItem('subadmin_setup_token', result.tempToken || '');
+        // The setup token travels in memory (Batch 17, L3).
+        setTwoFactorSetupToken(result.tempToken || '');
         router.push('/subadmin-setup');
         return;
       }
@@ -78,7 +93,7 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      await api.adminVerifyTwoFactorLogin(tempToken, twoFactorCode.trim());
+      await api.adminVerifyTwoFactorLogin(tempToken, twoFactorCode.trim(), twoFaTsToken || undefined);
       window.location.assign('/admin/users');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -87,6 +102,8 @@ export default function AdminLoginPage() {
         setErrorMessage('Unexpected error. Please try again.');
       }
       setIsLoading(false);
+      // The Turnstile token is single-use — a failed attempt spent it.
+      resetTwoFaTs();
     }
   };
 
@@ -166,6 +183,10 @@ export default function AdminLoginPage() {
               </p>
             )}
 
+            {isTurnstileConfigured() && (
+              <TurnstileWidget key={twoFaTsKey} onVerify={setTwoFaTsToken} onExpire={() => setTwoFaTsToken(null)} />
+            )}
+
             <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">
               Verify
             </Button>
@@ -177,6 +198,7 @@ export default function AdminLoginPage() {
                 setTempToken('');
                 setTwoFactorCode('');
                 setErrorMessage('');
+                resetTwoFaTs();
               }}
               className="w-full text-xs font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             >

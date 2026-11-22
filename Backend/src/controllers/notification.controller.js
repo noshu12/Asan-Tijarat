@@ -17,6 +17,8 @@ async function listNotifications(req, res, next) {
       .sort({ createdAt: -1 })
       .skip((safePage - 1) * limit)
       .limit(limit)
+      // Batch 19 (audit M5) — list projection: the fields the bell reads.
+      .select('_id userId type title message link orderId read createdAt updatedAt')
       .lean();
     res.json({
       notifications: toClient(notifications),

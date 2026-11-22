@@ -40,14 +40,31 @@ export default function HomeClient() {
   // empty on purpose — no mock fallback, so no fake products ever show here.
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Batch 19 (Round-5 audit L10) — categories + catalogue stats come
+  // from the lightweight GET /api/products/categories endpoint (three
+  // server-side distinct/count calls, no product documents), NOT from
+  // the product page: the homepage used to fetch 100 products just to
+  // derive these, and the stats were only as accurate as the first 100
+  // rows. Null until the endpoint answers; the memos below fall back to
+  // deriving from the 8 loaded products if it fails.
+  const [categoryList, setCategoryList] = useState<string[] | null>(null);
+  const [totalProducts, setTotalProducts] = useState<number | null>(null);
+  const [supplierCount, setSupplierCount] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        // Batch 04 — the widest page (100): the category list below is
-        // derived from these products, so it needs more than the default 50.
-        const data = await api.products({ limit: 100 });
+        // Only the 8 cards on screen — categories/stats ride separately.
+        const [data, cats] = await Promise.all([
+          api.products({ limit: 8 }),
+          api.productCategories().catch(() => null),
+        ]);
         setProducts(data.products);
+        if (cats) {
+          setCategoryList(cats.categories ?? []);
+          setTotalProducts(typeof cats.total === 'number' ? cats.total : null);
+          setSupplierCount(typeof cats.suppliers === 'number' ? cats.suppliers : null);
+        }
       } catch {
         setProducts([]);
       } finally {
@@ -60,6 +77,7 @@ export default function HomeClient() {
   const topProducts = useMemo(() => products.slice(0, 8), [products]);
 
   const categories = useMemo(() => {
+    if (categoryList !== null) return categoryList;
     const seen = new Set<string>();
     const list: string[] = [];
     for (const product of products) {
@@ -69,15 +87,16 @@ export default function HomeClient() {
       }
     }
     return list;
-  }, [products]);
+  }, [products, categoryList]);
 
   const suppliers = useMemo(() => {
+    if (supplierCount !== null) return supplierCount;
     const seen = new Set<string>();
     for (const product of products) {
       if (product.supplierName) seen.add(product.supplierName);
     }
     return seen.size;
-  }, [products]);
+  }, [products, supplierCount]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -129,7 +148,7 @@ export default function HomeClient() {
       <section className="bg-white border-y border-asan-border text-asan-dark py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
           <div>
-            <p className="text-3xl sm:text-4xl font-extrabold text-asan-accent">{isLoading ? '…' : products.length}</p>
+            <p className="text-3xl sm:text-4xl font-extrabold text-asan-accent">{isLoading ? '…' : (totalProducts ?? products.length)}</p>
             <p className="text-xs sm:text-sm text-asan-text-light uppercase tracking-wider font-semibold mt-1">Products Listed</p>
           </div>
           <div>

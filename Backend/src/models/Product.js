@@ -74,26 +74,23 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// Batch 04 — text index over the fields the catalogue search scans
-// (name / description / category / supplierName / supplierCity), so a
-// $text search no longer needs a full collection scan. The search itself
-// still uses the regex $or — substring matching ("bas" → "Basmati") must
-// keep working, and a text index cannot serve that — but the index is in
-// place for $text queries and for the sort/filter paths above.
-productSchema.index({ name: 'text', description: 'text', category: 'text', supplierName: 'text', supplierCity: 'text' });
-
-// B11 (Round-4 Batch 13) — the two indexes the list endpoint's actual
-// query shape was missing. getProducts (product.controller.js) ALWAYS
-// filters `status` on the public list (`$ne: 'Out of Stock'`, no
-// supplierId) and sorts `createdAt: -1` by default, so a compound
-// { status, createdAt } serves that whole path (filter + sort) instead
-// of a status-only index plus an in-memory sort. The supplier's own
-// list filters `supplierId` and sorts the same way, so it gets the
-// matching { supplierId, createdAt } compound. No single-field status /
-// createdAt indexes: the compounds cover both shapes and keep the
-// index count down. Price sorts (price_asc / price_desc) keep using
-// the existing single-field price index.
+// Batch 19 (Round-5 audit M8) — the text index is GONE, deliberately.
+// It was dead weight: grep $text across Backend/src returned zero hits,
+// and the catalogue search still uses the regex $or — substring matching
+// ("bas" → "Basmati") must keep working, and a text index cannot serve
+// that. Switching the search to $text would have lost the substring
+// match, so the decision (Noushad, Batch 19) is: drop the index, keep
+// the regex search. The index cost write time + storage for zero
+// benefit. If the catalogue ever outgrows regex search, that is a
+// separate search redesign, not an index re-add.
 productSchema.index({ status: 1, createdAt: -1 });
 productSchema.index({ supplierId: 1, createdAt: -1 });
+
+// Batch 19 (Round-5 audit L1) — compounds for the category / city
+// filtered list shapes getProducts actually runs (category + createdAt
+// sort, supplierCity + createdAt sort). Before this, filtered lists
+// fell back to a single-field index + in-memory sort.
+productSchema.index({ category: 1, createdAt: -1 });
+productSchema.index({ supplierCity: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Product', productSchema);

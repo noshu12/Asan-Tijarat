@@ -34,4 +34,9 @@ const contactMessageSchema = new mongoose.Schema(
   }
 );
 
+// Batch 19 (Round-5 audit L3) — the admin contacts list sorts
+// createdAt: -1, but only `status` was indexed, so the sort ran in
+// memory on every load.
+contactMessageSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('ContactMessage', contactMessageSchema);

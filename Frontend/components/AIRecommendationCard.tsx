@@ -9,6 +9,7 @@ import { ProductImage } from '@/components/ProductImage';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthProvider';
 import { addToCart } from '@/lib/cart';
+import { trackAddToCart } from '@/lib/analytics';
 
 export function AIRecommendationCard({ product }: { product: Product }) {
   const router = useRouter();
@@ -23,6 +24,12 @@ export function AIRecommendationCard({ product }: { product: Product }) {
     }
     if (user.role !== 'shopkeeper') return;
     addToCart(product);
+    // Batch 20 (audit (d)-1) — the dashboard add path never reported to
+    // GA4, so every add from a recommendation was invisible in the
+    // view → add → checkout funnel. Same MOQ quantity as ProductCard
+    // (stock-capped, Batch 20 (d)-2) and only when the add really
+    // happened (addToCart is a no-op at stock 0).
+    if (product.stock > 0) trackAddToCart(product.id, Math.min(Math.max(product.moq, 1), product.stock));
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1400);
   };
@@ -46,7 +53,7 @@ export function AIRecommendationCard({ product }: { product: Product }) {
                 {product.name}
               </h4>
             </Link>
-            <p className="text-[11px] text-slate-400 truncate">{product.supplierName}</p>
+            <p className="text-xs text-slate-400 truncate">{product.supplierName}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
             <span className="font-extrabold text-sm text-asan-dark dark:text-asan-accent-light whitespace-nowrap">

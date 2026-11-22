@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PortalHeader } from '@/components/PortalHeader';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -205,7 +206,7 @@ function CategoryMultiSelect({
           {selected.map((cat) => (
             <span
               key={cat}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-asan-accent-light text-asan-dark border border-asan-border dark:bg-asan-dark dark:text-asan-accent-light dark:border-asan-mid"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-asan-accent-light text-asan-dark border border-asan-border dark:bg-asan-dark dark:text-asan-accent-light dark:border-asan-mid"
             >
               {cat}
               <button
@@ -252,7 +253,8 @@ export function SettingsView({ role }: SettingsViewProps) {
   // useAuth() is called here, at the top of the component only — never inside
   // useEffect, and never inside another useEffect. The effects below only
   // READ `user`, they never call the hook again.
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -268,6 +270,14 @@ export function SettingsView({ role }: SettingsViewProps) {
   const [houseAddress, setHouseAddress] = useState('');
   const [currentHouseLocation, setCurrentHouseLocation] = useState('');
   const [avatar, setAvatar] = useState('');
+  // Batch 17 (L5) — current password, asked only when the email or
+  // phone changes (the server requires it for a contact change).
+  const [contactPassword, setContactPassword] = useState('');
+  const [showContactPassword, setShowContactPassword] = useState(false);
+  // True while the typed email/phone differ from the stored ones.
+  const contactChanged =
+    email.trim().toLowerCase() !== (user?.email || '').toLowerCase() ||
+    phone.trim() !== (user?.phone || '');
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
@@ -427,6 +437,12 @@ export function SettingsView({ role }: SettingsViewProps) {
       setProfileError('Phone number cannot be empty.');
       return;
     }
+    // Batch 17 (L5) — a contact change needs the current password; the
+    // server verifies it and kills every other session.
+    if (contactChanged && !contactPassword.trim()) {
+      setProfileError('Enter your current password to change your email or phone number.');
+      return;
+    }
 
     setSavingProfile(true);
     try {
@@ -438,11 +454,21 @@ export function SettingsView({ role }: SettingsViewProps) {
         houseAddress,
         currentHouseLocation,
         avatar,
+        ...(contactChanged ? { currentPassword: contactPassword } : {}),
         // Freshly captured GPS point — omit entirely when none exists so an
         // already-stored point is never accidentally cleared.
         ...(coords ? { currentLocation: coords } : {}),
       });
       setUserId(res.user.id);
+      setContactPassword('');
+      if (res.contactChanged) {
+        // Batch 17 (L5) — the server killed the session with the contact
+        // change (force re-login): sign in again with the new details.
+        setProfileSuccess('Contact details updated. Please sign in again with your new details.');
+        await logout();
+        router.push('/signin');
+        return;
+      }
       setProfileSuccess('Profile updated successfully.');
     } catch (err) {
       setProfileError(
@@ -561,7 +587,7 @@ export function SettingsView({ role }: SettingsViewProps) {
               <button
                 type="button"
                 onClick={() => avatarFileRef.current?.click()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-asan-accent hover:text-asan-accent transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-asan-accent hover:text-asan-accent transition"
               >
                 Change photo
               </button>
@@ -569,7 +595,7 @@ export function SettingsView({ role }: SettingsViewProps) {
                 <button
                   type="button"
                   onClick={handleRemoveAvatar}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-red-600 dark:text-red-400 hover:border-red-400 transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-red-600 dark:text-red-400 hover:border-red-400 transition"
                 >
                   Remove photo
                 </button>
@@ -608,6 +634,24 @@ export function SettingsView({ role }: SettingsViewProps) {
             />
           </div>
 
+          {/* Batch 17 (L5) — email/phone change needs the current password,
+              so a stolen session alone cannot redirect OTPs and resets. */}
+          {contactChanged && (
+            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 space-y-2">
+              <PasswordField
+                label="Current Password"
+                value={contactPassword}
+                onChange={setContactPassword}
+                placeholder="Required to change email or phone"
+                show={showContactPassword}
+                onToggleShow={() => setShowContactPassword((v) => !v)}
+              />
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                Changing your email or phone number requires your current password — it also signs out your other sessions.
+              </p>
+            </div>
+          )}
+
           {/* Residential details — same fields collected at registration, so
               traders can keep them current without contacting support. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -634,14 +678,14 @@ export function SettingsView({ role }: SettingsViewProps) {
               type="button"
               onClick={capture}
               disabled={locating}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-asan-accent hover:text-asan-accent transition disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-asan-accent hover:text-asan-accent transition disabled:opacity-60"
             >
               <MapPin className={`w-3.5 h-3.5 ${locating ? 'animate-pulse' : ''}`} />
               {locating ? 'Detecting your location…' : 'Use my current location'}
             </button>
 
             {coords && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                 <Check className="w-3.5 h-3.5" />
                 Location captured ({coords.lat}, {coords.lng})
               </span>
@@ -651,7 +695,7 @@ export function SettingsView({ role }: SettingsViewProps) {
           {notice && (
             <p
               role="alert"
-              className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2"
+              className="text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2"
             >
               {notice}
             </p>

@@ -5,8 +5,9 @@ const Counter = require('../models/Counter');
 const { toClient } = require('../utils/serialize');
 const { sanitizeLocation, googleMapsLink } = require('../utils/location');
 const { calcLineTotal, sumLineTotals } = require('../utils/orderTotals');
-const { reserveStock } = require('../utils/stock');
-const { notifyUser, notifyOrderParties } = require('../utils/notify');
+const { reserveStock, restoreStock } = require('../utils/stock');
+const { notifyUser, notifyAdmins, notifyOrderParties } = require('../utils/notify');
+const { cancelSettlementPatch } = require('../utils/orderCancel');
 
 /**
  * Legal order-state transitions, lowercase only.
@@ -145,7 +146,15 @@ async function createOrder(req, res, next) {
     const buyerLocationLink = googleMapsLink(buyerLocationPoint) || '';
 
     // Resolve every line against the live catalogue.
-    const lines = [];
+    //
+    // Batch 19 (Round-5 audit M6) — one Product.find({ _id: { $in } })
+    // for the whole cart, then an id map, instead of one findById per
+    // cart line (N sequential round trips, latency growing with cart
+    // size). Validation order and error messages are unchanged: shape /
+    // quantity first (no DB), then per-line product checks in cart order
+    // (PRODUCT_NOT_FOUND / BELOW_MOQ / INSUFFICIENT_STOCK). A product
+    // listed twice in the cart resolves from the same map entry, exactly
+    // as two findByIds would have.
     for (const item of items) {
       if (!item || !item.productId || !item.quantity) {
         return res.status(400).json({
@@ -157,8 +166,14 @@ async function createOrder(req, res, next) {
           error: { code: 'INVALID_QUANTITY', message: 'Quantity must be a whole number of at least 1.' },
         });
       }
+    }
+    const ids = [...new Set(items.map((item) => String(item.productId)))];
+    const found = await Product.find({ _id: { $in: ids } }).lean();
+    const byId = new Map(found.map((p) => [String(p._id), p]));
 
-      const product = await Product.findById(item.productId).lean();
+    const lines = [];
+    for (const item of items) {
+      const product = byId.get(String(item.productId));
       if (!product) {
         return res.status(404).json({
           error: { code: 'PRODUCT_NOT_FOUND', message: `Product "${item.productId}" not found.` },
@@ -239,7 +254,11 @@ async function createOrder(req, res, next) {
     }
 
     // Phase 2: all stock reserved — now create one order per supplier group.
+    // Order.create + nextOrderNumber() stay sequential (order numbers must
+    // be issued in order); only the supplier notifications fan out in
+    // parallel (Batch 19, audit L8 — notifyUser never throws).
     const created = [];
+    const notifyJobs = [];
     for (const group of groups.values()) {
       // Stock is reserved — now create the order.
       // Strip internal fields before persisting the item snapshots —
@@ -280,11 +299,33 @@ async function createOrder(req, res, next) {
       created.push(order);
 
       // Batch 05 — the supplier learns about the new order in-app.
-      await notifyUser(group.supplierId, {
+      // Collected, not awaited here: all group notifications go out
+      // together after the loop (Batch 19, audit L8).
+      notifyJobs.push(
+        notifyUser(group.supplierId, {
+          type: 'order_placed',
+          title: `New order ${order.orderNumber}`,
+          message: `${order.buyerName} placed an order (${order.items.length} item${order.items.length > 1 ? 's' : ''}, ${order.totalAmount} PKR).`,
+          link: `/supplier/orders/${order._id}`,
+          orderId: order._id,
+        })
+      );
+    }
+    await Promise.all(notifyJobs);
+
+    // Batch 23 (TEAMLY realtime audit RT-1) — the supplier notify above
+    // was the ONLY order_placed fan-out, so admins never learned a new
+    // order existed. One order_placed per created order to all admins.
+    // FIRE-AND-FORGET (not awaited, not in notifyJobs): notifyAdmins
+    // never throws, and the response must not wait on the bell. It runs
+    // after order creation, so a failed checkout sends nothing. Message
+    // carries order number + amount only — no customer address/phone.
+    for (const order of created) {
+      notifyAdmins({
         type: 'order_placed',
         title: `New order ${order.orderNumber}`,
         message: `${order.buyerName} placed an order (${order.items.length} item${order.items.length > 1 ? 's' : ''}, ${order.totalAmount} PKR).`,
-        link: `/supplier/orders/${order._id}`,
+        link: `/admin/orders/${order._id}`,
         orderId: order._id,
       });
     }
@@ -333,6 +374,10 @@ async function getOrders(req, res, next) {
       .sort({ createdAt: -1 })
       .skip((safePage - 1) * limit)
       .limit(limit)
+      // Batch 19 (audit M5) — list projection: the fields the supplier /
+      // shopkeeper order lists read. The single-order endpoint
+      // (getOrder) still returns the whole document.
+      .select('_id orderNumber buyerId buyerName supplierId supplierName items subtotal totalAmount paymentMethod paymentChannel paymentStatus paymentReference amountHeld platformFee payoutAmount refundAmount deliveryProof disputeId status deliveryDate shippingAddress buyerLocationLink createdAt updatedAt')
       .lean();
     res.json({ orders: toClient(orders), count: orders.length, total, page: safePage, limit, totalPages });
   } catch (err) {
@@ -422,12 +467,15 @@ async function updateOrderStatus(req, res, next) {
       });
     }
 
-    // Batch 06 — cancelling must never bypass an open dispute: the money
-    // stays frozen until the admin decides. Unreachable through the status
-    // machine today (disputes cannot open on pending orders, and only
-    // pending orders can be cancelled), but the guard keeps the money
-    // rules true even if that changes.
-    if (toStatus === 'cancelled' && order.disputeId) {
+    // Batch 18 (audit M5) — an open dispute freezes the ORDER, not just
+    // the money: ANY status move returns DISPUTE_OPEN while a claim is
+    // open, so a supplier can no longer push confirmed → processing →
+    // shipped → delivered while the payment sits frozen_dispute. (The
+    // old guard only ran for 'cancelled' — and was already unreachable
+    // there, since disputes cannot open on pending orders and only
+    // pending orders can be cancelled — so the freeze effectively
+    // guarded nothing at all.)
+    if (order.disputeId) {
       const d = await Dispute.findById(order.disputeId, { status: 1 }).lean();
       if (d && d.status !== 'resolved') {
         return res.status(400).json({
@@ -436,32 +484,50 @@ async function updateOrderStatus(req, res, next) {
       }
     }
 
-    order.status = toStatus;
+    const patch = { status: toStatus };
     if (toStatus === 'confirmed') {
-      order.deliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // +3 days
+      patch.deliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // +3 days
     }
     if (toStatus === 'cancelled') {
-      // Stock was decremented when the order was placed — give it back,
-      // since a cancelled pending order never reaches the supplier.
-      for (const item of order.items) {
-        await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.quantity } });
-      }
-      // Batch 05 — an advance payment already held in escrow goes straight
-      // back to the shopkeeper in full (a cancelled order takes no fee).
-      // A merely submitted (unconfirmed) reference just goes back to
-      // 'unpaid' — the money was never confirmed in.
-      if (order.paymentStatus === 'held_in_escrow') {
-        order.refundAmount = order.totalAmount;
-        order.platformFee = 0;
-        order.payoutAmount = 0;
-        order.amountHeld = 0;
-        order.paymentStatus = 'refunded';
-      } else if (order.paymentStatus === 'payment_submitted') {
-        order.paymentStatus = 'unpaid';
-      }
+      // Batch 18 (audit HIGH 1 + L10) — the money settlement for a
+      // cancel, shared with the admin cancel endpoint (see
+      // utils/orderCancel.js): escrowed OR paid money refunds in full,
+      // a merely-submitted reference goes back to 'unpaid' with the
+      // stale reference cleared.
+      Object.assign(patch, cancelSettlementPatch(order));
     }
 
-    await order.save();
+    // Batch 20 (audit (c)-1) — capture the PRE-cancel payment state
+    // here: the atomic update below mutates the loaded doc in place
+    // (and the findOneAndUpdate result may alias it), so the refund
+    // check after it must use this snapshot, not order.paymentStatus.
+    const refundedOnCancel =
+      order.paymentStatus === 'held_in_escrow' || order.paymentStatus === 'paid';
+
+    // Batch 18 (audit M3) — ATOMIC status move. The transition check
+    // above read the order's status; this update only applies while the
+    // order is STILL in that status. Two concurrent moves (e.g. buyer
+    // cancels while the supplier confirms) can no longer both pass the
+    // guard — the loser gets null and a 409.
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id, status: order.status },
+      { $set: patch },
+      { new: true }
+    );
+    if (!updated) {
+      return res.status(409).json({
+        error: { code: 'CONCURRENT_UPDATE', message: 'This order was just changed by another request — reload it and check its status.' },
+      });
+    }
+
+    if (toStatus === 'cancelled') {
+      // Stock was decremented when the order was placed — give it back,
+      // since a cancelled order never reaches the supplier. This runs
+      // AFTER the atomic update above, so a losing concurrent cancel
+      // never restores stock twice. Batch 19 (audit L6) — one bulkWrite
+      // for the whole restore set (utils/stock.js restoreStock).
+      await restoreStock(Product, updated.items);
+    }
 
     // Batch 05 — the other party learns about the move in-app.
     const typeMap = {
@@ -475,22 +541,53 @@ async function updateOrderStatus(req, res, next) {
     // method (b) has no receipt-confirm action, the shopkeeper must pay
     // and submit the transaction reference instead.
     const messageMap = {
-      confirmed: `The supplier confirmed order ${order.orderNumber}.`,
-      processing: `The supplier started processing order ${order.orderNumber}.`,
-      shipped: `Order ${order.orderNumber} is on its way.`,
-      delivered: order.paymentMethod === 'online_at_delivery'
-        ? `Order ${order.orderNumber} was marked delivered. Pay online now that the goods have arrived, then submit the transaction reference.`
-        : `Order ${order.orderNumber} was marked delivered. Please confirm receipt so the escrowed payment can release.`,
-      cancelled: `Order ${order.orderNumber} was cancelled by the shopkeeper.`,
+      confirmed: `The supplier confirmed order ${updated.orderNumber}.`,
+      processing: `The supplier started processing order ${updated.orderNumber}.`,
+      shipped: `Order ${updated.orderNumber} is on its way.`,
+      delivered: updated.paymentMethod === 'online_at_delivery'
+        ? `Order ${updated.orderNumber} was marked delivered. Pay online now that the goods have arrived, then submit the transaction reference.`
+        : `Order ${updated.orderNumber} was marked delivered. Please confirm receipt so the escrowed payment can release.`,
+      cancelled: `Order ${updated.orderNumber} was cancelled by the shopkeeper.`,
     };
-    await notifyOrderParties(order, {
+    await notifyOrderParties(updated, {
       type: typeMap[toStatus] || 'order_confirmed',
-      title: `Order ${order.orderNumber} — ${toStatus}`,
-      message: messageMap[toStatus] || `Order ${order.orderNumber} moved to ${toStatus}.`,
+      title: `Order ${updated.orderNumber} — ${toStatus}`,
+      message: messageMap[toStatus] || `Order ${updated.orderNumber} moved to ${toStatus}.`,
       excludeUserId: req.user._id,
     });
 
-    res.json({ order });
+    // Batch 20 (audit (c)-1) — `payment_refunded` was wired everywhere
+    // (Notification enum, frontend event lists) but never emitted: the
+    // refund hid inside the order_cancelled message text. A cancel that
+    // actually refunds money (escrowed or paid — see
+    // cancelSettlementPatch) now also sends the distinct refund event,
+    // so the bell/toast show the refund on its own. A cancel with no
+    // money to return (unpaid, or a merely-submitted reference going
+    // back to 'unpaid') sends nothing extra.
+    if (toStatus === 'cancelled' && refundedOnCancel) {
+      await notifyOrderParties(updated, {
+        type: 'payment_refunded',
+        title: `Payment refunded — ${updated.orderNumber}`,
+        message: `Rs ${updated.refundAmount || 0} was refunded to the shopkeeper for cancelled order ${updated.orderNumber}.`,
+        excludeUserId: req.user._id,
+      });
+    }
+
+    // Batch 23 (TEAMLY realtime audit RT-5) — the generic admin status
+    // feed. The parties above get their specific type (order_confirmed /
+    // shipped / delivered / cancelled); admins get ONE order_status per
+    // move, never inside a loop. FIRE-AND-FORGET: notifyAdmins never
+    // throws. `order_status` was added to the Notification enum first —
+    // the type did not exist before this batch.
+    notifyAdmins({
+      type: 'order_status',
+      title: `Order ${updated.orderNumber} — ${toStatus}`,
+      message: `Order ${updated.orderNumber} moved to ${toStatus}.`,
+      link: `/admin/orders/${updated._id}`,
+      orderId: updated._id,
+    });
+
+    res.json({ order: updated });
   } catch (err) {
     next(err);
   }

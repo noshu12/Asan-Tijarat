@@ -38,9 +38,14 @@ function safeRedirectTarget(value: string | null): string {
 
 export default function SignInPage() {
   const router = useRouter();
-  const { user, loading: authLoading, login: authLogin, verifyTwoFactorLogin: authVerify2FA } = useAuth();
+  const { user, loading: authLoading, login: authLogin, verifyTwoFactorLogin: authVerify2FA, setTwoFactorSetupToken } = useAuth();
   const [tsToken, setTsToken] = useState<string | null>(null);
   const [tsKey, setTsKey] = useState(0);
+  // Batch 17 (M3) — the 2FA code step has its OWN Turnstile widget: the
+  // login token above is single-use and already spent on step 1, and
+  // POST /api/auth/2fa/login is Turnstile-guarded now.
+  const [twoFaTsToken, setTwoFaTsToken] = useState<string | null>(null);
+  const [twoFaTsKey, setTwoFaTsKey] = useState(0);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -93,8 +98,9 @@ export default function SignInPage() {
       const result = await authLogin(identifier.trim(), password, tsToken || undefined);
       if (result.requires2FASetup) {
         // Sub-admin first sign-in — 2FA setup is mandatory. The setup page
-        // picks the short-lived token up from sessionStorage (never the URL).
-        sessionStorage.setItem('subadmin_setup_token', result.tempToken || '');
+        // picks the short-lived token up from memory (AuthProvider state,
+        // Batch 17 L3) — never sessionStorage, never the URL.
+        setTwoFactorSetupToken(result.tempToken || '');
         router.push('/subadmin-setup');
         return;
       }
@@ -129,7 +135,7 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      await authVerify2FA(tempToken, twoFactorCode);
+      await authVerify2FA(tempToken, twoFactorCode, twoFaTsToken || undefined);
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -138,6 +144,10 @@ export default function SignInPage() {
         setErrorMessage('Unexpected error. Please try again.');
       }
       setIsLoading(false);
+      // The Turnstile token is single-use — a failed attempt spent it,
+      // so mint a fresh one for the retry.
+      setTwoFaTsToken(null);
+      setTwoFaTsKey((k) => k + 1);
     }
   };
 
@@ -147,6 +157,8 @@ export default function SignInPage() {
     setTwoFactorCode('');
     setErrorMessage('');
     setErrorCode('');
+    setTwoFaTsToken(null);
+    setTwoFaTsKey((k) => k + 1);
   };
 
   return (
@@ -242,6 +254,10 @@ export default function SignInPage() {
                 >
                   {errorMessage}
                 </p>
+              )}
+
+              {isTurnstileConfigured() && (
+                <TurnstileWidget key={twoFaTsKey} onVerify={setTwoFaTsToken} onExpire={() => setTwoFaTsToken(null)} />
               )}
 
               <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">

@@ -161,7 +161,7 @@ function CategoryMultiSelect({
           {selected.map((cat) => (
             <span
               key={cat}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-asan-accent-light text-asan-dark border border-asan-border dark:bg-asan-dark dark:text-asan-accent-light dark:border-asan-mid"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-asan-accent-light text-asan-dark border border-asan-border dark:bg-asan-dark dark:text-asan-accent-light dark:border-asan-mid"
             >
               {cat}
               <button
@@ -238,6 +238,12 @@ export default function GetStartedPage() {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpMessage, setOtpMessage] = useState('');
   const [otpError, setOtpError] = useState('');
+  // Batch 17 (M3) — the OTP step has its OWN Turnstile widget:
+  // /verify-otp is Turnstile-guarded now, and the register token above
+  // is single-use and already spent. Without a site key the widget
+  // renders nothing and no token is sent (dev behaviour).
+  const [otpTsToken, setOtpTsToken] = useState<string | null>(null);
+  const [otpTsKey, setOtpTsKey] = useState(0);
 
   // OTP box refs — aik digit likhte hi agle box par focus, Backspace par
   // peeche wale box par focus, aur paste par 6 boxes aik saath bharne ke liye.
@@ -477,7 +483,7 @@ export default function GetStartedPage() {
 
     setIsVerifyingOtp(true);
     try {
-      const res = await api.verifyOtp(registeredEmail, otpCode);
+      const res = await api.verifyOtp(registeredEmail, otpCode, otpTsToken || undefined);
       // OTP verification sets emailVerified only — admin approval is still required.
       setNotice(res.message || PENDING_VERIFICATION_NOTICE);
       setSubmitted(true);
@@ -499,6 +505,9 @@ export default function GetStartedPage() {
         setOtpError('Unexpected error while verifying OTP. Please try again.');
       }
       setIsVerifyingOtp(false);
+      // The Turnstile token is single-use — a failed attempt spent it.
+      setOtpTsToken(null);
+      setOtpTsKey((k) => k + 1);
     }
   };
 
@@ -588,7 +597,7 @@ export default function GetStartedPage() {
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-400 mt-4">
+              <p className="text-xs text-slate-400 mt-4">
                 Taking you to the Home page — you can sign in once your account is verified.
               </p>
 
@@ -642,6 +651,10 @@ export default function GetStartedPage() {
                   <Button type="submit" isLoading={isVerifyingOtp} className="w-full h-12 text-sm font-bold">
                     Verify OTP
                   </Button>
+
+                  {isTurnstileConfigured() && (
+                    <TurnstileWidget key={otpTsKey} onVerify={setOtpTsToken} onExpire={() => setOtpTsToken(null)} />
+                  )}
 
                   <button
                     type="button"
@@ -864,7 +877,7 @@ export default function GetStartedPage() {
                   </button>
 
                   {deviceLocation.coords && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                       <Check className="w-3.5 h-3.5" />
                       Location captured ({deviceLocation.coords.lat}, {deviceLocation.coords.lng})
                     </span>
@@ -874,7 +887,7 @@ export default function GetStartedPage() {
                 {deviceLocation.notice && (
                   <p
                     role="alert"
-                    className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2"
+                    className="text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2"
                   >
                     {deviceLocation.notice}
                   </p>
