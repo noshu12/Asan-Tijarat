@@ -41,6 +41,13 @@ export default function AdminDisputesPage() {
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Batch 19 (Round-5 audit L4) — the queue used to fetch only the
+  // first 50 disputes with no page param and no pagination UI, even
+  // though the backend supports page/limit/totalPages. Page state here;
+  // changing tab resets to page 1.
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   // Batch 13 — live queue: dispute_opened / dispute_resolved (or a
   // reconnect sync) bumps refreshKey; the fetch effect below refetches
@@ -50,6 +57,12 @@ export default function AdminDisputesPage() {
     ['dispute_opened', 'dispute_resolved'],
     () => setRefreshKey((k) => k + 1),
   );
+  // Batch 20 (audit (c)-5) — request ids for the two live refetches
+  // below (list + evidence thread): a response that resolves AFTER a
+  // newer fetch started is ignored, so rapid live events can no longer
+  // resolve out of order and let the stale list/thread win.
+  const fetchSeqRef = useRef(0);
+  const evidenceSeqRef = useRef(0);
   const [decisionById, setDecisionById] = useState<Record<string, DisputeDecision>>({});
   const [refundById, setRefundById] = useState<Record<string, string>>({});
   const [noteById, setNoteById] = useState<Record<string, string>>({});
@@ -74,9 +87,12 @@ export default function AdminDisputesPage() {
   // never clears the thread or shows an error.
   const evidenceOrderIdRef = useRef<string | null>(null);
   const reloadEvidenceMessages = useCallback(async (orderId: string) => {
+    // Batch 20 (audit (c)-5) — see evidenceSeqRef above.
+    const requestId = ++evidenceSeqRef.current;
     try {
       const msgRes = await api.messages.list(orderId);
       if (evidenceOrderIdRef.current !== orderId) return;
+      if (requestId !== evidenceSeqRef.current) return;
       setEvidenceMessages(msgRes.messages ?? []);
     } catch {
       // Live refetch only — keep the thread already on screen.
@@ -106,21 +122,26 @@ export default function AdminDisputesPage() {
     let mounted = true;
     if (!silent) setLoading(true);
     setError(null);
+    // Batch 20 (audit (c)-5) — see fetchSeqRef above.
+    const requestId = ++fetchSeqRef.current;
     api.admin
-      .disputes({ status: activeTab === 'all' ? undefined : activeTab, limit: 50 })
+      .disputes({ status: activeTab === 'all' ? undefined : activeTab, limit: 50, page })
       .then((res) => {
-        if (mounted) setDisputes(res.disputes ?? []);
+        if (!mounted || requestId !== fetchSeqRef.current) return;
+        setDisputes(res.disputes ?? []);
+        setTotalPages(res.totalPages ?? 1);
+        setTotal(res.total ?? res.disputes?.length ?? 0);
       })
       .catch((err) => {
-        if (mounted) setError(err instanceof Error ? err.message : 'Failed to load disputes');
+        if (mounted && requestId === fetchSeqRef.current) setError(err instanceof Error ? err.message : 'Failed to load disputes');
       })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted && requestId === fetchSeqRef.current) setLoading(false);
       });
     return () => {
       mounted = false;
     };
-  }, [authLoading, activeTab, refreshKey]);
+  }, [authLoading, activeTab, page, refreshKey]);
 
   const decide = async (d: Dispute) => {
     const decision = decisionById[d.id] ?? 'release';
@@ -184,7 +205,7 @@ export default function AdminDisputesPage() {
         {(['all', 'open', 'in_review', 'resolved'] as const).map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => { setPage(1); setActiveTab(tab); }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
               activeTab === tab
                 ? 'bg-asan-dark text-white shadow-md'
@@ -229,12 +250,12 @@ export default function AdminDisputesPage() {
                 <p className="text-sm font-bold text-slate-900 dark:text-white">
                   {d.orderNumber} • {d.reasonLabel}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Opened by {d.raisedByName || d.raisedByRole} ({d.raisedByRole}) • {formatDate(d.createdAt)}
                 </p>
               </div>
               <span
-                className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                   d.status === 'resolved'
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                     : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
@@ -268,17 +289,17 @@ export default function AdminDisputesPage() {
                       <p className="text-xs font-bold text-slate-900 dark:text-white">
                         Order {evidenceOrder.orderNumber} • {formatPKR(evidenceOrder.totalAmount)}
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Buyer: {evidenceOrder.buyerName} • Supplier: {evidenceOrder.supplierName} • Status: {evidenceOrder.status}
                       </p>
                       <div className="mt-2 space-y-1">
                         {evidenceOrder.items.map((item, idx) => (
-                          <p key={idx} className="text-[11px] text-slate-600 dark:text-slate-300">
+                          <p key={idx} className="text-xs text-slate-600 dark:text-slate-300">
                             {item.productName} — {item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}
                           </p>
                         ))}
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-2 break-words">
+                      <p className="text-xs text-slate-500 mt-2 break-words">
                         Payment: {PAYMENT_METHOD_LABEL[evidenceOrder.paymentMethod ?? 'online_advance'] ?? evidenceOrder.paymentMethod}
                         {' • '}Status: {evidenceOrder.paymentStatus ?? 'unpaid'}
                         {evidenceOrder.paymentReference ? ` • Reference: ${evidenceOrder.paymentReference}` : ''}
@@ -292,26 +313,26 @@ export default function AdminDisputesPage() {
                         <div>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={fileUrl(evidenceOrder.deliveryProof.url)} alt="Delivery proof" className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 object-cover" />
-                          <p className="text-[11px] text-slate-400 mt-1">
+                          <p className="text-xs text-slate-400 mt-1">
                             Uploaded {evidenceOrder.deliveryProof.uploadedAt ? formatDate(evidenceOrder.deliveryProof.uploadedAt) : ''}
                           </p>
                         </div>
                       ) : (
-                        <p className="text-[11px] text-slate-500">No delivery photo uploaded.</p>
+                        <p className="text-xs text-slate-500">No delivery photo uploaded.</p>
                       )}
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-900 dark:text-white mb-1">Chat thread</p>
                       {evidenceMessages.length === 0 ? (
-                        <p className="text-[11px] text-slate-500">No messages on this order.</p>
+                        <p className="text-xs text-slate-500">No messages on this order.</p>
                       ) : (
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {evidenceMessages.map((m) => (
                             <div key={m.id} className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                              <p className="text-[11px] font-bold text-slate-900 dark:text-white">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white">
                                 {m.senderName || m.senderRole} • {formatDate(m.createdAt)}
                               </p>
-                              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 break-words">{m.text}</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 break-words">{m.text}</p>
                             </div>
                           ))}
                         </div>
@@ -331,7 +352,7 @@ export default function AdminDisputesPage() {
                   <p className="text-slate-600 dark:text-slate-300">Refund: {formatPKR(d.resolution.refundAmount)}</p>
                 )}
                 {d.resolution.note && <p className="text-slate-600 dark:text-slate-300 break-words">Note: {d.resolution.note}</p>}
-                <p className="text-[11px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Decided by {d.resolution.decidedByName || 'admin'}
                   {d.resolution.decidedAt ? ` • ${formatDate(d.resolution.decidedAt)}` : ''}
                 </p>
@@ -382,6 +403,24 @@ export default function AdminDisputesPage() {
           </div>
         ))}
       </div>
+
+      {/* Batch 19 (audit L4) — page through the queue instead of only
+          ever seeing the first 50 disputes. */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-500">
+            Page {page} of {totalPages} • {total} dispute{total === 1 ? '' : 's'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Previous
+            </Button>
+            <Button type="button" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

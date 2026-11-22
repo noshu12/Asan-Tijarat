@@ -7,6 +7,13 @@
  * comes from the Order entity.
  */
 import { Order, OrderItem } from '@/lib/types';
+// Batch 22 (Round-5 audit h-L3) — money/formatDate/capitalize used to
+// be private copies here; they now come from the shared utils so the
+// printed receipt can never drift from the rest of the UI. formatPKR
+// renders exactly like the old money() ("Rs 1,234" — Intl rounds the
+// same way for whole-rupee amounts); formatDate carries the old NaN
+// guard, and its output is escaped at the one HTML call site below.
+import { formatPKR, formatDate, capitalize } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
 /* Brand palette (mirrors tailwind.config.ts "asan-*" tokens)          */
@@ -36,20 +43,6 @@ function escapeHtml(value: string | number): string {
   });
 }
 
-function money(amount: number): string {
-  return `Rs ${Math.round(amount).toLocaleString('en-PK')}`;
-}
-
-function formatDate(isoDate: string): string {
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) return escapeHtml(isoDate);
-  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 /** Renders the itemised line-rows of an order's receipt table. */
 function receiptRows(items: OrderItem[]): string {
   return items
@@ -61,9 +54,9 @@ function receiptRows(items: OrderItem[]): string {
           <span class="item-name">${escapeHtml(item.productName)}</span>
           <span class="item-sub">Sold by ${escapeHtml(item.supplierName)}</span>
         </td>
-        <td class="ta-r">${money(item.unitPrice)} / ${escapeHtml(item.unit)}</td>
+        <td class="ta-r">${formatPKR(item.unitPrice)} / ${escapeHtml(item.unit)}</td>
         <td class="ta-c">${item.quantity}</td>
-        <td class="ta-r strong">${money(item.unitPrice * item.quantity)}</td>
+        <td class="ta-r strong">${formatPKR(item.unitPrice * item.quantity)}</td>
       </tr>`
     )
     .join('');
@@ -92,7 +85,7 @@ function receiptMarkup(order: Order): string {
       <div class="meta ta-r">
         <p class="invoice-tag">INVOICE</p>
         <p class="order-no">${escapeHtml(order.orderNumber)}</p>
-        <p class="order-date">${formatDate(order.createdAt)}</p>
+        <p class="order-date">${escapeHtml(formatDate(order.createdAt))}</p>
       </div>
     </header>
 
@@ -100,7 +93,7 @@ function receiptMarkup(order: Order): string {
       <div class="info-card">
         <p class="label">Buyer</p>
         <p class="who">${escapeHtml(order.buyerName)}</p>
-        <p class="sub">${escapeHtml(order.buyerRole.charAt(0).toUpperCase() + order.buyerRole.slice(1))} Account</p>
+        <p class="sub">${escapeHtml(capitalize(order.buyerRole))} Account</p>
       </div>
       <div class="info-card">
         <p class="label">Supplier</p>
@@ -109,7 +102,7 @@ function receiptMarkup(order: Order): string {
       </div>
       <div class="info-card">
         <p class="label">Order Status</p>
-        <p class="who">${escapeHtml(statusLabel(order.status))}</p>
+        <p class="who">${escapeHtml(capitalize(order.status))}</p>
         <p class="sub">Pending to delivered</p>
       </div>
     </div>
@@ -128,8 +121,8 @@ function receiptMarkup(order: Order): string {
     </table>
 
     <div class="totals">
-      <div class="row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
-      <div class="row grand"><span>Total Amount</span><span>${money(subtotal)}</span></div>
+      <div class="row"><span>Subtotal</span><span>${formatPKR(subtotal)}</span></div>
+      <div class="row grand"><span>Total Amount</span><span>${formatPKR(subtotal)}</span></div>
     </div>
 
     <div class="ship">
@@ -139,7 +132,7 @@ function receiptMarkup(order: Order): string {
 
     <footer class="foot">
       This invoice was generated automatically — no signature required.<br />
-      <strong>Order Status:</strong> ${escapeHtml(statusLabel(order.status))}
+      <strong>Order Status:</strong> ${escapeHtml(capitalize(order.status))}
     </footer>
   </section>`;
 }

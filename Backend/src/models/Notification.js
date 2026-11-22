@@ -30,6 +30,23 @@ const NOTIFICATION_TYPES = [
   'account_suspended',
   'account_rejected',
   'account_reactivated',
+  // Batch 23 (TEAMLY realtime audit RT-2..RT-5) — 9 new types, 26 total.
+  // `order_status` is the generic admin-only status feed (RT-5); the
+  // product/user/KYC types below are the admin + public-catalogue events
+  // (RT-2/RT-3/RT-4). `product_approved` / `product_rejected` are enum
+  // entries ONLY: no product approve/reject flow exists anywhere in the
+  // codebase (Product.status is only Active/Low Stock/Out of Stock,
+  // derived from stock; admin routes only list/delete products), so
+  // nothing emits them yet — see the Batch 23 FIX-NOTE.
+  'product_created',
+  'product_updated',
+  'product_approved',
+  'product_rejected',
+  'stock_updated',
+  'price_updated',
+  'user_registered',
+  'kyc_submitted',
+  'order_status',
 ];
 
 const notificationSchema = new mongoose.Schema(

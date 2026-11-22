@@ -17,6 +17,17 @@ function backendOrigin(): string {
     process.env.BACKEND_INTERNAL_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     'http://localhost:5000';
+  // Batch 19 (Round-5 audit L5) — loud in production when neither var
+  // is set: the localhost fallback would make every sitemap fetch fail
+  // (and the build can never fail on it, so it would fail silently).
+  // Dev keeps the quiet localhost fallback; production logs an error.
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !process.env.BACKEND_INTERNAL_URL &&
+    !process.env.NEXT_PUBLIC_API_URL
+  ) {
+    console.error('[sitemap] NEXT_PUBLIC_API_URL / BACKEND_INTERNAL_URL is not set in production — sitemap product fetch falls back to http://localhost:5000 and will fail.');
+  }
   try {
     return new URL(raw).origin;
   } catch {
@@ -46,9 +57,14 @@ interface ProductsListResponse {
  * One page of the public list (GET /api/products — the same endpoint the
  * marketplace uses via api.products() in lib/api.ts). 5 s timeout so a
  * slow/hung backend can never hang the build.
+ *
+ * Batch 19 (Round-5 audit M7) — ?includeOutOfStock=true: out-of-stock
+ * products have live detail pages (HTTP 200), so they belong in the
+ * sitemap instead of being silently orphaned by the list's status
+ * filter. The marketplace never passes the flag.
  */
 async function fetchProductsPage(page: number): Promise<ProductsListResponse> {
-  const res = await fetch(`${backendOrigin()}/api/products?page=${page}&limit=100`, {
+  const res = await fetch(`${backendOrigin()}/api/products?page=${page}&limit=100&includeOutOfStock=true`, {
     signal: AbortSignal.timeout(5000),
     next: { revalidate: 3600 },
   });
@@ -70,6 +86,11 @@ async function fetchProductsPage(page: number): Promise<ProductsListResponse> {
  * NEVER throws: any failure — backend down, timeout, bad status,
  * unparseable body, malformed rows — returns [] and the sitemap falls
  * back to the 10 static URLs below, so the build can never fail on this.
+ *
+ * Batch 19 (Round-5 audit L7) — the failure is no longer silent: the
+ * catch logs a console.warn with the reason, so a backend outage shows
+ * up in the build/server logs instead of quietly shipping a 10-URL
+ * sitemap. The fallback itself is unchanged (build must never fail).
  */
 async function fetchAllProductIds(): Promise<SitemapProduct[]> {
   try {
@@ -84,14 +105,20 @@ async function fetchAllProductIds(): Promise<SitemapProduct[]> {
       if (Array.isArray(data.products)) products.push(...data.products);
     }
     return products;
-  } catch {
+  } catch (err) {
+    console.warn('[sitemap] product list fetch failed — serving static URLs only:', err instanceof Error ? err.message : err);
     return [];
   }
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // lastModified matches the last git change to each public page (2026-11-17).
-  const lastModified = new Date('2026-11-17');
+  // Batch 19 (audit L7) — static lastModified is the sitemap's own
+  // generation time, not a hardcoded date: the old 2026-11-17 stamp
+  // went stale the day after it was written and claimed every static
+  // page changed on a day nothing changed. Generation time is honest
+  // (the sitemap regenerates hourly via the products fetch revalidate)
+  // and never needs a code edit to stay true.
+  const lastModified = new Date();
   const staticEntries: MetadataRoute.Sitemap = [
     { url: `${baseUrl}/`, lastModified, changeFrequency: 'weekly', priority: 1.0 },
     { url: `${baseUrl}/marketplace`, lastModified, changeFrequency: 'daily', priority: 0.9 },

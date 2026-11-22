@@ -141,7 +141,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
       </div>
 
       {!userId && uploadedCount > 0 && (
-        <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+        <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
           User id was not passed to this viewer, so documents cannot be loaded through the admin route.
         </p>
       )}
@@ -197,7 +197,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
               </button>
 
               <div className="p-2.5 space-y-1">
-                <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">{slot.label}</p>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{slot.label}</p>
                 {doc?.url ? (
                   <>
                     <p className="text-xs text-slate-500 truncate" title={doc.originalName}>
@@ -267,7 +267,7 @@ export function KycDocumentViewer({ documents, userId, ownerLabel, role, classNa
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Document on file for <span className="font-semibold">{ownerLabel || 'this account'}</span>,
                 stored by the API and linked to their registration.
               </p>

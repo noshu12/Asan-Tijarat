@@ -7,30 +7,81 @@
 //  Both endpoints scope to the signed-in user server-side, so a user can
 //  never see another account's numbers. Cancelled orders are excluded from
 //  every money/quantity total — a cancelled order is not a sale.
+//
+//  Batch 19 (Round-5 audit H1) — these endpoints used to load the WHOLE
+//  order history into Node (Order.find({ party }).lean(), no limit, no
+//  date filter, no projection) and filter/group/sum in JS. Memory, CPU
+//  and response size grew with every order, while the 14-day daily
+//  buckets only ever needed 14 days of data. Everything is now
+//  aggregated in Mongo — three small pipelines per endpoint, each
+//  returning a handful of rows; no order document is ever loaded:
+//    1. totals:    all-time counts + sums, grouped by status
+//                  (totalOrders / ordersByStatus / revenueTotal /
+//                  revenueDelivered keep their old all-time meaning)
+//    2. top list:  top 5 products (supplier) / suppliers (shopkeeper),
+//                  live orders only, grouped + sorted in Mongo
+//    3. daily:     live orders from the last 14 days only, grouped by
+//                  UTC calendar day — the daily buckets still need
+//                  zero-filling in JS (a day with no orders has no row),
+//                  so the dayBuckets() loop below is KEPT as-is; only
+//                  its input changed (aggregated rows, not orders).
+//  Batch 22 (Round-5 audit h-L4) finished the dedupe: both handlers
+//  now call the shared bucketDaily() helper (dayBuckets + row-map +
+//  fillDaily) instead of repeating that call.
 // ────────────────────────────────────────────────────────────
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW_DAYS = 14;
 
-/** Midnight-aligned day buckets for the last WINDOW_DAYS days, oldest first. */
+/** Midnight-aligned (UTC) day buckets for the last WINDOW_DAYS days, oldest first.
+ * UTC, not local midnight: Mongo's $dateToString groups by UTC day, and the
+ * bucket dates are formatted with toISOString() (UTC). Using local midnight
+ * here shifted every bucket a day back in any non-UTC timezone (e.g. PKT),
+ * so today's UTC bucket was missing and today's sales were dropped. */
 function dayBuckets() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const utcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const buckets = [];
   for (let i = WINDOW_DAYS - 1; i >= 0; i--) {
-    const d = new Date(today.getTime() - i * DAY_MS);
+    const d = new Date(utcMidnight - i * DAY_MS);
     buckets.push({ date: d.toISOString().slice(0, 10), revenue: 0, orders: 0 });
   }
   return buckets;
 }
 
-function countByStatus(orders) {
-  const counts = {};
-  for (const o of orders) {
-    counts[o.status] = (counts[o.status] || 0) + 1;
+/** Start of the 14-day window (UTC midnight, 13 days ago) — the daily $match. */
+function windowStart() {
+  const now = new Date();
+  const utcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(utcMidnight - (WINDOW_DAYS - 1) * DAY_MS);
+}
+
+/** Fills the zero-filled day buckets from one aggregated row per day. */
+function fillDaily(daily, rows) {
+  const index = new Map(daily.map((b, i) => [b.date, i]));
+  for (const row of rows || []) {
+    const i = index.get(row.date);
+    if (i === undefined) continue;
+    daily[i].revenue += row.revenue || 0;
+    daily[i].orders += row.orders || 0;
   }
-  return counts;
+  return daily;
+}
+
+/**
+ * Builds the 14-day daily-bucket series from the daily pipeline's rows.
+ * Batch 22 (Round-5 audit h-L4) — both handlers used to repeat the same
+ * dayBuckets() + row-map + fillDaily() call; the loop now lives here.
+ * (Batch 19 had already shared the fill loop itself as fillDaily —
+ * this finishes the dedupe it left for Batch 22.)
+ */
+function bucketDaily(rows) {
+  return fillDaily(
+    dayBuckets(),
+    (rows || []).map((r) => ({ date: r._id, revenue: r.revenue, orders: r.orders }))
+  );
 }
 
 /**
@@ -46,49 +97,72 @@ async function getSupplierAnalytics(req, res, next) {
       });
     }
 
-    const orders = await Order.find({ supplierId: req.user._id }).lean();
-    const live = orders.filter((o) => o.status !== 'cancelled');
-    const delivered = orders.filter((o) => o.status === 'delivered');
+    const supplierId = new mongoose.Types.ObjectId(req.user._id);
+    const start = windowStart();
 
-    // Top products by revenue across live (non-cancelled) orders.
-    const byProduct = new Map();
-    for (const o of live) {
-      for (const item of o.items || []) {
-        const key = String(item.productId);
-        const cur = byProduct.get(key) || {
-          productId: key,
-          productName: item.productName || 'Product',
-          quantity: 0,
-          revenue: 0,
-        };
-        cur.quantity += item.quantity || 0;
-        cur.revenue += (item.unitPrice || 0) * (item.quantity || 0);
-        byProduct.set(key, cur);
-      }
-    }
-    const topProducts = [...byProduct.values()]
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
+    const [totals, topProducts, dailyRows] = await Promise.all([
+      // All-time totals, grouped by status in Mongo.
+      Order.aggregate([
+        { $match: { supplierId } },
+        {
+          $group: {
+            _id: '$status',
+            orders: { $sum: 1 },
+            revenue: { $sum: '$totalAmount' },
+          },
+        },
+      ]),
+      // Top 5 products by revenue, live orders only, grouped in Mongo.
+      Order.aggregate([
+        { $match: { supplierId, status: { $ne: 'cancelled' } } },
+        { $unwind: '$items' },
+        {
+          $group: {
+            _id: '$items.productId',
+            productName: { $first: '$items.productName' },
+            quantity: { $sum: '$items.quantity' },
+            revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+          },
+        },
+        { $sort: { revenue: -1 } },
+        { $limit: 5 },
+      ]),
+      // Daily revenue for the last 14 days only — older orders never load.
+      Order.aggregate([
+        { $match: { supplierId, status: { $ne: 'cancelled' }, createdAt: { $gte: start } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$totalAmount' },
+            orders: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
 
-    // Daily revenue buckets for the last 14 days.
-    const daily = dayBuckets();
-    const index = new Map(daily.map((b, i) => [b.date, i]));
-    for (const o of live) {
-      if (!o.createdAt) continue;
-      const key = new Date(o.createdAt).toISOString().slice(0, 10);
-      if (index.has(key)) {
-        daily[index.get(key)].revenue += o.totalAmount || 0;
-        daily[index.get(key)].orders += 1;
-      }
+    const ordersByStatus = {};
+    let totalOrders = 0;
+    let revenueTotal = 0;
+    let revenueDelivered = 0;
+    for (const row of totals) {
+      ordersByStatus[row._id] = row.orders;
+      totalOrders += row.orders;
+      if (row._id !== 'cancelled') revenueTotal += row.revenue || 0;
+      if (row._id === 'delivered') revenueDelivered += row.revenue || 0;
     }
 
     res.json({
-      totalOrders: orders.length,
-      ordersByStatus: countByStatus(orders),
-      revenueTotal: live.reduce((s, o) => s + (o.totalAmount || 0), 0),
-      revenueDelivered: delivered.reduce((s, o) => s + (o.totalAmount || 0), 0),
-      topProducts,
-      dailyRevenue: daily,
+      totalOrders,
+      ordersByStatus,
+      revenueTotal,
+      revenueDelivered,
+      topProducts: (topProducts || []).map((p) => ({
+        productId: String(p._id),
+        productName: p.productName || 'Product',
+        quantity: p.quantity || 0,
+        revenue: p.revenue || 0,
+      })),
+      dailyRevenue: bucketDaily(dailyRows),
     });
   } catch (err) {
     next(err);
@@ -108,47 +182,71 @@ async function getShopkeeperAnalytics(req, res, next) {
       });
     }
 
-    const orders = await Order.find({ buyerId: req.user._id }).lean();
-    const live = orders.filter((o) => o.status !== 'cancelled');
-    const delivered = orders.filter((o) => o.status === 'delivered');
+    const buyerId = new mongoose.Types.ObjectId(req.user._id);
+    const start = windowStart();
 
-    // Top suppliers by spend across live (non-cancelled) orders.
-    const bySupplier = new Map();
-    for (const o of live) {
-      const key = String(o.supplierId);
-      const cur = bySupplier.get(key) || {
-        supplierId: key,
-        supplierName: o.supplierName || 'Supplier',
-        orders: 0,
-        spent: 0,
-      };
-      cur.orders += 1;
-      cur.spent += o.totalAmount || 0;
-      bySupplier.set(key, cur);
-    }
-    const topSuppliers = [...bySupplier.values()]
-      .sort((a, b) => b.spent - a.spent)
-      .slice(0, 5);
+    const [totals, topSuppliers, dailyRows] = await Promise.all([
+      // All-time totals, grouped by status in Mongo.
+      Order.aggregate([
+        { $match: { buyerId } },
+        {
+          $group: {
+            _id: '$status',
+            orders: { $sum: 1 },
+            spent: { $sum: '$totalAmount' },
+          },
+        },
+      ]),
+      // Top 5 suppliers by spend, live orders only, grouped in Mongo.
+      Order.aggregate([
+        { $match: { buyerId, status: { $ne: 'cancelled' } } },
+        {
+          $group: {
+            _id: '$supplierId',
+            supplierName: { $first: '$supplierName' },
+            orders: { $sum: 1 },
+            spent: { $sum: '$totalAmount' },
+          },
+        },
+        { $sort: { spent: -1 } },
+        { $limit: 5 },
+      ]),
+      // Daily spend for the last 14 days only — older orders never load.
+      Order.aggregate([
+        { $match: { buyerId, status: { $ne: 'cancelled' }, createdAt: { $gte: start } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$totalAmount' },
+            orders: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
 
-    // Daily spend buckets for the last 14 days.
-    const daily = dayBuckets();
-    const index = new Map(daily.map((b, i) => [b.date, i]));
-    for (const o of live) {
-      if (!o.createdAt) continue;
-      const key = new Date(o.createdAt).toISOString().slice(0, 10);
-      if (index.has(key)) {
-        daily[index.get(key)].revenue += o.totalAmount || 0;
-        daily[index.get(key)].orders += 1;
-      }
+    const ordersByStatus = {};
+    let totalOrders = 0;
+    let spentTotal = 0;
+    let spentDelivered = 0;
+    for (const row of totals) {
+      ordersByStatus[row._id] = row.orders;
+      totalOrders += row.orders;
+      if (row._id !== 'cancelled') spentTotal += row.spent || 0;
+      if (row._id === 'delivered') spentDelivered += row.spent || 0;
     }
 
     res.json({
-      totalOrders: orders.length,
-      ordersByStatus: countByStatus(orders),
-      spentTotal: live.reduce((s, o) => s + (o.totalAmount || 0), 0),
-      spentDelivered: delivered.reduce((s, o) => s + (o.totalAmount || 0), 0),
-      topSuppliers,
-      dailySpent: daily,
+      totalOrders,
+      ordersByStatus,
+      spentTotal,
+      spentDelivered,
+      topSuppliers: (topSuppliers || []).map((s) => ({
+        supplierId: String(s._id),
+        supplierName: s.supplierName || 'Supplier',
+        orders: s.orders || 0,
+        spent: s.spent || 0,
+      })),
+      dailySpent: bucketDaily(dailyRows),
     });
   } catch (err) {
     next(err);

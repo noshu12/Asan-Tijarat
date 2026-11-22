@@ -2,7 +2,7 @@ const Order = require('../models/Order');
 const Dispute = require('../models/Dispute');
 const AuditLog = require('../models/AuditLog');
 const { toClient } = require('../utils/serialize');
-const { calcPlatformFee } = require('../utils/payment');
+const { calcPlatformFee, feeForRelease } = require('../utils/payment');
 const { notifyUser, notifyOrderParties, notifyAdmins } = require('../utils/notify');
 const { saveDeliveryPhoto, DeliveryProofError } = require('../utils/deliveryProof');
 
@@ -89,6 +89,17 @@ async function submitPaymentReference(req, res, next) {
     if (order.status === 'cancelled') {
       return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'This order is cancelled.' } });
     }
+    // Batch 18 (audit HIGH 1b) — at-delivery money is only due once the
+    // goods have arrived. Without this gate a reference submitted while
+    // the order was still pending could be confirmed into 'paid', and a
+    // later cancel then stranded the money (no refund path — HIGH 1a).
+    // Advance orders are unaffected: they are MEANT to be paid at order
+    // time, before delivery.
+    if (order.paymentMethod === 'online_at_delivery' && order.status !== 'delivered') {
+      return res.status(400).json({
+        error: { code: 'INVALID_STATE', message: 'This order is paid at delivery — a payment reference can only be submitted once the order is marked delivered.' },
+      });
+    }
     const reference = req.body.reference ? String(req.body.reference).trim() : '';
     if (!reference || reference.length > 200) {
       return res.status(400).json({ error: { code: 'MISSING_FIELDS', message: 'A transaction reference is required (max 200 characters).' } });
@@ -154,39 +165,62 @@ async function confirmPayment(req, res, next) {
       });
     }
 
+    // Batch 18 (audit M3) — ATOMIC confirm. The guard above
+    // (payment_submitted) is a read; the write below is a SEPARATE
+    // conditional update that only succeeds while the payment is STILL
+    // payment_submitted. Two concurrent confirms can no longer both pass
+    // the guard — the loser gets null here and a 409, never a second
+    // confirm (and a dispute freezing the payment in between fails the
+    // filter the same way). The returned document is the confirmed
+    // order; everything below (audit log, notify, response) uses it.
+    const patch = {};
     if (order.paymentMethod === 'online_at_delivery') {
       const fee = calcPlatformFee(order.totalAmount);
-      order.platformFee = fee;
-      order.payoutAmount = Math.max(0, order.totalAmount - fee);
-      order.paymentStatus = 'paid';
+      patch.platformFee = fee;
+      patch.payoutAmount = Math.max(0, order.totalAmount - fee);
+      patch.paymentStatus = 'paid';
     } else {
       // online_advance (default): the money now sits in escrow.
-      order.amountHeld = order.totalAmount;
-      order.paymentStatus = 'held_in_escrow';
+      // Batch 18 (audit L7) — snapshot the platform fee NOW, at confirm
+      // time, so the release later uses this figure and not whatever %
+      // the env var holds by then.
+      patch.amountHeld = order.totalAmount;
+      patch.platformFee = calcPlatformFee(order.totalAmount);
+      patch.paymentStatus = 'held_in_escrow';
     }
-    await order.save();
+    const confirmed = await Order.findOneAndUpdate(
+      { _id: order._id, paymentStatus: 'payment_submitted' },
+      { $set: patch },
+      { new: true }
+    );
+    if (!confirmed) {
+      return res.status(409).json({
+        error: { code: 'CONCURRENT_UPDATE', message: 'This payment was just changed by another request — reload the order and check its payment status.' },
+      });
+    }
+    const confirmedOrder = confirmed;
 
     await AuditLog.create({
       actorId: req.user._id,
       actorName: req.user.name || req.user.email || '',
       action: 'PAYMENT_CONFIRMED',
       entityType: 'Order',
-      entityId: String(order._id),
-      details: { orderNumber: order.orderNumber, method: order.paymentMethod, status: order.paymentStatus },
+      entityId: String(confirmedOrder._id),
+      details: { orderNumber: confirmedOrder.orderNumber, method: confirmedOrder.paymentMethod, status: confirmedOrder.paymentStatus },
     }).catch((err) => console.log('[audit] failed to write log:', err.message));
 
-    await notifyOrderParties(order, {
-      type: order.paymentStatus === 'paid' ? 'payment_released' : 'payment_held',
-      title: order.paymentStatus === 'paid'
-        ? `Payment confirmed for ${order.orderNumber}`
-        : `Payment held in escrow — ${order.orderNumber}`,
-      message: order.paymentStatus === 'paid'
+    await notifyOrderParties(confirmedOrder, {
+      type: confirmedOrder.paymentStatus === 'paid' ? 'payment_released' : 'payment_held',
+      title: confirmedOrder.paymentStatus === 'paid'
+        ? `Payment confirmed for ${confirmedOrder.orderNumber}`
+        : `Payment held in escrow — ${confirmedOrder.orderNumber}`,
+      message: confirmedOrder.paymentStatus === 'paid'
         ? `The delivery payment was confirmed. Platform fee deducted, the rest goes to the supplier.`
         : `The advance payment was confirmed and is now held in escrow. It releases to the supplier once delivery is confirmed.`,
       excludeUserId: req.user._id,
     });
 
-    res.json({ order: toClient(order.toObject()) });
+    res.json({ order: toClient(confirmedOrder.toObject()) });
   } catch (err) {
     next(err);
   }
@@ -224,23 +258,49 @@ async function confirmDeliveryReceipt(req, res, next) {
         error: { code: 'INVALID_STATE', message: `No escrowed payment to release (status is "${order.paymentStatus}").` },
       });
     }
+    // Batch 18 (audit M4) — escrow never releases on zero delivery
+    // evidence. The supplier's delivery photo + this confirmation are
+    // the stated evidence for dispute reasons 9-11; without the photo
+    // the money stays held until the supplier uploads one.
+    if (!order.deliveryProof || !order.deliveryProof.url) {
+      return res.status(400).json({
+        error: { code: 'DELIVERY_PROOF_REQUIRED', message: 'No delivery photo on this order yet — the supplier must upload one before the escrow can release.' },
+      });
+    }
 
-    const fee = calcPlatformFee(order.totalAmount);
-    order.platformFee = fee;
-    order.payoutAmount = Math.max(0, order.totalAmount - fee);
-    order.amountHeld = 0;
-    order.paymentStatus = 'released';
-    await order.save();
+    // Batch 18 (audit M3) — ATOMIC release, same pattern as
+    // confirmPayment above: only succeeds while the payment is STILL
+    // held_in_escrow, so two concurrent receipt-confirms can never both
+    // release. Batch 18 (audit L7) — the fee is the one SNAPSHOTTED at
+    // confirm time (feeForRelease), not the live env %.
+    const fee = feeForRelease(order, order.totalAmount);
+    const released = await Order.findOneAndUpdate(
+      { _id: order._id, paymentStatus: 'held_in_escrow' },
+      {
+        $set: {
+          platformFee: fee,
+          payoutAmount: Math.max(0, order.totalAmount - fee),
+          amountHeld: 0,
+          paymentStatus: 'released',
+        },
+      },
+      { new: true }
+    );
+    if (!released) {
+      return res.status(409).json({
+        error: { code: 'CONCURRENT_UPDATE', message: 'This payment was just changed by another request — reload the order and check its payment status.' },
+      });
+    }
 
-    await notifyUser(order.supplierId, {
+    await notifyUser(released.supplierId, {
       type: 'payment_released',
-      title: `Payment released — ${order.orderNumber}`,
+      title: `Payment released — ${released.orderNumber}`,
       message: `The shopkeeper confirmed delivery. Platform fee deducted, the rest is released to you.`,
-      link: `/supplier/orders/${order._id}`,
-      orderId: order._id,
+      link: `/supplier/orders/${released._id}`,
+      orderId: released._id,
     });
 
-    res.json({ order: toClient(order.toObject()) });
+    res.json({ order: toClient(released.toObject()) });
   } catch (err) {
     next(err);
   }
@@ -264,6 +324,16 @@ async function uploadDeliveryProof(req, res, next) {
     if (order.status !== 'shipped' && order.status !== 'delivered') {
       return res.status(400).json({
         error: { code: 'INVALID_STATE', message: 'A delivery photo can only be uploaded once the order is shipped.' },
+      });
+    }
+    // Batch 18 (audit M4) — the photo is the evidence for dispute
+    // reasons 9-11, so it must not change while a claim is open, and
+    // never again once the money is settled (released/paid). A supplier
+    // must not be able to swap the photo mid-dispute or after payout.
+    if (await hasOpenDispute(order)) return disputeOpenError(res);
+    if (order.paymentStatus === 'released' || order.paymentStatus === 'paid') {
+      return res.status(400).json({
+        error: { code: 'INVALID_STATE', message: 'The payment for this order is already settled — the delivery photo can no longer be changed.' },
       });
     }
     if (!req.body.dataUrl) {

@@ -8,6 +8,11 @@ const { sendEmail, isEmailConfigured } = require('../utils/sendEmail');
 const { otpEmail, pendingVerificationEmail, resetPasswordEmail } = require('../utils/emailTemplates');
 const { authenticator } = require('otplib');
 const QRCode = require('qrcode');
+const { jwtExpiryToMs } = require('../utils/jwt');
+const { isTotpLocked, totpLockMinutesLeft, recordTotpFailure, resetTotpAttempts } = require('../utils/totpLock');
+const { isSafeAvatar } = require('../utils/avatar');
+const { rotateCsrfToken } = require('../middleware/csrf');
+const { notifyAdmins } = require('../utils/notify');
 
 /**
  * Shown to a self-registered shopkeeper/supplier while their KYC details are
@@ -32,7 +37,10 @@ function signToken(user) {
  */
 function issueAuthCookie(res, user) {
   const token = signToken(user);
-  const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days, matching JWT_EXPIRES_IN
+  // Batch 17 (M4) — maxAge is derived from JWT_EXPIRES_IN (via
+  // jwtExpiryToMs), the same value signToken() signs with. The old
+  // hardcoded 7 days drifted from the token whenever the env var changed.
+  const maxAge = jwtExpiryToMs();
   const isProduction = process.env.NODE_ENV === 'production';
   res.cookie('asan_token', token, {
     httpOnly: true,
@@ -55,7 +63,8 @@ function issueAuthCookie(res, user) {
  */
 function issueAdminAuthCookie(res, user) {
   const token = signToken(user);
-  const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days, matching JWT_EXPIRES_IN
+  // Batch 17 (M4) — same JWT_EXPIRES_IN-derived maxAge as issueAuthCookie.
+  const maxAge = jwtExpiryToMs();
   const isProduction = process.env.NODE_ENV === 'production';
   res.cookie('asan_admin_token', token, {
     httpOnly: true,
@@ -69,34 +78,6 @@ function issueAdminAuthCookie(res, user) {
 
 function hashValue(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
-}
-
-/**
- * POST /api/auth/check-availability
- * Body: { email?, phone? } — at least one required.
- * Returns which identifiers are still free. Safe to call before register.
- */
-async function checkAvailability(req, res, next) {
-  try {
-    const { email, phone } = req.body || {};
-    if (!email && !phone) {
-      return res.status(400).json({
-        error: { code: 'MISSING_FIELDS', message: 'email is required.' },
-      });
-    }
-    const result = {};
-    if (email) {
-      const found = await User.findOne({ email: String(email).toLowerCase().trim() }).lean();
-      result.emailAvailable = !found;
-    }
-    if (phone) {
-      const found = await User.findOne({ phone: String(phone).trim() }).lean();
-      result.phoneAvailable = !found;
-    }
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
 }
 
 /**
@@ -145,6 +126,20 @@ async function register(req, res, next) {
     if (String(password).length < 8) {
       return res.status(400).json({
         error: { code: 'WEAK_PASSWORD', message: 'Password must be at least 8 characters.' },
+      });
+    }
+    // Batch 17 (L1) — JSON body values can be objects when a caller sends
+    // operator shapes (`phone: { $ne: '' }`); String-coerce email/phone
+    // before anything uses them, so an object can never reach a Mongoose
+    // filter or crash .toLowerCase().
+    const cleanEmail = String(email).toLowerCase().trim();
+    const cleanPhone = String(phone).trim();
+    // Batch 17 (L2) — avatar allow-list: http(s), relative path, or a real
+    // image data URL (the settings photo upload). Anything else —
+    // data:text/html, javascript:, blob: — is rejected, never stored.
+    if (avatar !== undefined && !isSafeAvatar(avatar)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_AVATAR', message: 'Avatar must be an http(s) URL, a relative path, or an image file.' },
       });
     }
     // Self-registration is limited to marketplace accounts; admins are
@@ -219,7 +214,7 @@ async function register(req, res, next) {
       }
     }
 
-    const existing = await User.findOne({ $or: [{ email: email.toLowerCase() }, { phone }] });
+    const existing = await User.findOne({ $or: [{ email: cleanEmail }, { phone: cleanPhone }] });
     if (existing) {
       return res.status(409).json({
         error: { code: 'EMAIL_EXISTS', message: 'An account with this email or phone already exists.' },
@@ -242,7 +237,7 @@ async function register(req, res, next) {
     let user;
     try {
       user = await User.create({
-        name, email, phone, password, role,
+        name, email: cleanEmail, phone: cleanPhone, password, role,
         businessName, city, cnic,
         avatar,
         houseAddress,
@@ -270,6 +265,32 @@ async function register(req, res, next) {
       // Roll the written files back — nothing should point at a ghost account.
       await deleteStoredUploads(stored);
       throw err;
+    }
+
+    // Batch 23 (TEAMLY realtime audit RT-3 + RT-4) — AFTER User.create
+    // succeeds, so a failed registration sends nothing. FIRE-AND-FORGET:
+    // notifyAdmins never throws. Name + role ONLY — no email, phone,
+    // CNIC, NTN, address, or document in the payload. The "KYC submit"
+    // IS this register() (CORRECTION to RT-4: there is no kyc.controller
+    // and no Kyc model — documents are stored on the User itself, see
+    // `documents: stored.documents` in the User.create above), so a
+    // registration WITH documents also sends kyc_submitted, linked by
+    // the user id (`/admin/kyc/:id`). KYC approve/reject need nothing
+    // here: admin verifyUser/rejectUser already send account_verified /
+    // account_rejected.
+    notifyAdmins({
+      type: 'user_registered',
+      title: `New ${user.role} registered`,
+      message: `${user.name} registered as a ${user.role}.`,
+      link: `/admin/users/${user._id}`,
+    });
+    if (stored.documents && Object.keys(stored.documents).length > 0) {
+      notifyAdmins({
+        type: 'kyc_submitted',
+        title: 'New KYC submission',
+        message: `${user.name} submitted KYC documents as a ${user.role}.`,
+        link: `/admin/kyc/${user._id}`,
+      });
     }
 
     // No token: the account is registered but NOT active until KYC approval.
@@ -414,8 +435,13 @@ async function login(req, res, next) {
       });
     }
 
+    // Batch 17 (L1) — identifier can be an object from a crafted JSON
+    // body (`identifier: { $ne: '' }`); coerce it so no operator shape
+    // reaches the $or filter or crashes .toLowerCase().
+    const cleanIdentifier = String(identifier).trim();
+
     const user = await User.findOne({
-      $or: [{ email: identifier.toLowerCase() }, { phone: identifier }],
+      $or: [{ email: cleanIdentifier.toLowerCase() }, { phone: cleanIdentifier }],
     }).select('+password');
 
     if (user && user.lockUntil && user.lockUntil.getTime() > Date.now()) {
@@ -517,6 +543,9 @@ async function login(req, res, next) {
     await user.save();
 
     issueAuthCookie(res, user);
+    // Batch 17 (L7) — a fresh session gets a fresh CSRF token, so a
+    // token leaked before this sign-in dies with the old session.
+    rotateCsrfToken(res);
 
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
@@ -544,8 +573,13 @@ async function adminLogin(req, res, next) {
       });
     }
 
+    // Batch 17 (L1) — identifier can be an object from a crafted JSON
+    // body (`identifier: { $ne: '' }`); coerce it so no operator shape
+    // reaches the $or filter or crashes .toLowerCase().
+    const cleanIdentifier = String(identifier).trim();
+
     const user = await User.findOne({
-      $or: [{ email: identifier.toLowerCase() }, { phone: identifier }],
+      $or: [{ email: cleanIdentifier.toLowerCase() }, { phone: cleanIdentifier }],
     }).select('+password');
 
     if (user && user.lockUntil && user.lockUntil.getTime() > Date.now()) {
@@ -617,6 +651,8 @@ async function adminLogin(req, res, next) {
     await user.save();
 
     issueAdminAuthCookie(res, user);
+    // Batch 17 (L7) — a fresh session gets a fresh CSRF token.
+    rotateCsrfToken(res);
 
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
@@ -667,12 +703,28 @@ async function adminVerifyTwoFactorLogin(req, res, next) {
         },
       });
     }
+    // Batch 17 (M2) — per-account TOTP brute-force limit (5 fails →
+    // 15-min lock, the loginAttempts pattern). While locked, even the
+    // right code from a fresh tempToken is refused.
+    if (isTotpLocked(user)) {
+      return res.status(403).json({
+        error: { code: 'TWO_FACTOR_LOCKED', message: `Too many wrong codes. Try again in ${totpLockMinutesLeft(user)} minute(s).` },
+      });
+    }
     const ok = authenticator.check(String(token).trim(), user.twoFactorSecret);
     if (!ok) {
+      const { locked } = recordTotpFailure(user);
+      await user.save();
+      if (locked) {
+        return res.status(403).json({
+          error: { code: 'TWO_FACTOR_LOCKED', message: 'Too many wrong codes. Sign in again in 15 minutes.' },
+        });
+      }
       return res.status(401).json({
         error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
       });
     }
+    resetTotpAttempts(user);
     // Single-session: this verified login kills any older session.
     user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
@@ -690,6 +742,16 @@ async function adminVerifyTwoFactorLogin(req, res, next) {
  */
 async function logout(req, res, next) {
   try {
+    // Batch 17 (M1) — logout used to only clear the cookies, so a stolen
+    // token stayed valid until its 7-day expiry. Bumping tokenVersion
+    // kills every token issued before this logout, server-side — the
+    // same invalidation login / password-change / reset already use.
+    // Batch 17 (L7) — the CSRF token rotates too, so a leaked
+    // double-submit token dies with the session.
+    if (req.user) {
+      req.user.tokenVersion = (req.user.tokenVersion || 0) + 1;
+      await req.user.save();
+    }
     res.clearCookie('asan_token', {
       httpOnly: true,
       path: '/',
@@ -702,6 +764,7 @@ async function logout(req, res, next) {
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
     });
+    rotateCsrfToken(res);
     res.json({ ok: true, message: 'Logged out.' });
   } catch (err) {
     next(err);
@@ -900,6 +963,15 @@ async function verifyTwoFactorSetupFirst(req, res, next) {
       });
     }
     const user = await User.findById(payload.id).select('+twoFactorTempSecret');
+    // Batch 17 (M2) — same per-account TOTP limit as the 2FA logins.
+    // The lock is checked BEFORE the setup-started check: the 5th
+    // failure discards the pending secret, and a locked account must
+    // still hear "locked" (403), not "setup not started" (400).
+    if (isTotpLocked(user)) {
+      return res.status(403).json({
+        error: { code: 'TWO_FACTOR_LOCKED', message: `Too many wrong codes. Sign in again in ${totpLockMinutesLeft(user)} minute(s) to restart setup.` },
+      });
+    }
     if (!user || (user.role !== 'admin' && user.role !== 'subadmin') || !user.twoFactorTempSecret) {
       return res.status(400).json({
         error: { code: 'TWO_FACTOR_SETUP_NOT_STARTED', message: 'Start setup first to get a QR code.' },
@@ -907,10 +979,24 @@ async function verifyTwoFactorSetupFirst(req, res, next) {
     }
     const ok = authenticator.check(String(token).trim(), user.twoFactorTempSecret);
     if (!ok) {
+      const { locked } = recordTotpFailure(user);
+      if (locked) {
+        // The 5th failure invalidates the pending setup itself: the
+        // guessed secret is discarded, so the attacker cannot keep
+        // guessing it after the lock expires - setup must start over.
+        user.twoFactorTempSecret = undefined;
+      }
+      await user.save();
+      if (locked) {
+        return res.status(403).json({
+          error: { code: 'TWO_FACTOR_LOCKED', message: 'Too many wrong codes. Sign in again in 15 minutes to restart setup.' },
+        });
+      }
       return res.status(400).json({
         error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
       });
     }
+    resetTotpAttempts(user);
     user.twoFactorSecret = user.twoFactorTempSecret;
     user.twoFactorTempSecret = undefined;
     user.twoFactorEnabled = true;
@@ -969,17 +1055,34 @@ async function verifyTwoFactorLogin(req, res, next) {
         },
       });
     }
+    // Batch 17 (M2) — per-account TOTP brute-force limit, same as the
+    // admin 2FA login above: 5 fails → 15-min lock.
+    if (isTotpLocked(user)) {
+      return res.status(403).json({
+        error: { code: 'TWO_FACTOR_LOCKED', message: `Too many wrong codes. Try again in ${totpLockMinutesLeft(user)} minute(s).` },
+      });
+    }
     const ok = authenticator.check(String(token).trim(), user.twoFactorSecret);
     if (!ok) {
+      const { locked } = recordTotpFailure(user);
+      await user.save();
+      if (locked) {
+        return res.status(403).json({
+          error: { code: 'TWO_FACTOR_LOCKED', message: 'Too many wrong codes. Sign in again in 15 minutes.' },
+        });
+      }
       return res.status(401).json({
         error: { code: 'INVALID_TWO_FACTOR_CODE', message: 'Incorrect code. Enter the current code from your authenticator app.' },
       });
     }
+    resetTotpAttempts(user);
     // Single-session: this verified login kills any older session.
     user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     issueAuthCookie(res, user);
+    // Batch 17 (L7) — a fresh session gets a fresh CSRF token.
+    rotateCsrfToken(res);
     res.json({ user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -1141,6 +1244,12 @@ async function updateMe(req, res, next) {
         error: { code: 'INVALID_CNIC', message: 'CNIC must be exactly 13 digits.' },
       });
     }
+    // Batch 17 (L2) — avatar allow-list, same as register.
+    if (updates.avatar !== undefined && !isSafeAvatar(updates.avatar)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_AVATAR', message: 'Avatar must be an http(s) URL, a relative path, or an image file.' },
+      });
+    }
 
     // GPS coordinates captured from the device — same validation as register.
     // `null` clears the stored point; anything else must be a valid coordinate.
@@ -1195,10 +1304,61 @@ async function updateMe(req, res, next) {
       updates.phone = phone;
     }
 
-    Object.assign(req.user, updates);
-    await req.user.save();
+    // Batch 17 (L5) — a stolen session could silently swap the account's
+    // email/phone, redirecting future OTPs and password resets to the
+    // attacker. Changing either contact now requires the current
+    // password, and the session is then killed outright (tokenVersion
+    // bump + cookies cleared below = force re-login, the sanctioned
+    // alternative to OTP-before-change). A changed email still sets
+    // emailVerified = false above, so the new address must be
+    // re-verified by OTP (send-otp → verify-otp) before it counts.
+    const contactChanged =
+      (updates.email !== undefined && updates.email !== req.user.email) ||
+      (updates.phone !== undefined && updates.phone !== req.user.phone);
+    if (contactChanged) {
+      const { currentPassword } = req.body || {};
+      if (!currentPassword) {
+        return res.status(401).json({
+          error: { code: 'PASSWORD_REQUIRED', message: 'Enter your current password to change your email or phone number.' },
+        });
+      }
+      const userWithPassword = await User.findById(req.user._id).select('+password');
+      if (!userWithPassword || !(await userWithPassword.matchPassword(currentPassword))) {
+        return res.status(401).json({
+          error: { code: 'INVALID_PASSWORD', message: 'Your current password is incorrect.' },
+        });
+      }
+    }
 
-    res.json({ user: req.user.toSafeJSON() });
+    Object.assign(req.user, updates);
+    if (contactChanged) {
+      req.user.tokenVersion = (req.user.tokenVersion || 0) + 1;
+    }
+    await req.user.save();
+    if (contactChanged) {
+      // Batch 17 (L5) — force re-login: the session that changed the
+      // contact details does NOT keep running on the new, unverified
+      // details. The bump kills every session (this one included) and
+      // the cookies are cleared, so the browser stops sending the dead
+      // token; the CSRF token rotates too. The user signs in again with
+      // the new details. (The current password was already proven above,
+      // so a stolen session alone cannot reach this point at all.)
+      res.clearCookie('asan_token', {
+        httpOnly: true,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+      res.clearCookie('asan_admin_token', {
+        httpOnly: true,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+      rotateCsrfToken(res);
+    }
+
+    res.json({ user: req.user.toSafeJSON(), ...(contactChanged ? { contactChanged: true } : {}) });
   } catch (err) {
     next(err);
   }
@@ -1252,4 +1412,4 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst };
+module.exports = { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst };

@@ -60,7 +60,10 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
     // Batch 16 — B8 GA4: card adds the MOQ by default (lib/cart), so the
     // event reports the same quantity. Stock 0 pe addToCart kuch nahi
     // karta, is liye event bhi tabhi fire hota hai jab add waqai hua ho.
-    if (product.stock > 0) trackAddToCart(product.id, Math.max(product.moq, 1));
+    // Batch 20 (audit (d)-2) — the quantity is ALSO capped at stock:
+    // addToCart caps the real quantity at stock (lib/cart), so stock 2 /
+    // MOQ 5 used to put 2 in the cart but report 5 to GA4.
+    if (product.stock > 0) trackAddToCart(product.id, Math.min(Math.max(product.moq, 1), product.stock));
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1400);
   };

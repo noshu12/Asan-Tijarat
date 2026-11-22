@@ -5,12 +5,19 @@ import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
+import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 
 export default function ResetPasswordPage() {
   // Token sirf andar hi andar rakha jayega — ye kabhi screen par
   // render nahi hoga, na kisi Input mein, na kisi text mein.
   const [token, setToken] = useState('');
   const [tokenReady, setTokenReady] = useState(false);
+  // Batch 17 (M3) — /reset-password is Turnstile-guarded now, so this
+  // form has its own widget (the forgot-password token is single-use
+  // and already spent). Without a site key the widget renders nothing
+  // and no token is sent (dev behaviour, backend skips the check).
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const [tsKey, setTsKey] = useState(0);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -46,7 +53,7 @@ export default function ResetPasswordPage() {
 
     setIsLoading(true);
     try {
-      const res = await api.resetPassword(token.trim(), newPassword);
+      const res = await api.resetPassword(token.trim(), newPassword, tsToken || undefined);
       setSuccessMessage(res.message || 'Password reset. You can now sign in with the new password.');
       // FIX (Batch 03) — pehle success message set karte hi foran
       // /signin pe redirect ho jata tha, is liye user message kabhi dekh
@@ -58,6 +65,9 @@ export default function ResetPasswordPage() {
       } else {
         setErrorMessage('Unexpected error. Please try again.');
       }
+      // The Turnstile token is single-use — a failed attempt spent it.
+      setTsToken(null);
+      setTsKey((k) => k + 1);
     } finally {
       setIsLoading(false);
     }
@@ -164,6 +174,10 @@ export default function ResetPasswordPage() {
               <p role="alert" className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5">
                 {errorMessage}
               </p>
+            )}
+
+            {isTurnstileConfigured() && (
+              <TurnstileWidget key={tsKey} onVerify={setTsToken} onExpire={() => setTsToken(null)} />
             )}
 
             <Button type="submit" isLoading={isLoading} className="w-full h-12 text-sm font-bold mt-2">

@@ -24,9 +24,21 @@ import { useAuth } from '@/context/AuthProvider';
  * is a dispute decision (refund_full / refund_partial / return_goods),
  * and the backend already allows sub-admins on GET /api/admin/disputes
  * and POST /api/admin/disputes/:id/decide — so the UI gate must not
- * block them here either. Dashboard, Products, Security, Contacts,
- * Audit Log and Sub-Admins stay main-admin-only (undecided) — the
- * backend still 403s sub-admins on those, and this gate keeps them out.
+ * block them here either.
+ *
+ * Dashboard, Products, Security, Contacts and Sub-Admins
+ * stay main-admin-only — and since Batch 17 (Round-5 audit H1) the
+ * backend DOES 403 sub-admins on those routes (GET /api/admin/stats,
+ * /products, /contacts, DELETE /users/:id), matching this
+ * gate. (The old comment here claimed the backend already 403d them —
+ * that was WRONG until Batch 17: the backend used to allow sub-admins
+ * on all of them. The gate and the backend now agree.)
+ *
+ * NOTE (Batch 22) — there is no audit-log page and no /api/admin/audit-log
+ * endpoint any more (Round-5 audit h-M3: orphaned endpoint, removed
+ * instead of building a page for it). The audit trail is still WRITTEN
+ * (Backend/src/controllers/admin.controller.js writeAuditLog); it is
+ * just not listed through any UI or API.
  */
 function AdminGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();

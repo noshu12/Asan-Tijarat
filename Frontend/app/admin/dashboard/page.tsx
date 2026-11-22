@@ -16,7 +16,7 @@ import { api, AdminStats, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, Product } from '@/lib/types';
 import { formatPKR, formatDate } from '@/lib/utils';
-import { ACCOUNT_EVENT_TYPES, ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
+import { ACCOUNT_EVENT_TYPES, idFromEventLink, ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, PRODUCT_EVENT_TYPES, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
 
 export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -30,15 +30,94 @@ export default function AdminDashboardPage() {
   const [pendingUsers, setPendingUsers] = useState<AdminUser[]>([]);
   const [verifyBusyId, setVerifyBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // Batch 13 — live stats + counts: a matching event (or a reconnect
-  // sync) bumps refreshKey; the fetch effect below refetches silently on
-  // a bump, so the stats stay visible and nothing on the page resets.
+  // Batch 13 — live stats + counts: an account / dispute event (or a
+  // reconnect sync) bumps refreshKey; the fetch effect below refetches
+  // silently on a bump, so the stats stay visible and nothing on the
+  // page resets.
+  // Batch 24 — order / payment / product events NO LONGER bump
+  // refreshKey: they refetch stats ONLY (handler below), so the
+  // Pending Verifications list and the Latest Listings grid are never
+  // reloaded for an order event.
   const [refreshKey, setRefreshKey] = useState(0);
   const prevRefreshKeyRef = useRef(refreshKey);
   useLiveRefreshKey(
-    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved', ...ACCOUNT_EVENT_TYPES],
+    [...ACCOUNT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
     () => setRefreshKey((k) => k + 1),
   );
+  const pendingUsersRef = useRef<AdminUser[]>([]);
+  pendingUsersRef.current = pendingUsers;
+  const recentProductsRef = useRef<Product[]>([]);
+  recentProductsRef.current = recentProducts;
+  // Batch 24 hardening — in-flight prepend guards (same race as the
+  // marketplace page: Batch 23 sends catalogue events twice to admins,
+  // targeted + public). One set per list; the second frame for the
+  // same id returns before fetching. The id-exists checks stay as well.
+  const pendingProductPrependRef = useRef(new Set<string>());
+  const pendingUserPrependRef = useRef(new Set<string>());
+
+  // Batch 24 — stats-only live refetch. Order events (order_placed,
+  // order_status + the four lifecycle events), payment events and
+  // product events refetch ONLY api.admin.stats() — the Total Orders /
+  // Trade Volume / Products Listed cards and the Recent Orders table —
+  // never the whole page. AdminStats carries total orders only, not
+  // per-status counts; pending / delivered surface through the Recent
+  // Orders table, which this refetch also refreshes. A failed live
+  // refetch never clears the cards. product_created additionally
+  // prepends the one new listing to Latest Listings.
+  const refreshStatsOnly = async () => {
+    if (user?.role !== 'admin') return;
+    try {
+      const res = await api.admin.stats();
+      setStats(res.stats);
+      setRecentOrders(res.recentOrders);
+    } catch {
+      // Live-only: keep the last good stats on screen.
+    }
+  };
+  useRealtimeEvent(
+    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, ...PRODUCT_EVENT_TYPES],
+    (event) => {
+      void refreshStatsOnly();
+      if (event.type === 'product_created') {
+        const productId = idFromEventLink(event.link, 'product');
+        if (!productId) return;
+        if (recentProductsRef.current.some((p) => p.id === productId)) return;
+        if (pendingProductPrependRef.current.has(productId)) return;
+        pendingProductPrependRef.current.add(productId);
+        void api.product(productId).then((data) => {
+          const p = data.product;
+          if (!p) return;
+          setRecentProducts((prev) => [p, ...prev.filter((x) => x.id !== p.id)].slice(0, 6));
+        }).catch(() => {}).finally(() => {
+          pendingProductPrependRef.current.delete(productId);
+        });
+      }
+    },
+  );
+
+  // Batch 24 — a new registration / KYC submission: the Pending KYC
+  // card count comes from the stats refetch, and the new trader is
+  // prepended to the Pending Verifications list. No single-user admin
+  // endpoint exists, so the one user is picked out of a limit-100
+  // newest-first list fetch (same as the users page); verified users
+  // and staff accounts never land in this list.
+  useRealtimeEvent(['user_registered', 'kyc_submitted'], (event) => {
+    if (user?.role !== 'admin') return;
+    void refreshStatsOnly();
+    const userId =
+      idFromEventLink(event.link, 'users') ?? idFromEventLink(event.link, 'kyc');
+    if (!userId) return;
+    if (pendingUsersRef.current.some((u) => u.id === userId)) return;
+    if (pendingUserPrependRef.current.has(userId)) return;
+    pendingUserPrependRef.current.add(userId);
+    void api.admin.users({ limit: 100 }).then((res) => {
+      const u = (res.users ?? []).find((x) => x.id === userId);
+      if (!u || u.verified || u.role === 'admin' || u.role === 'subadmin') return;
+      setPendingUsers((prev) => (prev.some((x) => x.id === u.id) ? prev : [u, ...prev]));
+    }).catch(() => {}).finally(() => {
+      pendingUserPrependRef.current.delete(userId);
+    });
+  });
 
   useEffect(() => {
     // Wait for the auth provider to finish restoring the session from the httpOnly cookie.
@@ -191,7 +270,7 @@ export default function AdminDashboardPage() {
                 <Clock className="w-5 h-5 text-amber-500" />
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Pending Verifications</h3>
                 {pendingUsers.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[11px] font-bold">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-xs font-bold">
                     {pendingUsers.length}
                   </span>
                 )}
@@ -224,7 +303,7 @@ export default function AdminDashboardPage() {
                         <p className="font-bold text-slate-900 dark:text-white text-sm truncate">
                           {u.businessName || u.name}
                         </p>
-                        <p className="text-[11px] text-slate-400 truncate">{u.name} • {u.email}</p>
+                        <p className="text-xs text-slate-400 truncate">{u.name} • {u.email}</p>
                       </div>
                       <Badge variant={u.role === 'supplier' ? 'confirmed' : 'warning'}>
                         {u.role === 'supplier' ? 'Supplier' : 'Shopkeeper'}
@@ -274,7 +353,7 @@ export default function AdminDashboardPage() {
                       </Button>
                       <Link
                         href="/admin/users"
-                        className="text-[11px] font-bold text-slate-500 hover:text-asan-dark dark:hover:text-asan-accent-light"
+                        className="text-xs font-bold text-slate-500 hover:text-asan-dark dark:hover:text-asan-accent-light"
                       >
                         Review full details
                       </Link>

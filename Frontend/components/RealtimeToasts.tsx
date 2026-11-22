@@ -49,7 +49,7 @@ export function RealtimeToasts({
           >
             <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{t.title}</p>
             {t.message && (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                 {t.message}
               </p>
             )}

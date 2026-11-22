@@ -13,7 +13,7 @@ import { MapsLink } from '@/components/MapsLink';
 import { api, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { cn, formatDate } from '@/lib/utils';
-import { ACCOUNT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
+import { ACCOUNT_EVENT_TYPES, idFromEventLink, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
 
 // Admin list se aane wale user me emailVerified ho sakta hai, lekin
 // AdminUser type me ye field lazmi nahi hai, isliye safe tareeqe se parha hai.
@@ -105,9 +105,20 @@ export default function AdminUsersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Batch 19 (Round-5 audit H2) — the users table paginates (50/page).
+  // The Administrators / Sub-Admins boxes CANNOT page from the same
+  // list (the main admin is the oldest account, so it would fall off
+  // page 1): they get their own tiny complete fetch — at most 11 staff
+  // accounts — while the table pages through shopkeepers/suppliers.
+  const [staffUsers, setStaffUsers] = useState<AdminUser[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   // Batch 13 — live list: account_verified / account_suspended (or a
   // reconnect sync) bumps refreshKey; the fetch effect below refetches
   // silently on a bump, so expanded rows and filters never reset.
+  // Batch 24 adds the user_registered / kyc_submitted single-row
+  // handlers below (no full refetch for a new registration).
   const [refreshKey, setRefreshKey] = useState(0);
   const prevRefreshKeyRef = useRef(refreshKey);
   useLiveRefreshKey(
@@ -129,21 +140,108 @@ export default function AdminUsersPage() {
   // filter values, exactly as the plain closure did.
   const filtersRef = useRef({ roleFilter, verifiedFilter, search });
   filtersRef.current = { roleFilter, verifiedFilter, search };
+  // Batch 19 — page lives in a ref too, for the same reason: loadUsers
+  // is called from the effect, the Apply button and runAction, and the
+  // effect must not refetch on every page-state change by itself (the
+  // Prev/Next buttons bump refreshKey after setting the page instead).
+  const pageRef = useRef(page);
+  pageRef.current = page;
 
   const loadUsers = useCallback(async () => {
     const { roleFilter: role, verifiedFilter: verified, search: q } = filtersRef.current;
     setError(null);
     try {
-      const res = await api.admin.users({ role, verified, search: q.trim() || undefined });
+      const [res, adminsRes, subsRes] = await Promise.all([
+        api.admin.users({ role, verified, search: q.trim() || undefined, page: pageRef.current, limit: 50 }),
+        api.admin.users({ role: 'admin', limit: 100 }),
+        api.admin.users({ role: 'subadmin', limit: 100 }),
+      ]);
       if (!res) return;
       const list = Array.isArray(res) ? res : ((res as { users?: AdminUser[] }).users || []);
       setUsers(list);
+      setTotalPages((res as { totalPages?: number }).totalPages ?? 1);
+      setTotal((res as { total?: number }).total ?? list.length);
+      const staff = [
+        ...((adminsRes as { users?: AdminUser[] }).users || []),
+        ...((subsRes as { users?: AdminUser[] }).users || []),
+      ];
+      setStaffUsers(staff);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Batch 24 — live registrations + KYC (Batch 23 types
+  // user_registered / kyc_submitted).
+  //
+  // There is NO separate admin/suppliers page and NO admin/kyc page in
+  // this repo: suppliers are the role filter on THIS page and KYC is
+  // this page ("Users & KYC"), so both events land here. The pending
+  // count the admin watches is the dashboard's Pending KYC card (wired
+  // live there) plus this table's total below.
+  //
+  // There is also NO single-user admin endpoint (GET /api/admin/users
+  // is a list only; its search matches name/email/phone/business, not
+  // id), so the one user is picked out of a limit-100 list fetch —
+  // the list is sorted newest-first, so a just-registered user is in
+  // it. Nothing on screen is replaced by that fetch: only the one
+  // matching row is prepended / updated, and the derived filteredUsers
+  // below still applies the admin's role / verified / search filters.
+  // user_registered and kyc_submitted fire for the SAME registration,
+  // so a pending-set + a functional setUsers dedupe stop the row (and
+  // the total) ever doubling.
+  const usersRef = useRef<AdminUser[]>([]);
+  usersRef.current = users;
+  const pendingUserPrependRef = useRef(new Set<string>());
+  const fetchOneUser = async (userId: string): Promise<AdminUser | null> => {
+    const res = await api.admin.users({ limit: 100 });
+    const list = Array.isArray(res) ? res : ((res as { users?: AdminUser[] }).users || []);
+    return list.find((u) => u.id === userId) ?? null;
+  };
+  const userMatchesFilters = (u: AdminUser): boolean => {
+    const { roleFilter: role, verifiedFilter: verified, search: q } = filtersRef.current;
+    if (role !== 'all' && u.role !== role) return false;
+    if (verified === 'true' && !u.verified) return false;
+    if (verified === 'false' && u.verified) return false;
+    if (q.trim()) {
+      const needle = q.trim().toLowerCase();
+      const hay = `${u.name} ${u.email} ${u.phone || ''} ${u.businessName || ''}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  };
+  useRealtimeEvent(['user_registered', 'kyc_submitted'], (event) => {
+    const userId =
+      idFromEventLink(event.link, 'users') ?? idFromEventLink(event.link, 'kyc');
+    if (!userId) return;
+    // Already on screen (e.g. a re-submitted KYC) — refresh the row in
+    // place; the total does not change and the expanded row stays open.
+    if (usersRef.current.some((u) => u.id === userId)) {
+      void fetchOneUser(userId).then((u) => {
+        if (!u) return;
+        setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
+      }).catch(() => {});
+      return;
+    }
+    if (pendingUserPrependRef.current.has(userId)) return;
+    pendingUserPrependRef.current.add(userId);
+    void fetchOneUser(userId)
+      .then((u) => {
+        if (!u) return;
+        if (!userMatchesFilters(u)) return;
+        setUsers((prev) => {
+          if (prev.some((x) => x.id === u.id)) return prev.map((x) => (x.id === u.id ? u : x));
+          return pageRef.current === 1 ? [u, ...prev] : prev;
+        });
+        setTotal((prev) => prev + 1);
+      })
+      .catch(() => {})
+      .finally(() => {
+        pendingUserPrependRef.current.delete(userId);
+      });
+  });
 
   useEffect(() => {
     if (authLoading) return;
@@ -158,6 +256,16 @@ export default function AdminUsersPage() {
     if (!silent) setLoading(true);
     void loadUsers();
   }, [authLoading, user, refreshKey, loadUsers]);
+
+  // Batch 19 (audit H2) — Prev/Next sets the page ref AND state, then
+  // loads directly: the fetch effect does not depend on `page` (same
+  // ref pattern as the filters above), so paging never refetches twice.
+  const goToPage = (next: number) => {
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    pageRef.current = clamped;
+    setPage(clamped);
+    void loadUsers();
+  };
 
   const runAction = async (action: () => Promise<unknown>, ok: string) => {
     setBusyId('all');
@@ -242,8 +350,10 @@ export default function AdminUsersPage() {
 
   const isMainAdmin = user?.role === 'admin';
   // Three separate boxes: admins, sub-admins, and regular users.
-  const adminUsers = users.filter((u) => u.role === 'admin');
-  const subadminUsers = users.filter((u) => u.role === 'subadmin');
+  // Batch 19 — staff boxes read the separate staff fetch (see above),
+  // not the paginated table list.
+  const adminUsers = staffUsers.filter((u) => u.role === 'admin');
+  const subadminUsers = staffUsers.filter((u) => u.role === 'subadmin');
 
   const filteredUsers = users.filter((u) => {
     if (u.role === 'admin' || u.role === 'subadmin') return false; // own boxes above
@@ -308,7 +418,7 @@ export default function AdminUsersPage() {
           <option value="true">Verified</option>
           <option value="false">Pending KYC</option>
         </select>
-        <Button type="button" variant="outline" onClick={() => void loadUsers()}>
+        <Button type="button" variant="outline" onClick={() => { setPage(1); pageRef.current = 1; void loadUsers(); }}>
           Apply
         </Button>
       </div>
@@ -479,7 +589,7 @@ export default function AdminUsersPage() {
                             <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
                               {u.businessName || u.name}
                             </p>
-                            <p className="text-[11px] text-slate-400">{u.name} · {u.city || '—'}</p>
+                            <p className="text-xs text-slate-400">{u.name} · {u.city || '—'}</p>
                           </div>
                           <ChevronDown
                             className={cn(
@@ -491,7 +601,7 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
                         {u.email}
-                        <p className="text-[11px] text-slate-400">{u.phone}</p>
+                        <p className="text-xs text-slate-400">{u.phone}</p>
                       </td>
                       <td className="px-4 py-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
                         {u.role === 'supplier' ? 'Supplier' : u.role === 'shopkeeper' ? 'Shopkeeper' : 'Admin'}
@@ -634,6 +744,23 @@ export default function AdminUsersPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Batch 19 (audit H2) — page through users instead of only ever
+          seeing the first 50. */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-500">
+            Page {page} of {totalPages} • {total} user{total === 1 ? '' : 's'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+              Previous
+            </Button>
+            <Button type="button" variant="outline" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>

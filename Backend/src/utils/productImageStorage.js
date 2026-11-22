@@ -233,7 +233,9 @@ module.exports = {
   deleteStoredUploads,
   deleteProductStoredFiles,
   ProductImageError,
-  PUBLIC_PREFIX,
+  // Batch 22 (Round-5 audit h-L5) — PUBLIC_PREFIX and
+  // MAX_PRODUCT_IMAGES are NOT exported any more: no caller ever
+  // imported them; both constants stay defined above and are still
+  // used inside this file.
   MAX_IMAGE_BYTES,
-  MAX_PRODUCT_IMAGES,
 };

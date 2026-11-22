@@ -1,24 +1,32 @@
 // ────────────────────────────────────────────────────────────
 //  Admin controllers — platform management over MongoDB.
-//  REVISED (Batch 02, 2026-11-09): Noushad ka faisla — sub-admin ko FULL
-//  access hai (admin.routes.js dekho). Is liye suspend/activate/reject/
-//  delete pe koi sub-admin rok nahi hai. Sirf admin accounts khud
-//  immutable hain (neeche ADMIN_IMMUTABLE checks) — koi sub-admin main
-//  admin ko chher nahi sakta.
+//  REVISED (Batch 17, 2026-11-22 — Round-5 audit H1): sub-admin scope
+//  now matches the AdminGate (Frontend/app/admin/AdminClient.tsx):
+//  users, messages, orders, disputes (+ refunds, which ARE dispute
+//  decisions) stay open to sub-admins; stats, products, audit log,
+//  contacts and DELETE /users/:id are MAIN-ADMIN-ONLY, enforced by the
+//  route roles in admin.routes.js — the old Batch 02 "FULL access"
+//  decision is superseded for those routes (see FIX-NOTE). Admin
+//  accounts themselves stay immutable (ADMIN_IMMUTABLE checks below) —
+//  no sub-admin can touch a main admin account.
 // ────────────────────────────────────────────────────────────
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const Dispute = require('../models/Dispute');
 const AuditLog = require('../models/AuditLog');
 const ContactMessage = require('../models/ContactMessage');
 const { toClient } = require('../utils/serialize');
+const { queryString } = require('../utils/safeQuery');
 const { UPLOAD_ROOT, deleteStoredUploads: deleteKycStoredUploads } = require('../utils/kycStorage');
 const { deleteProductStoredFiles } = require('../utils/productImageStorage');
 const { getPrivateSignedUrl } = require('../utils/cloudinary');
 const { sendEmail } = require('../utils/sendEmail');
-const { notifyUser } = require('../utils/notify');
+const { notifyUser, notifyAdmins, notifyOrderParties } = require('../utils/notify');
+const { cancelSettlementPatch, ADMIN_CANCELLABLE_STATUSES } = require('../utils/orderCancel');
+const { restoreStock } = require('../utils/stock');
 const {
   accountVerifiedEmail,
   accountSuspendedEmail,
@@ -30,6 +38,14 @@ const {
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// Batch 17 (L1) — allow-lists for the req.query filters below. A value
+// outside the list (or an operator object) is rejected with 400, never
+// passed to Mongoose.
+const USER_ROLES = ['shopkeeper', 'supplier', 'admin', 'subadmin'];
+const PRODUCT_STATUSES = ['Active', 'Low Stock', 'Out of Stock'];
+const ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 
 /**
  * Writes one line to the audit log. Never throws — a logging failure must
@@ -98,22 +114,59 @@ async function getStats(req, res, next) {
 }
 
 /**
- * GET /api/admin/users?role=&verified=&search=
+ * GET /api/admin/users?role=&verified=&search=&page=&limit=
+ *
+ * Batch 19 (Round-5 audit H2 + M5) — this list used to return up to 300
+ * whole user documents in one response, with no page params and no
+ * total: rows past 300 were silently invisible to the admin. It now
+ * paginates with the same page/limit/totalPages/safePage pattern as
+ * getOrders (order.controller.js), and projects only the fields the
+ * users table reads. In particular `avatar` (a base64 data URL, up to
+ * ~2.7 MB per user) NEVER leaves the server on a list call — the old
+ * code sent it for up to 300 users. Identity numbers
+ * (cnic/ntn/utilityBillAccountNumber) stay excluded too; the
+ * post-fetch deletes below are kept as a belt-and-braces guard.
+ * (`documents` metadata stays — see the projection comment below.)
  */
 async function listUsers(req, res, next) {
   try {
     const query = {};
-    if (req.query.role && req.query.role !== 'all') query.role = req.query.role;
+    // Batch 17 (L1) — raw req.query values never reach a Mongoose filter:
+    // role is String-coerced + allow-listed, search is String-coerced.
+    // An operator object (?role[$ne]=admin) is rejected, not executed.
+    const role = queryString(req.query.role);
+    if (role === null || (role && role !== 'all' && !USER_ROLES.includes(role))) {
+      return res.status(400).json({ error: { code: 'INVALID_ROLE', message: 'role must be shopkeeper, supplier, admin or subadmin.' } });
+    }
+    if (role && role !== 'all') query.role = role;
     if (req.query.verified === 'true') query.verified = true;
     if (req.query.verified === 'false') query.verified = false;
 
-    const search = (req.query.search || '').trim();
+    const search = (queryString(req.query.search) || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
       query.$or = [{ name: rx }, { email: rx }, { phone: rx }, { businessName: rx }];
     }
 
-    const users = await User.find(query).sort({ createdAt: -1 }).limit(300).lean();
+    const total = await User.countDocuments(query);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const users = await User.find(query)
+      .sort({ createdAt: -1 })
+      .skip((safePage - 1) * limit)
+      .limit(limit)
+      // Batch 19 (audit M5) — `avatar` (a base64 data URL, up to ~2.7 MB
+      // per user) NEVER leaves the server on a list call. `documents`
+      // is deliberately KEPT, against the audit's wording: it holds only
+      // small metadata (storage path / Cloudinary id, size — no file
+      // content), and the users table's KycDocumentViewer renders from
+      // it (which slots exist). Excluding it would blank every KYC
+      // preview on this page; the actual files still load per-document
+      // through the audited admin KYC route, never from this list.
+      .select('-avatar -cnic -ntn -utilityBillAccountNumber')
+      .lean();
     const safe = toClient(users).map((u) => {
       // Identity numbers are encrypted at rest — never send ciphertext to
       // the list view. The admin reveals them per-user via
@@ -123,7 +176,7 @@ async function listUsers(req, res, next) {
       delete u.utilityBillAccountNumber;
       return u;
     });
-    res.json({ users: safe, count: users.length });
+    res.json({ users: safe, count: users.length, total, page: safePage, limit, totalPages });
   } catch (err) {
     next(err);
   }
@@ -464,22 +517,52 @@ async function getKycDocument(req, res, next) {
 }
 
 /**
- * GET /api/admin/products?search=&status=&supplierId=
+ * GET /api/admin/products?search=&status=&supplierId=&page=&limit=
+ *
+ * Batch 19 (Round-5 audit H2 + M5) — same fix as listUsers: the old
+ * limit(500) with no pagination silently hid rows past 500, and the
+ * whole document came back including `description` — the field Batch 14
+ * stripped from the public list for the same reason. Paginated
+ * (getOrders pattern) and projected to the fields the admin products
+ * table reads. `additionalImages` stays (the table's photo-count badge
+ * reads its length, and it is URL strings only) and `imageUploads`
+ * stays (the full-size photo modal shows its file name/size/date, and
+ * it is small per-photo metadata, no file content).
  */
 async function listProducts(req, res, next) {
   try {
     const query = {};
-    if (req.query.status && req.query.status !== 'all') query.status = req.query.status;
-    if (req.query.supplierId) query.supplierId = req.query.supplierId;
+    // Batch 17 (L1) — status allow-listed, supplierId String-coerced +
+    // ObjectId-shaped; search String-coerced (see listUsers).
+    const status = queryString(req.query.status);
+    if (status === null || (status && status !== 'all' && !PRODUCT_STATUSES.includes(status))) {
+      return res.status(400).json({ error: { code: 'INVALID_STATUS', message: 'Unknown status filter.' } });
+    }
+    if (status && status !== 'all') query.status = status;
+    const supplierId = queryString(req.query.supplierId);
+    if (supplierId === null || (supplierId && !OBJECT_ID_RE.test(supplierId))) {
+      return res.status(400).json({ error: { code: 'INVALID_SUPPLIER_ID', message: 'Unknown supplier filter.' } });
+    }
+    if (supplierId) query.supplierId = supplierId;
 
-    const search = (req.query.search || '').trim();
+    const search = (queryString(req.query.search) || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
       query.$or = [{ name: rx }, { description: rx }, { category: rx }, { supplierName: rx }];
     }
 
-    const products = await Product.find(query).sort({ createdAt: -1 }).limit(500).lean();
-    res.json({ products: toClient(products), count: products.length });
+    const total = await Product.countDocuments(query);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip((safePage - 1) * limit)
+      .limit(limit)
+      .select('_id name category price unit moq stock supplierId supplierName supplierCity image additionalImages imageUploads status createdAt updatedAt')
+      .lean();
+    res.json({ products: toClient(products), count: products.length, total, page: safePage, limit, totalPages });
   } catch (err) {
     next(err);
   }
@@ -507,14 +590,25 @@ async function deleteProduct(req, res, next) {
 }
 
 /**
- * GET /api/admin/orders?status=&search=
+ * GET /api/admin/orders?status=&search=&page=&limit=
+ *
+ * Batch 19 (Round-5 audit H2 + M5) — same fix as listUsers: the old
+ * limit(500) with no pagination silently hid rows past 500. Paginated
+ * (getOrders pattern) and projected to the fields the admin orders
+ * table reads (payment + delivery-proof fields included — the table
+ * shows the reference, fee/payout and delivery photo state).
  */
 async function listOrders(req, res, next) {
   try {
     const query = {};
-    if (req.query.status && req.query.status !== 'all') query.status = req.query.status;
+    // Batch 17 (L1) — status allow-listed, search String-coerced.
+    const status = queryString(req.query.status);
+    if (status === null || (status && status !== 'all' && !ORDER_STATUSES.includes(status))) {
+      return res.status(400).json({ error: { code: 'INVALID_STATUS', message: 'Unknown status filter.' } });
+    }
+    if (status && status !== 'all') query.status = status;
 
-    const search = (req.query.search || '').trim();
+    const search = (queryString(req.query.search) || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
       query.$or = [
@@ -525,28 +619,152 @@ async function listOrders(req, res, next) {
       ];
     }
 
-    const orders = await Order.find(query).sort({ createdAt: -1 }).limit(500).lean();
+    const total = await Order.countDocuments(query);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .skip((safePage - 1) * limit)
+      .limit(limit)
+      .select('_id orderNumber buyerId buyerName supplierId supplierName items subtotal totalAmount paymentMethod paymentChannel paymentStatus paymentReference amountHeld platformFee payoutAmount refundAmount deliveryProof disputeId status deliveryDate shippingAddress buyerLocationLink createdAt updatedAt')
+      .lean();
 
-    res.json({ orders: toClient(orders), count: orders.length });
+    res.json({ orders: toClient(orders), count: orders.length, total, page: safePage, limit, totalPages });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * GET /api/admin/audit-log?limit=&page=
- * Newest first. Lets the admin verify what the audit writes recorded.
+ * POST /api/admin/orders/:id/cancel  (admin / sub-admin) — Batch 18
+ * (audit LOW L10).
+ *
+ * Before this batch only the buyer could cancel, and only from pending —
+ * so a stuck order (escrow held, supplier unresponsive) had no cancel
+ * path at all; the only recovery was a dispute decision. The admin can
+ * now cancel a stuck order from pending / confirmed / processing /
+ * shipped. The money settlement is the SAME shared rule as the buyer
+ * cancel (utils/orderCancel.js — cancelSettlementPatch), so the two
+ * paths can never drift: escrowed or paid money refunds in full, a
+ * merely-submitted reference goes back to 'unpaid' with the stale
+ * reference cleared. Released money cannot be clawed back here — that
+ * is a dispute decision. A delivered order is refused too: the goods
+ * arrived, so a refund goes through a dispute, not a cancel. Blocked
+ * while a dispute is open (DISPUTE_OPEN), like every other status move
+ * (Batch 18, audit M5).
+ *
+ * Body: { reason? } — optional note, kept in the audit log.
+ * NOTE — this does NOT touch the Confirm Payment button/logic (removal
+ * is PAUSED, Noushad 2026-11-22) or the payment gateway (Shaheem's
+ * work): it only cancels the order and settles the record.
  */
-async function listAuditLog(req, res, next) {
+async function cancelOrder(req, res, next) {
   try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const logs = await AuditLog.find()
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
-    res.json({ logs: toClient(logs), count: logs.length, page, limit });
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'No order matches that id.' } });
+    }
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'This order is already cancelled.' } });
+    }
+    if (!ADMIN_CANCELLABLE_STATUSES.includes(order.status)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_STATE', message: `A ${order.status} order cannot be cancelled by the admin — use a dispute decision.` },
+      });
+    }
+    if (order.paymentStatus === 'released') {
+      return res.status(400).json({
+        error: { code: 'INVALID_STATE', message: 'The payment was already released to the supplier — a cancel cannot claw it back. Use a dispute decision.' },
+      });
+    }
+    if (order.paymentStatus === 'refunded') {
+      return res.status(400).json({ error: { code: 'INVALID_STATE', message: 'This order was already refunded.' } });
+    }
+    if (order.paymentStatus === 'frozen_dispute' || order.disputeId) {
+      const d = order.disputeId
+        ? await Dispute.findById(order.disputeId, { status: 1 }).lean()
+        : null;
+      if (order.paymentStatus === 'frozen_dispute' || (d && d.status !== 'resolved')) {
+        return res.status(400).json({
+          error: { code: 'DISPUTE_OPEN', message: 'A dispute is open on this order — the payment is frozen until the admin decides.' },
+        });
+      }
+    }
+    const reason = req.body.reason ? String(req.body.reason).trim() : '';
+    if (reason.length > 500) {
+      return res.status(400).json({ error: { code: 'INVALID_REASON', message: 'Reason must be 500 characters or less.' } });
+    }
+
+    // Batch 20 (audit (c)-1) — capture the PRE-cancel payment state
+    // here, before the atomic update below (see order.controller.js:
+    // the update may mutate the loaded doc in place).
+    const refundedOnCancel =
+      order.paymentStatus === 'held_in_escrow' || order.paymentStatus === 'paid';
+
+    // Batch 18 (audit M3) — ATOMIC cancel: only applies while the order
+    // is STILL in the status loaded above, so a concurrent supplier move
+    // (or a second admin cancel) cannot both settle the same order.
+    const patch = { status: 'cancelled', ...cancelSettlementPatch(order) };
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id, status: order.status },
+      { $set: patch },
+      { new: true }
+    );
+    if (!updated) {
+      return res.status(409).json({
+        error: { code: 'CONCURRENT_UPDATE', message: 'This order was just changed by another request — reload it and check its status.' },
+      });
+    }
+
+    // Stock was decremented at checkout — give it back. Runs AFTER the
+    // atomic update, so a losing concurrent cancel never restores twice.
+    // Batch 19 (audit L6) — one bulkWrite for the whole restore set,
+    // not one updateOne per line (see utils/stock.js restoreStock).
+    await restoreStock(Product, updated.items);
+
+    await logAdminAction(req, 'ORDER_CANCELLED', 'Order', req.params.id, {
+      orderNumber: updated.orderNumber,
+      fromStatus: order.status,
+      paymentStatus: updated.paymentStatus,
+      refundAmount: updated.refundAmount || 0,
+      reason: reason || undefined,
+    });
+    await notifyOrderParties(updated, {
+      type: 'order_cancelled',
+      title: `Order ${updated.orderNumber} — cancelled`,
+      message: `Order ${updated.orderNumber} was cancelled by the admin${reason ? `: ${reason}` : '.'}`,
+      excludeUserId: req.user._id,
+    });
+    // Batch 20 (audit (c)-1) — same distinct refund event as the buyer
+    // cancel above: an admin cancel that actually refunds money
+    // (escrowed or paid) also emits `payment_refunded`, so the refund
+    // is not buried inside the order_cancelled message. No money
+    // returned (unpaid / submitted-back-to-unpaid) = no extra event.
+    if (refundedOnCancel) {
+      await notifyOrderParties(updated, {
+        type: 'payment_refunded',
+        title: `Payment refunded — ${updated.orderNumber}`,
+        message: `Rs ${updated.refundAmount || 0} was refunded to the shopkeeper for cancelled order ${updated.orderNumber}.`,
+        excludeUserId: req.user._id,
+      });
+    }
+
+    // Batch 23 (TEAMLY realtime audit RT-5) — the admin cancel changes
+    // an order's status too, so it gets the same single order_status
+    // feed as updateOrderStatus: ONCE, never in a loop, FIRE-AND-FORGET
+    // (notifyAdmins never throws). The parties already heard
+    // order_cancelled above; this is the admin-side status feed.
+    notifyAdmins({
+      type: 'order_status',
+      title: `Order ${updated.orderNumber} — cancelled`,
+      message: `Order ${updated.orderNumber} moved to cancelled.`,
+      link: `/admin/orders/${updated._id}`,
+      orderId: updated._id,
+    });
+
+    res.json({ order: toClient(updated.toObject()) });
   } catch (err) {
     next(err);
   }
@@ -555,17 +773,25 @@ async function listAuditLog(req, res, next) {
 /**
  * GET /api/admin/contacts?limit=&page=
  * Newest first. Contact form se aaye messages admin yahan se dekhega.
+ *
+ * Batch 19 (Round-5 audit L2) — the response used to carry only
+ * { contacts, count, page, limit }: an out-of-range page silently
+ * returned an empty list with no way to know how many pages exist.
+ * It now returns total/totalPages and a clamped safePage, like every
+ * other list endpoint.
  */
 async function listContacts(req, res, next) {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const total = await ContactMessage.countDocuments({});
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), totalPages);
     const contacts = await ContactMessage.find()
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
-    res.json({ contacts: toClient(contacts), count: contacts.length, page, limit });
+    res.json({ contacts: toClient(contacts), count: contacts.length, total, page, limit, totalPages });
   } catch (err) {
     next(err);
   }
@@ -781,7 +1007,7 @@ module.exports = {
   listProducts,
   deleteProduct,
   listOrders,
-  listAuditLog,
+  cancelOrder,
   listContacts,
   deleteContact,
   replyContact,

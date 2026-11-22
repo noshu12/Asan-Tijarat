@@ -10,7 +10,10 @@
  * All events go through this helper — no component calls `gtag` directly.
  * NO PII in any payload: only product/order ids, categories, amounts and
  * the user's own search text (what they typed in the marketplace search
- * box). Never a name, email, phone, CNIC, address or user identifier.
+ * box) — and even that is redacted first (Batch 20, audit (d)-4):
+ * email-like and phone-like patterns are replaced with '[redacted]'
+ * before anything is sent to Google. Never a name, email, phone, CNIC,
+ * address or user identifier.
  *
  * Event names (exactly six — grep `track[A-Z]` to audit call sites):
  *   page_view (manual — see GoogleAnalytics.tsx, config uses
@@ -83,7 +86,32 @@ export function trackOrderPlaced(orderId: string, totalAmount: number): void {
 
 /** Marketplace search submitted — the query text the user typed. */
 export function trackSearch(searchTerm: string): void {
-  trackEvent('search', { search_term: searchTerm });
+  trackEvent('search', { search_term: redactSearchTerm(searchTerm) });
+}
+
+/**
+ * Batch 20 (audit (d)-4) — `search_term` is GA4's standard recommended
+ * parameter, but it used to carry the raw typed text: a user who typed
+ * their own name, email or phone number into the marketplace search box
+ * sent it straight to Google. Email-like and phone-like patterns are
+ * replaced with '[redacted]' BEFORE sending; the rest of the query
+ * (the actual product words) still goes through, so search analytics
+ * keeps working. Redaction lives here — the one place every search
+ * event passes through — not at the call site, so no future caller can
+ * forget it.
+ *
+ * Email: user@domain.tld. Phone: any run of 8+ digits, optionally
+ * separated by spaces / dashes / brackets / a leading + (covers
+ * 03001234567, 0300-1234567, +92 300 1234567). Shorter digit runs
+ * (quantities, years, product codes like "1121") are left alone.
+ */
+const EMAIL_PATTERN = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+const PHONE_PATTERN = /\+?\d[\d\s().-]{6,}\d/g;
+
+export function redactSearchTerm(searchTerm: string): string {
+  return searchTerm
+    .replace(EMAIL_PATTERN, '[redacted]')
+    .replace(PHONE_PATTERN, '[redacted]');
 }
 
 /** Marketplace filter changed — filter name + value only. */

@@ -116,7 +116,7 @@ export function ProductImageUpload({
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{label}</span>
-        <span className="text-[11px] font-semibold text-slate-400">
+        <span className="text-xs font-semibold text-slate-400">
           {images.length}/{MAX_PRODUCT_IMAGES} attached
         </span>
       </div>
@@ -214,7 +214,7 @@ export function ProductImageUpload({
         )}
       </div>
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-xs text-slate-400">
         The photo marked <span className="font-semibold text-asan-accent">Main photo</span> is the one
         buyers, your dashboard and the admin panel see first.
       </p>

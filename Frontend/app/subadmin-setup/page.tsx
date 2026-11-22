@@ -1,22 +1,26 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthProvider';
 
 /**
  * /subadmin-setup — PUBLIC page for the mandatory first-time 2FA setup.
  * Reached only from /admin/login when adminLogin() answers
  * { requires2FASetup: true } — for the MAIN ADMIN as well as sub-admins
  * (FIX New audit #5: 2FA is mandatory for the main admin too). The
- * short-lived setup token comes from sessionStorage (never the URL).
+ * short-lived setup token comes from AuthProvider memory (Batch 17, L3)
+ * — never sessionStorage, never the URL — so a refresh here means
+ * signing in again (the token lives 5 minutes anyway).
  * After the first code is confirmed, sign in normally: password →
  * requires2FA → 6-digit code → session.
  */
 export default function SubadminSetupPage() {
+  const { twoFactorSetupToken, setTwoFactorSetupToken } = useAuth();
   const [phase, setPhase] = useState<'loading' | 'no-token' | 'scan' | 'done'>('loading');
   const [tempToken, setTempToken] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -24,13 +28,17 @@ export default function SubadminSetupPage() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Setup must start exactly once even if the effect re-runs.
+  const startedRef = useRef(false);
 
   useEffect(() => {
-    const token = sessionStorage.getItem('subadmin_setup_token') || '';
+    const token = twoFactorSetupToken || '';
     if (!token) {
       setPhase('no-token');
       return;
     }
+    if (startedRef.current) return;
+    startedRef.current = true;
     setTempToken(token);
     (async () => {
       try {
@@ -43,7 +51,7 @@ export default function SubadminSetupPage() {
         setPhase('no-token');
       }
     })();
-  }, []);
+  }, [twoFactorSetupToken]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +63,8 @@ export default function SubadminSetupPage() {
     setBusy(true);
     try {
       await api.verifyTwoFactorSetupFirst(tempToken, code.trim());
-      sessionStorage.removeItem('subadmin_setup_token');
+      // The setup token is single-use in practice — drop it from memory.
+      setTwoFactorSetupToken('');
       setPhase('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Incorrect code. Try again.');

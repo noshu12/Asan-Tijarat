@@ -2,6 +2,7 @@ const router = require('express').Router();
 const {
   getProducts,
   getProductCities,
+  getProductCategories,
   getProduct,
   getProductMarketSale,
   createProduct,
@@ -12,8 +13,9 @@ const { protect, requireRole } = require('../middleware/auth');
 
 // Public catalogue
 router.get('/', getProducts);
-// /cities must sit before /:id — otherwise Express would read "cities" as an id.
+// /cities and /categories must sit before /:id — otherwise Express would read them as an id.
 router.get('/cities', getProductCities);
+router.get('/categories', getProductCategories);
 router.get('/:id/market-sale', getProductMarketSale);
 router.get('/:id', getProduct);
 

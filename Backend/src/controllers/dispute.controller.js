@@ -3,8 +3,8 @@ const Dispute = require('../models/Dispute');
 const { DISPUTE_REASONS, SHOPKEEPER_REASONS, SUPPLIER_REASONS } = require('../models/Dispute');
 const AuditLog = require('../models/AuditLog');
 const { toClient } = require('../utils/serialize');
-const { calcPlatformFee } = require('../utils/payment');
-const { notifyUser, notifyOrderParties, notifyAdmins } = require('../utils/notify');
+const { calcPlatformFee, feeForRelease } = require('../utils/payment');
+const { notifyOrderParties, notifyAdmins } = require('../utils/notify');
 
 /**
  * Dispute / refund flow (Batch 05) — Noushad's finalised rules.
@@ -157,35 +157,6 @@ async function openDispute(req, res, next) {
 }
 
 /**
- * GET /api/disputes?status=&limit=&page=  (party to the orders)
- * The signed-in user's disputes, newest first.
- */
-async function listMyDisputes(req, res, next) {
-  try {
-    const query = { raisedBy: req.user._id };
-    if (req.query.status && req.query.status !== 'all') {
-      if (!['open', 'in_review', 'resolved'].includes(String(req.query.status))) {
-        return res.status(400).json({ error: { code: 'INVALID_STATUS', message: 'Invalid dispute status.' } });
-      }
-      query.status = req.query.status;
-    }
-    const total = await Dispute.countDocuments(query);
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const safePage = Math.min(page, totalPages);
-    const disputes = await Dispute.find(query)
-      .sort({ createdAt: -1 })
-      .skip((safePage - 1) * limit)
-      .limit(limit)
-      .lean();
-    res.json({ disputes: toClient(disputes), count: disputes.length, total, page: safePage, limit, totalPages });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
  * GET /api/disputes/:id  (party to the order, or admin/sub-admin)
  */
 async function getDispute(req, res, next) {
@@ -222,9 +193,9 @@ async function getDispute(req, res, next) {
 /**
  * GET /api/disputes/order/:orderId  (party to the order, or admin/sub-admin)
  * The latest dispute for one order, so both parties see the same dispute
- * on the order page (Batch 06 — listMyDisputes only returns disputes the
- * caller raised, so the counterparty saw nothing and got
- * DISPUTE_ALREADY_OPEN when they tried to file).
+ * on the order page (Batch 06 — the old per-user list only returned
+ * disputes the caller raised, so the counterparty saw nothing and got
+ * DISPUTE_ALREADY_OPEN when they tried to file; Batch 22 removed it).
  */
 async function getDisputeByOrder(req, res, next) {
   try {
@@ -268,6 +239,9 @@ async function listDisputesAdmin(req, res, next) {
       .sort({ createdAt: -1 })
       .skip((safePage - 1) * limit)
       .limit(limit)
+      // Batch 19 (audit M5) — list projection: the fields the admin
+      // queue reads (same shape the old per-user list used).
+      .select('_id orderId orderNumber reason reasonLabel description raisedBy raisedByRole raisedByName status resolution createdAt updatedAt')
       .lean();
     res.json({ disputes: toClient(disputes), count: disputes.length, total, page: safePage, limit, totalPages });
   } catch (err) {
@@ -318,13 +292,15 @@ async function decideDispute(req, res, next) {
     let refundAmount = 0;
 
     if (decision === 'refund_partial') {
-      refundAmount = Number(req.body.refundAmount);
+      // Batch 18 (audit L8) — ROUND FIRST, then validate. The old order
+      // (validate 99.6 < 100, then round to 100) let a "partial" refund
+      // equal the full total, recorded as partial with kept = 0.
+      refundAmount = Math.round(Number(req.body.refundAmount));
       if (!Number.isFinite(refundAmount) || refundAmount <= 0 || refundAmount >= total) {
         return res.status(400).json({
           error: { code: 'INVALID_REFUND', message: 'A partial refund must be more than 0 and less than the order total.' },
         });
       }
-      refundAmount = Math.round(refundAmount);
     } else if (decision === 'refund_full' || decision === 'return_goods') {
       refundAmount = total;
     }
@@ -332,65 +308,117 @@ async function decideDispute(req, res, next) {
     // Batch 06 — a dispute frozen from 'unpaid' never had money move, and
     // a dispute never frozen at all (reason 11 on a cancelled order whose
     // advance was already refunded at cancel) has no money left to give
-    // back either. A refund decision on either records 0 — in the order,
-    // the resolution and the audit log — so no record claims money back
-    // that never left the shopkeeper or was already returned.
+    // back either.
+    // Batch 18 (audit HIGH 2) — 'payment_submitted' joins that list: a
+    // reference the admin never confirmed is NOT money. A refund decision
+    // on it records 0 and hands the payment back to 'payment_submitted'
+    // (mirror of the release branch below) instead of writing a false
+    // 'refunded' record for money that may never have been paid.
+    // Batch 18 (audit L9) — never-frozen is different from the other two:
+    // the cancel ALREADY refunded the full total, so the resolution
+    // records THAT amount (what the order already says), not 0.
     const wasUnpaid = order.prevPaymentStatus === 'unpaid';
+    const wasSubmitted = order.prevPaymentStatus === 'payment_submitted';
     const neverFrozen = order.paymentStatus !== 'frozen_dispute';
-    const noMoneyToMove = wasUnpaid || neverFrozen;
-    if (noMoneyToMove && decision !== 'release') refundAmount = 0;
+    const noMoneyToMove = wasUnpaid || wasSubmitted || neverFrozen;
+    if (decision !== 'release') {
+      refundAmount = neverFrozen ? (order.refundAmount || 0) : noMoneyToMove ? 0 : refundAmount;
+    }
 
-    // Settle the frozen money.
+    // Settle the frozen money — as a PATCH, applied atomically below.
+    // (Batch 18, audit M3: no check-then-save here; see the update.)
+    const orderPatch = {};
     if (order.paymentStatus === 'frozen_dispute') {
       const wasHeld = order.prevPaymentStatus === 'held_in_escrow';
-      const wasSubmitted = order.prevPaymentStatus === 'payment_submitted';
       if (decision === 'release') {
         if (wasHeld) {
           // Escrow was holding the money: release it, fee deducted.
-          const fee = calcPlatformFee(total);
-          order.platformFee = fee;
-          order.payoutAmount = Math.max(0, total - fee);
-          order.amountHeld = 0;
-          order.paymentStatus = 'released';
+          // Batch 18 (audit L7) — the fee is the one snapshotted at
+          // confirm time, not the live env %.
+          const fee = feeForRelease(order, total);
+          orderPatch.platformFee = fee;
+          orderPatch.payoutAmount = Math.max(0, total - fee);
+          orderPatch.amountHeld = 0;
+          orderPatch.paymentStatus = 'released';
         } else if (wasSubmitted) {
           // Money was submitted but never confirmed into escrow: hand it
           // back to the submitted state so the admin confirms it normally.
-          order.paymentStatus = 'payment_submitted';
+          orderPatch.paymentStatus = 'payment_submitted';
         } else {
           // Nothing was ever paid (e.g. online_at_delivery not yet paid):
           // there is nothing to release.
-          order.paymentStatus = 'unpaid';
+          orderPatch.paymentStatus = 'unpaid';
         }
       } else {
         // refund_full / refund_partial / return_goods.
-        order.refundAmount = refundAmount;
-        if (wasUnpaid) {
+        orderPatch.refundAmount = refundAmount;
+        if (wasSubmitted) {
+          // Batch 18 (audit HIGH 2) — mirror of the release branch:
+          // nothing was ever confirmed in, so there is no refund to
+          // record and no fee or payout. Back to 'payment_submitted',
+          // NOT 'refunded' — the payment can still be confirmed.
+          orderPatch.platformFee = 0;
+          orderPatch.payoutAmount = 0;
+          orderPatch.amountHeld = 0;
+          orderPatch.paymentStatus = 'payment_submitted';
+        } else if (wasUnpaid) {
           // Nothing was ever paid: the shopkeeper owes nothing, and no
           // payout or fee applies — a partial refund of money never paid
           // is the same outcome as a full one.
-          order.platformFee = 0;
-          order.payoutAmount = 0;
+          orderPatch.platformFee = 0;
+          orderPatch.payoutAmount = 0;
+          orderPatch.amountHeld = 0;
+          orderPatch.paymentStatus = 'refunded';
         } else if (decision === 'refund_full' || decision === 'return_goods') {
           // A full refund takes no platform fee.
-          order.platformFee = 0;
-          order.payoutAmount = 0;
+          orderPatch.platformFee = 0;
+          orderPatch.payoutAmount = 0;
+          orderPatch.amountHeld = 0;
+          orderPatch.paymentStatus = 'refunded';
         } else {
           // Partial: the supplier keeps total - refund; the fee applies to
           // the kept part only.
           const kept = total - refundAmount;
           const fee = calcPlatformFee(kept);
-          order.platformFee = fee;
-          order.payoutAmount = Math.max(0, kept - fee);
+          orderPatch.platformFee = fee;
+          orderPatch.payoutAmount = Math.max(0, kept - fee);
+          orderPatch.amountHeld = 0;
+          orderPatch.paymentStatus = 'refunded';
         }
-        order.amountHeld = 0;
-        order.paymentStatus = 'refunded';
       }
-      order.prevPaymentStatus = '';
-      await order.save();
+      orderPatch.prevPaymentStatus = '';
     }
 
-    dispute.status = 'resolved';
-    dispute.resolution = {
+    // Batch 18 (audit M3) — ATOMIC decide. Two guards, each one
+    // conditional update, in this order:
+    //   1. the ORDER settles first, and only while it is STILL
+    //      frozen_dispute. Two concurrent decides race here — exactly
+    //      one wins, the loser gets null and a 409, and never touches
+    //      the dispute. (A never-frozen order has no money to settle,
+    //      so this step is skipped and the dispute claim below is the
+    //      only guard — which is exactly the case that needs it.)
+    //   2. the DISPUTE resolves, and only while it is NOT already
+    //      resolved. This is what stops two concurrent decides on a
+    //      never-frozen order both recording a resolution.
+    // The old code did findById → guard → save() on both documents, so
+    // two concurrent calls both passed the `resolved` guard and the last
+    // writer overwrote the resolution (with duplicate audit logs and
+    // notifications).
+    let settledOrder = order;
+    if (order.paymentStatus === 'frozen_dispute') {
+      settledOrder = await Order.findOneAndUpdate(
+        { _id: order._id, paymentStatus: 'frozen_dispute' },
+        { $set: orderPatch },
+        { new: true }
+      );
+      if (!settledOrder) {
+        return res.status(409).json({
+          error: { code: 'CONCURRENT_UPDATE', message: 'This dispute was just decided by another request — reload the dispute and check its status.' },
+        });
+      }
+    }
+
+    const resolution = {
       decision,
       refundAmount,
       note,
@@ -398,17 +426,26 @@ async function decideDispute(req, res, next) {
       decidedByName: req.user.name || req.user.email || '',
       decidedAt: new Date(),
     };
-    await dispute.save();
+    const decided = await Dispute.findOneAndUpdate(
+      { _id: dispute._id, status: { $ne: 'resolved' } },
+      { $set: { status: 'resolved', resolution } },
+      { new: true }
+    );
+    if (!decided) {
+      return res.status(409).json({
+        error: { code: 'CONCURRENT_UPDATE', message: 'This dispute was just decided by another request — reload the dispute and check its status.' },
+      });
+    }
 
     await AuditLog.create({
       actorId: req.user._id,
       actorName: req.user.name || req.user.email || '',
       action: 'DISPUTE_DECIDED',
       entityType: 'Dispute',
-      entityId: String(dispute._id),
+      entityId: String(decided._id),
       details: {
-        orderNumber: dispute.orderNumber,
-        reason: dispute.reason,
+        orderNumber: decided.orderNumber,
+        reason: decided.reason,
         decision,
         refundAmount,
         note,
@@ -418,23 +455,53 @@ async function decideDispute(req, res, next) {
     const decisionText = noMoneyToMove
       ? neverFrozen
         ? 'decided the money was already refunded when the order was cancelled'
-        : decision === 'release'
-          ? 'decided the shopkeeper still has to pay (no payment was made)'
-          : 'decided the shopkeeper owes nothing (no payment was made)'
+        : wasSubmitted
+          ? decision === 'release'
+            ? 'decided the submitted payment still needs admin confirmation (no payment was confirmed)'
+            : 'decided the submitted payment was never confirmed, so no refund is recorded and the payment goes back to submitted'
+          : decision === 'release'
+            ? 'decided the shopkeeper still has to pay (no payment was made)'
+            : 'decided the shopkeeper owes nothing (no payment was made)'
       : {
           release: 'released the payment to the supplier',
           refund_full: 'refunded the full order amount to the shopkeeper',
           refund_partial: `refunded Rs ${refundAmount} to the shopkeeper and released the rest to the supplier`,
           return_goods: 'ordered the goods returned and refunded the full order amount to the shopkeeper',
         }[decision];
-    await notifyOrderParties(order, {
+    await notifyOrderParties(settledOrder, {
       type: 'dispute_resolved',
-      title: `Dispute decided — ${order.orderNumber}`,
+      title: `Dispute decided — ${settledOrder.orderNumber}`,
       message: `The admin ${decisionText}. ${note ? `Note: ${note}` : ''}`,
       excludeUserId: req.user._id,
     });
 
-    res.json({ dispute: toClient(dispute.toObject()), order: toClient(order.toObject()) });
+    // Batch 20 (audit (c)-1) — `payment_refunded` was wired everywhere
+    // but never emitted; a refund decision hid inside the
+    // dispute_resolved message. Emit the distinct refund event ONLY
+    // when money actually moved back: a frozen dispute decided
+    // refund_full / refund_partial / return_goods with a real
+    // refundAmount (> 0). That excludes:
+    //   • release (money goes to the supplier, not back),
+    //   • wasSubmitted / wasUnpaid (refundAmount is 0 — nothing was
+    //     ever confirmed in, so there is no refund to announce),
+    //   • never-frozen (the cancel already refunded AND already sent
+    //     this event on the cancel path — sending it again here would
+    //     double-notify the same refund).
+    if (
+      decision !== 'release' &&
+      !neverFrozen &&
+      refundAmount > 0 &&
+      settledOrder.paymentStatus === 'refunded'
+    ) {
+      await notifyOrderParties(settledOrder, {
+        type: 'payment_refunded',
+        title: `Payment refunded — ${settledOrder.orderNumber}`,
+        message: `The admin refunded Rs ${refundAmount} to the shopkeeper for order ${settledOrder.orderNumber} (dispute decision).`,
+        excludeUserId: req.user._id,
+      });
+    }
+
+    res.json({ dispute: toClient(decided.toObject()), order: toClient(settledOrder.toObject()) });
   } catch (err) {
     next(err);
   }
@@ -442,7 +509,6 @@ async function decideDispute(req, res, next) {
 
 module.exports = {
   openDispute,
-  listMyDisputes,
   getDispute,
   getDisputeByOrder,
   listDisputesAdmin,

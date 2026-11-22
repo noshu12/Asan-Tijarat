@@ -97,11 +97,6 @@ export interface Product {
   status: 'Active' | 'Low Stock' | 'Out of Stock';
 }
 
-export interface CartItem {
-  product: Product;
-  quantity: number;
-}
-
 /** Backend order status — lowercase, with processing as a real stage. Must match the Backend Order model. */
 export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
@@ -275,11 +270,4 @@ export interface ChatMessage {
   senderName?: string;
   text: string;
   createdAt: string;
-}
-
-export interface TopSupplier {
-  id: string;
-  name: string;
-  initials: string;
-  tradeVolume: number;
 }

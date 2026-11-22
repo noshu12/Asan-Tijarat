@@ -10,20 +10,33 @@
 // SCALING NOTE: this map lives in this one Node process. If the backend
 // ever runs as several instances behind a load balancer, replace this
 // module with a Redis pub/sub adapter behind the SAME interface
-// (addClient / removeClient / broadcast / broadcastToAdmins /
-// getConnectionCount) — no caller changes. No Redis code now: single
-// Render instance, and the user does not pay for extra services.
-
-const User = require('../models/User');
+// (addClient / removeClient / broadcast / broadcastToAll /
+// getConnectionCount) — no caller changes. No Redis code now: single Render instance, and the user does
+// not pay for extra services.
+//
+// Batch 20 (audit (c)-3) — `broadcastToAdmins` (+ `fetchAdminIds` and
+// the 30 s admin-id cache) was deleted here: a repo-wide grep found zero
+// production callers — every admin event goes through notifyAdmins ->
+// notifyUser -> broadcast (utils/notify.js) — and the only other user
+// was its own unit test (test/sse.test.js), which was updated with it.
+// If an admin-only live event that is NOT stored as a notification is
+// ever needed, re-add a targeted broadcast then; until then this dead
+// surface (and its unused DB query path) stays out.
+//
+// Batch 23 (TEAMLY realtime audit, public-catalogue fan-out) —
+// `broadcastToAll` below is the ONE deliberate exception to the
+// userId-targeted rule: product_created / stock_updated / price_updated
+// must reach marketplace + product-page viewers, who are NOT admins and
+// have no notification row. Only those three public catalogue types may
+// use it (see notifyPublic in utils/notify.js); order/user/KYC events
+// stay notifyUser/notifyAdmins only. The payload carries catalogue data
+// only (product name/price/stock via title/message/link) — no CNIC, NTN,
+// phone, address, or payment reference ever goes through it.
 
 const MAX_CONNECTIONS_PER_USER = 5;
-const ADMIN_CACHE_TTL_MS = 30 * 1000; // admin ids re-read at most every 30 s
 
 /** userId (string) -> Set of live response objects for that user. */
 const clients = new Map();
-
-/** Cached admin + sub-admin ids: { ids: string[], fetchedAt: number }. */
-let adminCache = { ids: [], fetchedAt: 0 };
 
 function keyOf(userId) {
   return String(userId);
@@ -84,49 +97,51 @@ function broadcast(userId, event) {
   }
 }
 
-/**
- * Admin + sub-admin userIds, cached for 30 s so a broadcast storm (e.g.
- * many orders at once) does not hit the DB once per event. A failed
- * lookup logs and returns the last good list (possibly empty) — the
- * notification rows are still written by notify.js either way.
- */
-async function fetchAdminIds() {
-  const now = Date.now();
-  if (now - adminCache.fetchedAt < ADMIN_CACHE_TTL_MS) return adminCache.ids;
-  try {
-    const admins = await User.find(
-      { role: { $in: ['admin', 'subadmin'] } },
-      { _id: 1 }
-    ).lean();
-    adminCache = { ids: admins.map((a) => String(a._id)), fetchedAt: now };
-  } catch (err) {
-    console.log('[sse] admin lookup failed:', err.message);
-  }
-  return adminCache.ids;
-}
-
-/**
- * Pushes one event to every admin + sub-admin connection. Used for
- * admin-only events that are NOT stored as notifications; the normal
- * path (notifyAdmins -> notifyUser -> broadcast) needs no separate call.
- * Never throws.
- */
-async function broadcastToAdmins(event) {
-  try {
-    const ids = await fetchAdminIds();
-    for (const id of ids) {
-      broadcast(id, event);
-    }
-  } catch (err) {
-    console.log('[sse] broadcastToAdmins failed:', err.message);
-  }
-}
-
 /** Total live SSE connections across all users (monitoring only). */
 function getConnectionCount() {
   let total = 0;
   for (const set of clients.values()) total += set.size;
   return total;
+}
+
+/**
+ * Pushes one event to EVERY live connection, regardless of user.
+ *
+ * Batch 23 (TEAMLY realtime audit, public-catalogue fan-out) — the
+ * deliberate, documented exception to the userId-targeted rule. Only
+ * the three public catalogue types (product_created, stock_updated,
+ * price_updated) may use it, via notifyPublic in utils/notify.js:
+ * marketplace + product-page viewers are not admins and have no
+ * notification row, so a targeted broadcast cannot reach them. The
+ * event must carry public catalogue data only — never CNIC, NTN,
+ * phone, address, or a payment reference. Order/user/KYC events must
+ * NEVER come through here; those stay notifyUser/notifyAdmins only.
+ *
+ * A viewer who is ALSO a targeted recipient (e.g. a buyer of the
+ * product, or an admin) receives the event twice on the wire — once
+ * targeted, once here. Both frames carry the same type + link, so the
+ * frontend must treat catalogue events as idempotent refresh triggers
+ * (dedupe on type + link). Never throws.
+ */
+function broadcastToAll(event) {
+  try {
+    if (clients.size === 0) return;
+    const type = event && typeof event.type === 'string' ? event.type : 'message';
+    const payload = `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;
+    for (const [key, set] of [...clients]) {
+      for (const res of [...set]) {
+        try {
+          res.write(payload);
+        } catch {
+          // Dead connection — drop it and carry on with the rest.
+          set.delete(res);
+        }
+      }
+      if (set.size === 0) clients.delete(key);
+    }
+  } catch (err) {
+    console.log('[sse] broadcastToAll failed:', err.message);
+  }
 }
 
 /** Live SSE connections for one user (0 when none). */
@@ -140,7 +155,7 @@ module.exports = {
   addClient,
   removeClient,
   broadcast,
-  broadcastToAdmins,
+  broadcastToAll,
   getConnectionCount,
   getUserConnectionCount,
 };

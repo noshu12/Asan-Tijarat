@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, checkAvailability, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
+const { register, login, adminLogin, adminVerifyTwoFactorLogin, me, logout, updateMe, changePassword, sendOtp, verifyOtp, forgotPassword, resetPassword, setupTwoFactor, verifyTwoFactorSetup, disableTwoFactor, verifyTwoFactorLogin, setupTwoFactorFirst, verifyTwoFactorSetupFirst } = require('../controllers/auth.controller');
 const { protect, optionalProtect, requireRole } = require('../middleware/auth');
 const { requireTurnstile } = require('../utils/turnstile');
 const rateLimit = require('express-rate-limit');
@@ -12,7 +12,7 @@ const rateLimit = require('express-rate-limit');
 // Is liye OTP bhejnewale dono routes pe dedicated limiter: 5 requests
 // per 15 min per IP. Limiter Turnstile se PEHLE chalta hai — flood ko
 // sab se saste point pe roko, Turnstile verify karne se pehle.
-// verify-otp / reset-password / check-availability is limiter se bahar
+// verify-otp / reset-password is limiter se bahar
 // hain (report ne sirf send-otp aur forgot-password manga hai).
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -24,11 +24,17 @@ const otpLimiter = rateLimit({
 
 router.post('/register', requireTurnstile, register);
 router.post('/login', requireTurnstile, login);
-router.post('/check-availability', checkAvailability);
 router.post('/send-otp', otpLimiter, sendOtp);
-router.post('/verify-otp', verifyOtp);
+// Batch 17 (M3) — Turnstile now also guards the OTP/reset/2FA-login
+// steps, not just register/login/forgot-password: bots used to get a
+// free run at guessing 6-digit codes and reset tokens. The frontend
+// sends a fresh turnstileToken on each of these calls (own widget per
+// form — a token is single-use, so the login/register token cannot be
+// reused here). With TURNSTILE_SECRET_KEY unset (local dev) the check
+// is skipped, exactly like the existing placements.
+router.post('/verify-otp', requireTurnstile, verifyOtp);
 router.post('/forgot-password', otpLimiter, requireTurnstile, forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/reset-password', requireTurnstile, resetPassword);
 // 2FA (TOTP authenticator app) — setup / verify-setup / disable need a
 // signed-in admin, supplier or shopkeeper; the final login step is public
 // and gated by the short-lived tempToken that login() issued with
@@ -40,12 +46,12 @@ router.post('/reset-password', resetPassword);
 router.post('/2fa/setup', protect, requireRole('admin', 'shopkeeper', 'supplier'), setupTwoFactor);
 router.post('/2fa/verify-setup', protect, requireRole('admin', 'shopkeeper', 'supplier'), verifyTwoFactorSetup);
 router.post('/2fa/disable', protect, requireRole('admin', 'shopkeeper', 'supplier'), disableTwoFactor);
-router.post('/2fa/login', verifyTwoFactorLogin);
+router.post('/2fa/login', requireTurnstile, verifyTwoFactorLogin);
 // Dedicated ADMIN login (admin subdomain) — issues the host-only
 // asan_admin_token cookie. Turnstile-protected like the regular login.
 // The regular /login above now rejects admin/subadmin roles.
 router.post('/admin/login', requireTurnstile, adminLogin);
-router.post('/admin/2fa/login', adminVerifyTwoFactorLogin);
+router.post('/admin/2fa/login', requireTurnstile, adminVerifyTwoFactorLogin);
 // ADMIN + SUB-ADMIN FIRST-TIME 2FA setup — public, gated by the short-lived
 // setup tempToken adminLogin() issued with requires2FASetup:true (the account
 // has no session yet, so protect() cannot be used here). FIX (New audit #5)

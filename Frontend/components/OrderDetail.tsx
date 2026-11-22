@@ -93,26 +93,34 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
   const [stars, setStars] = useState(5);
   const [ratingComment, setRatingComment] = useState('');
 
+  // Batch 20 (audit (c)-5) — every load() run gets an id; a response
+  // that resolves AFTER a newer load started is ignored, so rapid live
+  // events (chat + order + payment at once) can no longer resolve out
+  // of order and let a stale order/thread win.
+  const loadSeqRef = useRef(0);
   const load = async () => {
+    const requestId = ++loadSeqRef.current;
     setError(null);
     try {
       const [orderRes, msgRes, disputeRes, ratingRes] = await Promise.all([
         api.order(orderId),
         api.messages.list(orderId),
         // Batch 06 — the dispute ON this order (both parties see the same
-        // one). listMyDisputes only returns disputes the caller raised, so
-        // the counterparty saw nothing.
+        // one). The old per-user list only returned disputes the caller
+        // raised, so the counterparty saw nothing (Batch 22 removed it).
         api.disputes.forOrder(orderId),
         api.ratings.forOrder(orderId),
       ]);
+      if (requestId !== loadSeqRef.current) return;
       setOrder(orderRes.order);
       setMessages(msgRes.messages ?? []);
       setDispute(disputeRes.dispute ?? null);
       setRating(ratingRes.rating ?? null);
     } catch (err) {
+      if (requestId !== loadSeqRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to load order.');
     } finally {
-      setLoading(false);
+      if (requestId === loadSeqRef.current) setLoading(false);
     }
   };
 
@@ -313,7 +321,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
                 <ProductImage src={item.productImage} alt={item.productName} className="w-12 h-12 rounded-lg object-cover shrink-0" width={48} height={48} />
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.productName}</p>
-                  <p className="text-[11px] text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>
+                  <p className="text-xs text-slate-400">{item.quantity} x {formatPKR(item.unitPrice)} / {item.unit}</p>
                 </div>
               </div>
               <p className="text-sm font-bold text-slate-900 dark:text-white shrink-0">{formatPKR(item.unitPrice * item.quantity)}</p>
@@ -424,7 +432,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={fileUrl(order.deliveryProof.url)} alt="Delivery proof" className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 object-cover" />
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               Uploaded {order.deliveryProof.uploadedAt ? formatDate(order.deliveryProof.uploadedAt) : ''} — this photo + your delivery confirmation are the evidence for delivery disputes.
             </p>
           </div>
@@ -448,7 +456,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
       {/* Chat */}
       <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
         <h3 className="text-base font-bold text-slate-900 dark:text-white">Chat with {isBuyer ? 'Supplier' : 'Shopkeeper'}</h3>
-        <p className="text-[11px] text-slate-400">Talk here first — this thread is step 1 of the dispute flow, and the admin can read it as evidence.</p>
+        <p className="text-xs text-slate-400">Talk here first — this thread is step 1 of the dispute flow, and the admin can read it as evidence.</p>
         <div
           ref={chatListRef}
           onScroll={(e) => {
@@ -496,7 +504,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
             <p className="text-slate-500">Reason: <span className="font-bold text-slate-900 dark:text-white">{dispute.reasonLabel}</span></p>
             <p className="text-slate-500">Status: <span className="font-bold text-slate-900 dark:text-white">{DISPUTE_STATUS_LABEL[dispute.status]}</span></p>
             <p className="text-slate-600 dark:text-slate-300 break-words">{dispute.description}</p>
-            <p className="text-[11px] text-slate-400">Opened by {dispute.raisedByName || dispute.raisedByRole} • {formatDate(dispute.createdAt)}</p>
+            <p className="text-xs text-slate-400">Opened by {dispute.raisedByName || dispute.raisedByRole} • {formatDate(dispute.createdAt)}</p>
             {dispute.status === 'resolved' && dispute.resolution?.decision && (
               <div className="p-3 rounded-xl bg-asan-accent-light dark:bg-asan-dark/40 border border-asan-border dark:border-asan-mid">
                 <p className="font-bold text-asan-dark dark:text-asan-accent-light">Admin decision: {DECISION_LABEL[dispute.resolution.decision]}</p>

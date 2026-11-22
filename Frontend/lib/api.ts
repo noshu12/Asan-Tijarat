@@ -30,11 +30,15 @@ export function isAdminHost(): boolean {
 
 /**
  * Turns a stored document path (`/uploads/kyc/cnicFront-…jpg`) into the URL an
- * <img>/<iframe> can load. Absolute URLs and data URLs pass through untouched.
+ * <img>/<iframe> can load. Absolute http(s) URLs pass through untouched;
+ * `data:` URLs do NOT (Batch 17, L2) — stored file URLs are /uploads paths
+ * or http(s) (Cloudinary) only, so a data: URL here is never a real
+ * product/delivery-proof image. (Avatars are rendered directly, not via
+ * fileUrl, and keep their own image-data-URL allow-list on the backend.)
  */
 export function fileUrl(pathname?: string | null): string {
   if (!pathname) return '';
-  if (/^(https?:|data:|blob:)/i.test(pathname)) return pathname;
+  if (/^(https?:|blob:)/i.test(pathname)) return pathname;
   return `${API_URL}${pathname.startsWith('/') ? '' : '/'}${pathname}`;
 }
 
@@ -111,6 +115,17 @@ async function ensureCsrfToken(): Promise<string> {
 export async function csrfHeaders(): Promise<Record<string, string>> {
   const token = await ensureCsrfToken();
   return { [CSRF_HEADER]: token };
+}
+
+/**
+ * Batch 17 (L7) — drops the cached CSRF token so the next state-changing
+ * call re-reads the fresh cookie. Called after login/logout (and the 2FA
+ * completions that issue a session), because the server rotates the token
+ * on those boundaries. Without this, the first call after sign-in would
+ * 403 once and then retry — harmless, but avoidable.
+ */
+export function clearCsrfTokenCache(): void {
+  csrfTokenCache = null;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -242,6 +257,12 @@ export interface ProfileUpdatePayload {
   currentHouseLocation?: string;
   /** GPS point — `null` clears the stored coordinates. */
   currentLocation?: DeviceLocation | null;
+  /**
+   * Batch 17 (L5) — required when email or phone changes: the current
+   * password must be proven before the contact details move, and every
+   * other session is killed. Sent only on a contact change.
+   */
+  currentPassword?: string;
 }
 
 export interface CreateOrderPayload {
@@ -295,11 +316,6 @@ export interface ProductWritePayload {
   description?: string;
   image?: UploadPayload | string;
   images?: Array<UploadPayload | string>;
-}
-
-/** Response of POST/PATCH /api/products — includes the stored photo metadata. */
-export interface ProductWriteResponse {
-  product: Product & { imageUploads?: ProductImageUpload[] };
 }
 
 /* ── Admin payload types (mirror Backend /api/admin/*) ─────────────── */
@@ -373,12 +389,20 @@ export const api = {
       method: 'POST',
       body: { identifier, password, turnstileToken },
       auth: false,
+    }).then((res) => {
+      // Batch 17 (L7) — a fresh session comes with a fresh CSRF token.
+      clearCsrfTokenCache();
+      return res;
     }),
 
   /** Clears the httpOnly session cookie on the server. */
   logout: () => request<{ ok: boolean }>('/api/auth/logout', {
     method: 'POST',
     auth: false,
+  }).then((res) => {
+    // Batch 17 (L7) — logout rotates the CSRF token too.
+    clearCsrfTokenCache();
+    return res;
   }),
 
   /* ── Admin 2FA (TOTP authenticator app) ─────────────────────────── */
@@ -410,12 +434,19 @@ export const api = {
   /**
    * Step 2 of admin sign-in: exchanges the short-lived tempToken from login()
    * plus the 6-digit authenticator code for the normal session cookie.
+   * Batch 17 (M3) — /2fa/login is Turnstile-guarded now, so the caller
+   * passes a fresh token from its own widget (the login token is
+   * single-use and already spent on step 1).
    */
-  verifyTwoFactorLogin: (tempToken: string, token: string) =>
+  verifyTwoFactorLogin: (tempToken: string, token: string, turnstileToken?: string) =>
     request<{ user: User }>('/api/auth/2fa/login', {
       method: 'POST',
-      body: { tempToken, token },
+      body: { tempToken, token, turnstileToken },
       auth: false,
+    }).then((res) => {
+      // Batch 17 (L7) — a fresh session comes with a fresh CSRF token.
+      clearCsrfTokenCache();
+      return res;
     }),
 
   /* ── Admin subdomain login (host-only asan_admin_token cookie) ────── */
@@ -432,17 +463,27 @@ export const api = {
       method: 'POST',
       body: { identifier, password, turnstileToken },
       auth: false,
+    }).then((res) => {
+      // Batch 17 (L7) — a fresh session comes with a fresh CSRF token.
+      clearCsrfTokenCache();
+      return res;
     }),
 
   /**
    * Admin sign-in step 2: exchanges the tempToken + 6-digit authenticator
    * code for the host-only asan_admin_token session cookie.
+   * Batch 17 (M3) — /admin/2fa/login is Turnstile-guarded now; the caller
+   * passes a fresh token from its own widget (see verifyTwoFactorLogin).
    */
-  adminVerifyTwoFactorLogin: (tempToken: string, token: string) =>
+  adminVerifyTwoFactorLogin: (tempToken: string, token: string, turnstileToken?: string) =>
     request<{ user: User }>('/api/auth/admin/2fa/login', {
       method: 'POST',
-      body: { tempToken, token },
+      body: { tempToken, token, turnstileToken },
       auth: false,
+    }).then((res) => {
+      // Batch 17 (L7) — a fresh session comes with a fresh CSRF token.
+      clearCsrfTokenCache();
+      return res;
     }),
 
   /**
@@ -482,7 +523,7 @@ export const api = {
    * `role` and `verified` are not accepted here (admin-only fields).
    */
   updateProfile: (payload: ProfileUpdatePayload) =>
-    request<{ user: User }>('/api/auth/me', { method: 'PATCH', body: payload }),
+    request<{ user: User; contactChanged?: boolean }>('/api/auth/me', { method: 'PATCH', body: payload }),
 
   /** Verifies the current password server-side before replacing it. */
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -499,11 +540,13 @@ export const api = {
       auth: false,
     }),
 
-  /** Resets the password with the token from the forgot-password request. */
-  resetPassword: (token: string, newPassword: string) =>
+  /** Resets the password with the token from the forgot-password request.
+   * Batch 17 (M3) — /reset-password is Turnstile-guarded now; the caller
+   * passes a fresh token from its own widget. */
+  resetPassword: (token: string, newPassword: string, turnstileToken?: string) =>
     request<{ reset: boolean; message: string }>('/api/auth/reset-password', {
       method: 'POST',
-      body: { token, newPassword },
+      body: { token, newPassword, turnstileToken },
       auth: false,
     }),
 
@@ -515,11 +558,14 @@ export const api = {
       auth: false,
     }),
 
-  /** Verifies the 6-digit email OTP — sets emailVerified only, admin approval still required. */
-  verifyOtp: (email: string, otp: string) =>
+  /** Verifies the 6-digit email OTP — sets emailVerified only, admin approval still required.
+   * Batch 17 (M3) — /verify-otp is Turnstile-guarded now; the caller
+   * passes a fresh token from its own widget (the register token is
+   * single-use and already spent). */
+  verifyOtp: (email: string, otp: string, turnstileToken?: string) =>
     request<{ emailVerified: boolean; message: string }>('/api/auth/verify-otp', {
       method: 'POST',
-      body: { email, otp },
+      body: { email, otp, turnstileToken },
       auth: false,
     }),
 
@@ -561,6 +607,15 @@ export const api = {
   productCities: () =>
     request<{ cities: string[] }>('/api/products/cities', { auth: false }),
 
+  /**
+   * Batch 19 (audit L10) — lightweight catalogue summary for the
+   * homepage: distinct live categories + live product count + distinct
+   * live-supplier count, no product documents. The homepage fetches 8
+   * products for its cards plus this, instead of 100 products.
+   */
+  productCategories: () =>
+    request<{ categories: string[]; total: number; suppliers: number }>('/api/products/categories', { auth: false }),
+
   product: (id: string) =>
     request<{ product: Product }>(`/api/products/${id}`, { auth: false }),
 
@@ -587,13 +642,6 @@ export const api = {
   },
 
   createOrder: (payload: CreateOrderPayload) =>
-    request<{ orders: Order[]; count: number }>('/api/orders', { method: 'POST', body: payload }),
-
-  /**
-   * Friendly alias used by the shopkeeper cart — POST /api/orders creates
-   * ONE order per supplier and returns { orders, count }.
-   */
-  placeOrder: (payload: CreateOrderPayload) =>
     request<{ orders: Order[]; count: number }>('/api/orders', { method: 'POST', body: payload }),
 
   updateOrderStatus: (id: string, status: OrderStatus) =>
@@ -638,14 +686,6 @@ export const api = {
   disputes: {
     create: (payload: { orderId: string; reason: DisputeReason; description: string }) =>
       request<{ dispute: Dispute }>('/api/disputes', { method: 'POST', body: payload }),
-    mine: (query: { status?: string; limit?: number; page?: number } = {}) => {
-      const params = new URLSearchParams();
-      if (query.status) params.set('status', query.status);
-      if (query.limit !== undefined) params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
-      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
-      const suffix = params.toString() ? `?${params.toString()}` : '';
-      return request<{ disputes: Dispute[]; count: number; total: number; page: number; limit: number; totalPages: number }>(`/api/disputes${suffix}`);
-    },
     get: (id: string) =>
       request<{ dispute: Dispute }>(`/api/disputes/${id}`),
     /** Batch 06 — the latest dispute on one order (both parties see it). */
@@ -667,8 +707,22 @@ export const api = {
   /* ── Batch 05 — per-order chat ───────────────────────────────────── */
 
   messages: {
-    list: (orderId: string) =>
-      request<{ messages: ChatMessage[]; count: number }>(`/api/orders/${orderId}/messages`),
+    /**
+     * Batch 19 (Round-5 audit M2) — the server pages NEWEST-first
+     * (sort createdAt: -1, _id: -1) with an optional `before` cursor,
+     * so threads over 100 messages still reach the newest ones. The
+     * page is reversed back to chat order HERE, so every caller still
+     * receives oldest-first display order and nobody changes. `hasMore`
+     * says whether older messages exist beyond this page.
+     */
+    list: async (orderId: string, query: { limit?: number; before?: string } = {}) => {
+      const params = new URLSearchParams();
+      if (query.limit !== undefined) params.set('limit', String(Math.min(200, Math.max(1, Math.floor(query.limit)))));
+      if (query.before) params.set('before', query.before);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const res = await request<{ messages: ChatMessage[]; count: number; hasMore?: boolean }>(`/api/orders/${orderId}/messages${suffix}`);
+      return { ...res, messages: [...(res.messages ?? [])].reverse() };
+    },
     send: (orderId: string, text: string) =>
       request<{ message: ChatMessage }>(`/api/orders/${orderId}/messages`, { method: 'POST', body: { text } }),
   },
@@ -683,13 +737,16 @@ export const api = {
   admin: {
     stats: () => request<{ stats: AdminStats; recentOrders: Order[] }>('/api/admin/stats'),
 
-    users: (query: { role?: string; verified?: string; search?: string } = {}) => {
+    users: (query: { role?: string; verified?: string; search?: string; page?: number; limit?: number } = {}) => {
       const params = new URLSearchParams();
       if (query.role && query.role !== 'all') params.set('role', query.role);
       if (query.verified === 'true' || query.verified === 'false') params.set('verified', query.verified);
       if (query.search) params.set('search', query.search);
+      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+      if (query.limit !== undefined) params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
       const suffix = params.toString() ? `?${params.toString()}` : '';
-      return request<{ users: AdminUser[]; count: number }>(`/api/admin/users${suffix}`);
+      // Batch 19 (audit H2) — paginated: total / page / limit / totalPages.
+      return request<{ users: AdminUser[]; count: number; total?: number; page?: number; limit?: number; totalPages?: number }>(`/api/admin/users${suffix}`);
     },
 
     verifyUser: (id: string, verified: boolean) =>
@@ -729,23 +786,29 @@ export const api = {
         `/api/admin/users/${id}/identity`
       ),
 
-    products: (query: { search?: string; status?: string } = {}) => {
+    products: (query: { search?: string; status?: string; page?: number; limit?: number } = {}) => {
       const params = new URLSearchParams();
       if (query.status && query.status !== 'all') params.set('status', query.status);
       if (query.search) params.set('search', query.search);
+      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+      if (query.limit !== undefined) params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
       const suffix = params.toString() ? `?${params.toString()}` : '';
-      return request<{ products: Product[]; count: number }>(`/api/admin/products${suffix}`);
+      // Batch 19 (audit H2) — paginated: total / page / limit / totalPages.
+      return request<{ products: Product[]; count: number; total?: number; page?: number; limit?: number; totalPages?: number }>(`/api/admin/products${suffix}`);
     },
 
     deleteProduct: (id: string) =>
       request<{ product: Product }>(`/api/admin/products/${id}`, { method: 'DELETE' }),
 
-    orders: (query: { status?: string; search?: string } = {}) => {
+    orders: (query: { status?: string; search?: string; page?: number; limit?: number } = {}) => {
       const params = new URLSearchParams();
       if (query.status && query.status !== 'all') params.set('status', query.status);
       if (query.search) params.set('search', query.search);
+      if (query.page !== undefined) params.set('page', String(Math.max(1, Math.floor(query.page))));
+      if (query.limit !== undefined) params.set('limit', String(Math.min(100, Math.max(1, Math.floor(query.limit)))));
       const suffix = params.toString() ? `?${params.toString()}` : '';
-      return request<{ orders: Order[]; count: number }>(`/api/admin/orders${suffix}`);
+      // Batch 19 (audit H2) — paginated: total / page / limit / totalPages.
+      return request<{ orders: Order[]; count: number; total?: number; page?: number; limit?: number; totalPages?: number }>(`/api/admin/orders${suffix}`);
     },
 
     /* ── Batch 05 — admin confirms a submitted payment (escrow / paid) ── */
@@ -770,7 +833,8 @@ export const api = {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('limit', String(limit));
-      return request<{ contacts: ContactMessage[]; count: number; page: number; limit: number }>(
+      // Batch 19 (audit L2) — total / totalPages now come back too.
+      return request<{ contacts: ContactMessage[]; count: number; total?: number; page: number; limit: number; totalPages?: number }>(
         `/api/admin/contacts?${params.toString()}`
       );
     },

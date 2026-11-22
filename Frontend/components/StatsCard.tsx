@@ -32,7 +32,7 @@ export function StatsCard({ title, value, change, isPositive = true, icon: Icon 
             >
               {change}
             </span>
-            <span className="text-[11px] text-slate-400">vs last month</span>
+            <span className="text-xs text-slate-400">vs last month</span>
           </div>
         )}
       </div>

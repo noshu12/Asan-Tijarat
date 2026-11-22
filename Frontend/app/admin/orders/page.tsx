@@ -9,17 +9,25 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, OrderStatus, PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { formatPKR, formatDate } from '@/lib/utils';
-import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
+import { formatPKR, formatDate, capitalize } from '@/lib/utils';
+import { idFromEventLink, ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
 
 const TABS: ('All' | OrderStatus)[] = ['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 
-const statusLabel = (s: string) => (s === 'All' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1));
+// Batch 22 (Round-5 audit h-L3) — the old local statusLabel one-liner
+// is now the shared capitalize() from lib/utils; only the 'All' tab
+// guard stays here.
+const statusLabel = (s: string) => (s === 'All' ? 'All' : capitalize(s));
 
 export default function AdminOrdersPage() {
   const { user, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'All' | OrderStatus>('All');
+  // Batch 19 (Round-5 audit H2) — the table paginates (50/page) instead
+  // of only ever showing the first 500 orders.
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   // FIX (Batch 03) — search typing refetch nahi karta tha: fetch effect ki
   // deps me `search` tha hi nahi. Ab search 400ms debounce hoke
@@ -36,11 +44,78 @@ export default function AdminOrdersPage() {
   // Batch 13 — live list: a matching event (or a reconnect sync) bumps
   // refreshKey; the fetch effect below refetches silently on a bump, so
   // the table, scroll, search text and tabs never reset.
+  // Batch 24 — order events NO LONGER bump refreshKey: order_placed
+  // prepends the one new row and order_status / lifecycle events update
+  // the one row in place (handler below), so the table is never fully
+  // refetched for an order event. Payment + dispute events and the
+  // reconnect sync still refetch silently via refreshKey.
   const prevRefreshKeyRef = useRef(refreshKey);
   useLiveRefreshKey(
-    [...ORDER_EVENT_TYPES, ...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
+    [...PAYMENT_EVENT_TYPES, 'dispute_opened', 'dispute_resolved'],
     () => setRefreshKey((k) => k + 1),
   );
+  const ordersRef = useRef<Order[]>([]);
+  ordersRef.current = orders;
+  // Batch 24 hardening — in-flight prepend guard (same race as the
+  // marketplace page: Batch 23 sends order_placed twice to admins,
+  // targeted + public). The second frame returns before fetching.
+  const pendingOrderPrependRef = useRef(new Set<string>());
+  const totalRef = useRef(total);
+  totalRef.current = total;
+
+  // Batch 24 — row-wise order updates (Batch 23 added `order_status`).
+  // VERIFIED: order_placed WAS wired before Batch 24, but only as a
+  // full silent list refetch via useLiveRefreshKey. Now: on
+  // order_placed, GET that ONE order (existing api.order) and prepend
+  // the row; on order_status / confirmed / shipped / delivered /
+  // cancelled, GET the one order and replace its row in place — or
+  // drop the row when its new status no longer matches the open tab
+  // (it still exists; switching tabs refetches that tab). Rows are
+  // only prepended on page 1 and only when they match the open tab +
+  // search. A failed single fetch is live-only noise.
+  useRealtimeEvent(ORDER_EVENT_TYPES, (event) => {
+    const orderId = event.orderId ?? idFromEventLink(event.link, 'orders');
+    if (!orderId) return;
+    const matchesView = (o: Order): boolean => {
+      if (activeTab !== 'All' && o.status !== activeTab) return false;
+      const q = debouncedSearch.trim().toLowerCase();
+      if (q) {
+        const hay = `${o.orderNumber} ${o.buyerName} ${o.supplierName}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    };
+    if (event.type === 'order_placed') {
+      if (ordersRef.current.some((o) => o.id === orderId)) return;
+      if (pendingOrderPrependRef.current.has(orderId)) return;
+      pendingOrderPrependRef.current.add(orderId);
+      void api.order(orderId).then((res) => {
+        const o = res.order;
+        if (!o) return;
+        if (ordersRef.current.some((x) => x.id === o.id)) return;
+        if (!matchesView(o)) return;
+        const newTotal = totalRef.current + 1;
+        setTotal(newTotal);
+        setTotalPages((prev) => Math.max(prev, Math.ceil(newTotal / 50)));
+        if (page !== 1) return;
+        setOrders((prev) => [o, ...prev]);
+      }).catch(() => {}).finally(() => {
+        pendingOrderPrependRef.current.delete(orderId);
+      });
+      return;
+    }
+    if (!ordersRef.current.some((o) => o.id === orderId)) return;
+    void api.order(orderId).then((res) => {
+      const o = res.order;
+      if (!o) return;
+      if (matchesView(o)) {
+        setOrders((prev) => prev.map((x) => (x.id === o.id ? o : x)));
+      } else {
+        setOrders((prev) => prev.filter((x) => x.id !== o.id));
+        setTotal((prev) => Math.max(0, prev - 1));
+      }
+    }).catch(() => {});
+  });
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
@@ -66,14 +141,23 @@ export default function AdminOrdersPage() {
     if (!silent) setLoading(true);
     setError(null);
     api.admin
-      .orders({ status: activeTab === 'All' ? undefined : activeTab, search: debouncedSearch || undefined })
-      .then((res) => { if (mounted) setOrders(res.orders); })
+      .orders({ status: activeTab === 'All' ? undefined : activeTab, search: debouncedSearch || undefined, page, limit: 50 })
+      .then((res) => {
+        if (!mounted) return;
+        setOrders(res.orders);
+        setTotalPages(res.totalPages ?? 1);
+        setTotal(res.total ?? res.orders?.length ?? 0);
+        // The backend clamps out-of-range pages (safePage): sync the UI
+        // to the page it actually served.
+        if (res.page !== undefined && res.page !== page) setPage(res.page);
+      })
       .catch((err) => { if (mounted) setError(err instanceof Error ? err.message : 'Failed to load orders.'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
     // FIX (Batch 03) — deps me debouncedSearch add kiya, taake typing se
     // refetch ho. Pehle deps sirf [user, activeTab] thay.
-  }, [user, activeTab, debouncedSearch, refreshKey, authLoading]);
+    // Batch 19 — `page` bhi dep hai (Prev/Next refetch karta hai).
+  }, [user, activeTab, debouncedSearch, refreshKey, authLoading, page]);
 
   const getVariant = (s: OrderStatus) => {
     switch (s) {
@@ -94,7 +178,7 @@ export default function AdminOrdersPage() {
         return (
           <>
             <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Payment submitted</p>
-            <p className="text-[11px] text-slate-400 whitespace-nowrap">
+            <p className="text-xs text-slate-400 whitespace-nowrap">
               Ref: {o.paymentReference || '—'} · {o.paymentChannel || '—'}
             </p>
           </>
@@ -103,7 +187,7 @@ export default function AdminOrdersPage() {
         return (
           <>
             <p className="text-xs font-bold text-slate-900 dark:text-white">Held in escrow</p>
-            <p className="text-[11px] text-slate-400 whitespace-nowrap">{formatPKR(o.amountHeld ?? o.totalAmount)} held</p>
+            <p className="text-xs text-slate-400 whitespace-nowrap">{formatPKR(o.amountHeld ?? o.totalAmount)} held</p>
           </>
         );
       case 'paid':
@@ -111,7 +195,7 @@ export default function AdminOrdersPage() {
           <>
             <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Paid</p>
             {o.platformFee != null && (
-              <p className="text-[11px] text-slate-400 whitespace-nowrap">
+              <p className="text-xs text-slate-400 whitespace-nowrap">
                 Fee {formatPKR(o.platformFee)} · Payout {formatPKR(o.payoutAmount ?? 0)}
               </p>
             )}
@@ -122,7 +206,7 @@ export default function AdminOrdersPage() {
           <>
             <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Released to supplier</p>
             {o.platformFee != null && (
-              <p className="text-[11px] text-slate-400 whitespace-nowrap">
+              <p className="text-xs text-slate-400 whitespace-nowrap">
                 Fee {formatPKR(o.platformFee)} · Payout {formatPKR(o.payoutAmount ?? 0)}
               </p>
             )}
@@ -132,7 +216,7 @@ export default function AdminOrdersPage() {
         return (
           <>
             <p className="text-xs font-bold text-red-600 dark:text-red-400">Frozen — dispute open</p>
-            <p className="text-[11px] text-slate-400">Decide the dispute first</p>
+            <p className="text-xs text-slate-400">Decide the dispute first</p>
           </>
         );
       case 'refunded':
@@ -140,9 +224,9 @@ export default function AdminOrdersPage() {
           <>
             <p className="text-xs font-bold text-slate-900 dark:text-white">Refunded</p>
             {o.refundAmount != null && o.refundAmount > 0 ? (
-              <p className="text-[11px] text-slate-400 whitespace-nowrap">{formatPKR(o.refundAmount)} returned</p>
+              <p className="text-xs text-slate-400 whitespace-nowrap">{formatPKR(o.refundAmount)} returned</p>
             ) : (
-              <p className="text-[11px] text-slate-400">No payment was made — nothing to refund</p>
+              <p className="text-xs text-slate-400">No payment was made — nothing to refund</p>
             )}
           </>
         );
@@ -257,7 +341,7 @@ export default function AdminOrdersPage() {
           <button
             key={tab}
             type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => { setPage(1); setActiveTab(tab); }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
               activeTab === tab
                 ? 'bg-asan-dark text-white shadow-md'
@@ -298,7 +382,7 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-xs font-bold text-slate-900 dark:text-white">{o.items[0]?.productName || '—'}</p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-xs text-slate-400">
                       Buyer: {o.buyerName} → Supplier: {o.supplierName}
                     </p>
                   </td>
@@ -323,13 +407,31 @@ export default function AdminOrdersPage() {
                         Confirm Payment
                       </Button>
                     ) : (
-                      <span className="text-[11px] text-slate-400">—</span>
+                      <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Batch 19 (audit H2) — page through orders instead of only ever
+          seeing the first 500. */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-500">
+            Page {page} of {totalPages} • {total} order{total === 1 ? '' : 's'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Previous
+            </Button>
+            <Button type="button" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>

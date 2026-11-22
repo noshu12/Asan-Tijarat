@@ -8,7 +8,7 @@ import { Search, X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
 import { trackFilterUsed, trackSearch } from '@/lib/analytics';
-import { useRealtime } from '@/hooks/useRealtime';
+import { idFromEventLink, PRODUCT_UPDATE_EVENT_TYPES, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
 type SortOption = 'price-asc' | 'price-desc';
 
 const MARKETPLACE_CATEGORIES: { id: string; name: string }[] = [
@@ -88,19 +88,31 @@ function MarketplaceContent() {
   // shows an empty list instead of fake products.
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
+  const totalRef = useRef(total);
+  totalRef.current = total;
   const [totalPages, setTotalPages] = useState(1);
   const [cities, setCities] = useState<string[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
-  // Batch 13 — live marketplace. No product event type exists in the
-  // agreed SSE list, so new listings arrive via a reconnect / tab-visible
-  // sync: the sync refetch MERGES instead of replacing — products that
-  // appeared since the last load are prepended with a "New" badge, and
-  // prices/stock on visible cards update in place. Filters, search text,
-  // sort, page and scroll are never touched.
+  // Batch 13 — live marketplace. Before Batch 24 no product event
+  // type existed in the agreed SSE list, so new listings arrived via a
+  // reconnect / tab-visible sync: the sync refetch MERGES instead of
+  // replacing — products that appeared since the last load are
+  // prepended with a "New" badge, and prices/stock on visible cards
+  // update in place. Filters, search text, sort, page and scroll are
+  // never touched. Batch 24 keeps that sync merge AND adds the live
+  // events (Batch 23) below, for listings that appear while the tab
+  // is open.
   const [refreshKey, setRefreshKey] = useState(0);
   const [newIds, setNewIds] = useState<ReadonlySet<string>>(new Set());
   const productsRef = useRef<Product[]>([]);
+  // Batch 24 hardening — in-flight prepend guard. Batch 23 sends a
+  // catalogue event twice to admins (targeted notifyAdmins + public
+  // broadcast); both frames derive the same productId, and if both
+  // fetches resolve in the same tick the post-fetch id check can pass
+  // twice before either prepends. The pending set stops the second
+  // frame before it fetches; the id-exists checks stay as well.
+  const pendingProductPrependRef = useRef(new Set<string>());
   const syncRefreshRef = useRef(false);
   const { syncKey } = useRealtime();
   const lastSyncKeyRef = useRef(0);
@@ -235,6 +247,72 @@ function MarketplaceContent() {
       router.replace(`/marketplace${qs ? `?${qs}` : ''}`, { scroll: false });
     }
   }, [selectedCategory, searchQuery, sortBy, city, debouncedMin, debouncedMax, inStockOnly, page, router, searchParams]);
+
+  // Batch 24 — live product events (Batch 23 added them to the SSE
+  // enum). product_created: GET that ONE product and prepend it to the
+  // top of the list — no full refetch, no spinner, scroll position
+  // untouched. A listing is only prepended on page 1 and only when it
+  // matches the filters the user has set (same rules as the server
+  // query), so a filtered view never gains a row that does not belong
+  // there. product_updated / stock_updated / price_updated: GET the
+  // one product and replace its card in place, if it is on screen.
+  // A failed single fetch is live-only noise — it never clears the
+  // list or shows an error.
+  useRealtimeEvent(
+    ['product_created', ...PRODUCT_UPDATE_EVENT_TYPES],
+    (event) => {
+      const productId = idFromEventLink(event.link, 'product');
+      if (!productId) return;
+      if (event.type === 'product_created') {
+        if (page !== 1) return; // new listings belong on page 1, not here
+        if (productsRef.current.some((p) => p.id === productId)) return;
+        if (pendingProductPrependRef.current.has(productId)) return;
+        pendingProductPrependRef.current.add(productId);
+        void api.product(productId).then((data) => {
+          const p = data.product;
+          if (!p) return;
+          if (productsRef.current.some((x) => x.id === p.id)) return;
+          if (selectedCategory !== 'all') {
+            const names = CATEGORY_PRODUCT_MATCHES[selectedCategory];
+            if (!names || !names.includes(p.category)) return;
+          }
+          const q = debouncedSearch.trim().toLowerCase();
+          if (q) {
+            const hay = `${p.name} ${p.category} ${p.supplierName} ${p.supplierCity}`.toLowerCase();
+            if (!hay.includes(q)) return;
+          }
+          if (city && p.supplierCity !== city) return;
+          const min = debouncedMin.trim() === '' ? undefined : Number(debouncedMin);
+          const max = debouncedMax.trim() === '' ? undefined : Number(debouncedMax);
+          if (min !== undefined && Number.isFinite(min) && p.price < min) return;
+          if (max !== undefined && Number.isFinite(max) && p.price > max) return;
+          if (inStockOnly && p.stock <= 0) return;
+          const merged = [p, ...productsRef.current];
+          productsRef.current = merged;
+          setProducts(merged);
+          setNewIds((old) => {
+            const next = new Set(old);
+            next.add(p.id);
+            return next;
+          });
+          const newTotal = totalRef.current + 1;
+          setTotal(newTotal);
+          setTotalPages(Math.max(1, Math.ceil(newTotal / PAGE_SIZE)));
+        }).catch(() => {}).finally(() => {
+          pendingProductPrependRef.current.delete(productId);
+        });
+        return;
+      }
+      if (!productsRef.current.some((p) => p.id === productId)) return;
+      void api.product(productId).then((data) => {
+        const p = data.product;
+        if (!p) return;
+        const merged = productsRef.current.map((x) => (x.id === p.id ? p : x));
+        productsRef.current = merged;
+        setProducts(merged);
+      }).catch(() => {});
+    },
+  );
 
   // Fetch the current page from the server whenever filters change.
   useEffect(() => {
@@ -382,14 +460,14 @@ function MarketplaceContent() {
                   placeholder="Search products, suppliers, cities (e.g. Basmati Rice, Faisalabad Cotton, Multan)..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"
+                  className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     aria-label="Clear marketplace search"
                     onClick={() => { setSearchQuery(''); setPage(1); }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -546,7 +624,7 @@ function MarketplaceContent() {
                   aria-label="Previous page"
                   disabled={page <= 1}
                   onClick={() => goToPage(page - 1)}
-                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -570,7 +648,7 @@ function MarketplaceContent() {
                   aria-label="Next page"
                   disabled={page >= totalPages}
                   onClick={() => goToPage(page + 1)}
-                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>

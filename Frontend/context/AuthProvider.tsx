@@ -17,8 +17,17 @@ interface AuthContextType {
   loading: boolean;
   login: (identifier: string, password: string, turnstileToken?: string) => Promise<LoginResult>;
   /** Completes an admin 2FA sign-in (tempToken + 6-digit code → session). */
-  verifyTwoFactorLogin: (tempToken: string, token: string) => Promise<void>;
+  verifyTwoFactorLogin: (tempToken: string, token: string, turnstileToken?: string) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Batch 17 (L3) — the short-lived 2FA-setup tempToken, kept in memory
+   * (React state) only: never localStorage/sessionStorage, so an XSS
+   * cannot read it after the fact. Set on a requires2FASetup login,
+   * read by /subadmin-setup, cleared after setup completes. Dies on
+   * refresh — the user just signs in again (the token lives 5 min anyway).
+   */
+  twoFactorSetupToken: string;
+  setTwoFactorSetupToken: (token: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -42,6 +51,8 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Batch 17 (L3) — 2FA-setup tempToken lives in memory only (see above).
+  const [twoFactorSetupToken, setTwoFactorSetupToken] = useState('');
 
   // Drop any stale localStorage auth keys left over from the old flow.
   useEffect(() => {
@@ -82,7 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.login(identifier.trim(), password, turnstileToken);
     if ('requires2FASetup' in res) {
       // Sub-admin first sign-in — 2FA setup is mandatory before any session.
-      // The caller redirects to the setup page with the tempToken.
+      // The caller redirects to the setup page; the tempToken travels in
+      // memory (twoFactorSetupToken), never in storage — Batch 17 (L3).
+      setTwoFactorSetupToken(res.tempToken || '');
       return { requires2FA: false, requires2FASetup: true, tempToken: res.tempToken };
     }
     if ('requires2FA' in res) {
@@ -96,8 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { requires2FA: false };
   }, []);
 
-  const verifyTwoFactorLogin = useCallback(async (tempToken: string, token: string) => {
-    const res = await api.verifyTwoFactorLogin(tempToken, token.trim());
+  const verifyTwoFactorLogin = useCallback(async (tempToken: string, token: string, turnstileToken?: string) => {
+    const res = await api.verifyTwoFactorLogin(tempToken, token.trim(), turnstileToken);
     setUser(res.user);
   }, []);
 
@@ -111,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, verifyTwoFactorLogin }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, verifyTwoFactorLogin, twoFactorSetupToken, setTwoFactorSetupToken }}>
       {children}
     </AuthContext.Provider>
   );

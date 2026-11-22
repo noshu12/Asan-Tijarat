@@ -131,4 +131,10 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ buyerId: 1, createdAt: -1 });
 orderSchema.index({ supplierId: 1, createdAt: -1 });
 
+// Batch 19 (Round-5 audit L9) — getProductMarketSale aggregates
+// $match { status: 'delivered', createdAt: { $gte: cutoff } } before
+// unwinding items, but Order only had a single-field status index, so
+// the date half of the match scanned. The compound covers that shape.
+orderSchema.index({ status: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Order', orderSchema);

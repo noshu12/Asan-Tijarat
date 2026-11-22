@@ -9,20 +9,24 @@ import type { NotificationItem } from '@/lib/types';
  * link, orderId, createdAt }) and the SSE event name IS the notification
  * type, so one parsed object serves the bell, the toasts and every page.
  *
- * CORRECTED 2026-11-21 (backend slice, verified by grep across all
- * controllers): `order_status` and `delivery_proof` are NOT real
- * notification types — they do not exist in the Notification enum and no
- * controller uses them, so nothing below relies on them ever arriving.
- * The order lifecycle arrives as four separate events (confirmed /
- * shipped / delivered / cancelled), payments have a `payment_refunded`
- * event too, and accounts have `account_rejected` / `account_reactivated`
- * alongside verified / suspended.
+ * CORRECTED 2026-11-22 (Batch 24, TEAMLY REALTIME audit RT-2..RT-5 —
+ * the Batch 13 note below is now WRONG and kept only as history):
+ * Batch 23 added `order_status` plus six product / two user event types
+ * to the Notification enum, and the backend emits them. The order
+ * lifecycle still ALSO arrives as four separate events (confirmed /
+ * shipped / delivered / cancelled) — `order_status` is the generic
+ * one, fired alongside them on every status change — payments still
+ * have `payment_refunded`, and accounts still have
+ * `account_rejected` / `account_reactivated` alongside verified /
+ * suspended. `delivery_proof` is still NOT a real notification type
+ * (verified again 2026-11-22: it does not exist in the enum and no
+ * controller uses it).
  *
- * There is deliberately NO product event type in this list (no
- * product_created / stock_changed) — the marketplace and product page
- * therefore revalidate on sync (reconnect / tab visible again) instead of
- * on a live event; if the backend adds a product event later, add its name
- * here and to the marketplace/product subscriptions.
+ * Product events (Batch 23) carry NO product fields in the payload —
+ * only the standard { id, type, title, message, link, orderId,
+ * createdAt } shape. The product id is parsed from `link`
+ * (`/product/<id>`) with idFromEventLink() below; pages then GET that
+ * one product instead of refetching the list.
  */
 export type RealtimeEventType =
   | 'order_placed'
@@ -30,6 +34,15 @@ export type RealtimeEventType =
   | 'order_shipped'
   | 'order_delivered'
   | 'order_cancelled'
+  | 'order_status'
+  | 'product_created'
+  | 'product_updated'
+  | 'product_approved'
+  | 'product_rejected'
+  | 'stock_updated'
+  | 'price_updated'
+  | 'user_registered'
+  | 'kyc_submitted'
   | 'payment_submitted'
   | 'payment_held'
   | 'payment_released'
@@ -55,6 +68,15 @@ export const ALL_REALTIME_EVENT_TYPES: RealtimeEventType[] = [
   'order_shipped',
   'order_delivered',
   'order_cancelled',
+  'order_status',
+  'product_created',
+  'product_updated',
+  'product_approved',
+  'product_rejected',
+  'stock_updated',
+  'price_updated',
+  'user_registered',
+  'kyc_submitted',
   'payment_submitted',
   'payment_held',
   'payment_released',
@@ -69,13 +91,58 @@ export const ALL_REALTIME_EVENT_TYPES: RealtimeEventType[] = [
   'account_reactivated',
 ];
 
-/** The four order-lifecycle events (there is no generic `order_status`). */
+/**
+ * Batch 24 — parse the entity id out of an event `link`.
+ * Product events carry `/product/<productId>`, user events
+ * `/admin/users/<userId>`, KYC events `/admin/kyc/<userId>`, order
+ * events `/admin/orders/<orderId>` (admins) or the portal order link
+ * (parties). The payload itself carries no productId / stock / price,
+ * so this is the only way to know WHICH row changed. Returns null
+ * when the link does not contain the segment (never throws).
+ */
+export function idFromEventLink(link: string | undefined | null, segment: string): string | null {
+  if (!link) return null;
+  const match = link.match(new RegExp(`/${segment}/([^/?#]+)`));
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+/**
+ * The order events: order_placed, the four lifecycle events, AND the
+ * generic `order_status` (Batch 23, added to the enum first — see the
+ * header note; RT-5). `order_status` fires on every status change,
+ * alongside the specific lifecycle event, so handlers that update a
+ * row in place subscribe to this whole group and treat order_placed
+ * (prepend) separately from the rest (update in place).
+ */
 export const ORDER_EVENT_TYPES: RealtimeEventType[] = [
   'order_placed',
   'order_confirmed',
   'order_shipped',
   'order_delivered',
   'order_cancelled',
+  'order_status',
+];
+
+/** All product events (Batch 23). */
+export const PRODUCT_EVENT_TYPES: RealtimeEventType[] = [
+  'product_created',
+  'product_updated',
+  'product_approved',
+  'product_rejected',
+  'stock_updated',
+  'price_updated',
+];
+
+/** Product events that change one listing's price/stock row in place. */
+export const PRODUCT_UPDATE_EVENT_TYPES: RealtimeEventType[] = [
+  'product_updated',
+  'stock_updated',
+  'price_updated',
 ];
 
 /** All payment events. */
@@ -94,7 +161,7 @@ export const ACCOUNT_EVENT_TYPES: RealtimeEventType[] = [
   'account_reactivated',
 ];
 
-export type RealtimeStatus = 'live' | 'connecting' | 'reconnecting' | 'offline';
+export type RealtimeStatus = 'live' | 'connecting' | 'reconnecting' | 'offline' | 'too_many_tabs';
 
 export type RealtimeHandler = (event: RealtimeEvent) => void;
 

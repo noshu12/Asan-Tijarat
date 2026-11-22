@@ -7,9 +7,14 @@ require('dotenv').config();
 // JWT secret ke baghair server chalana mana hai — warna har token
 // ek known/empty secret se sign hoga. Missing ho to server ruk jaye,
 // chup-chap chalna nahi.
-if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
-  console.error('[server] ❌ JWT_SECRET is missing in .env. Server will not start.');
-  console.error('[server]   → set a long random JWT_SECRET in Backend/.env and restart.');
+// Batch 17 (M4) — sirf non-empty hona kaafi nahi: 4-character secret se
+// bhi token sign ho jate thay aur forgeable ho jate thay. Ab 32 chars se
+// chhota secret bhi boot refuse karta hai (dev me bhi — warna local
+// secret production me copy ho jata). Generate:
+//   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim() || process.env.JWT_SECRET.trim().length < 32) {
+  console.error('[server] ❌ JWT_SECRET is missing or shorter than 32 characters in .env. Server will not start.');
+  console.error('[server]   → set a long random JWT_SECRET (at least 32 characters) in Backend/.env and restart.');
   process.exit(1);
 }
 
@@ -27,6 +32,11 @@ if (process.env.NODE_ENV === 'production') {
     missingProdVars.push('CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET (Cloudinary on karne ke liye)');
   }
   if (!process.env.MONGO_URI) missingProdVars.push('MONGO_URI (Atlas connection string)');
+  // Batch 17 (M3) — Turnstile fail-open band karo: TURNSTILE_SECRET_KEY
+  // unset ho to requireTurnstile chup-chap `next()` kar deta hai, is liye
+  // production bina bot protection ke chal sakta tha, bina warning ke.
+  // Ab production boot iske baghair ruk jata hai.
+  if (!process.env.TURNSTILE_SECRET_KEY) missingProdVars.push('TURNSTILE_SECRET_KEY (warna Turnstile checks silently off rehte hain — bot protection nahi)');
   if (missingProdVars.length > 0) {
     console.error('[server] ❌ Production config incomplete — server will not start:');
     missingProdVars.forEach((v) => console.error(`[server]   - ${v}`));
@@ -39,6 +49,13 @@ if (process.env.NODE_ENV === 'production') {
   if (process.env.USE_CLOUDINARY !== 'true') console.warn('[server] ⚠️  USE_CLOUDINARY != true — uploads local disk pe jayenge (dev only).');
   if (!process.env.NODE_ENV) console.warn('[server] ⚠️  NODE_ENV unset — Render pe isko "production" set karna lazmi hai.');
 }
+
+// Batch 18 (audit M6) — the platform fee silently becomes 0% when
+// PLATFORM_FEE_PERCENT is unset or garbage, so a lost Render env var
+// used to give away 2% on every order with no trace. Check LOUDLY at
+// every boot (missing/invalid = big red error in the logs, set = one
+// confirming line). Never stops the boot — 0% is the safe fallback.
+require('./src/utils/payment').checkFeeConfig();
 
 const path = require('path');
 const express = require('express');
@@ -148,11 +165,28 @@ app.use(
 // Turnstile check or DB call runs. (The report suggested 25 MB only on
 // register, but product photos and the delivery proof are base64 too —
 // a 1 MB global limit alone would have broken both flows.)
+//
+// Batch 19 (Round-5 audit M4) — product routes are now 35 MB, not 25:
+// 5 × 5 MB of binary is 25 MB, but base64 inflates it by 4/3, so five
+// near-max photos are ~33 MB on the wire + JSON overhead — the old
+// 25 MB limit 413'd a legal upload before validation ever ran, even
+// though server.js's own comment claimed "photos (5 × 5 MB)" were
+// covered. 35 MB covers the worst legal case; register (3 × 5 MB →
+// ~20 MB base64) and delivery proof (1 × 5 MB → ~6.7 MB) still fit
+// comfortably in 25 MB, so their limits stay as-is.
+//
+// Batch 19 (audit M3) — PATCH /api/auth/me gets its own 5 MB parser:
+// the Settings avatar is a base64 data URL of a file up to 2 MB
+// (~2.7 MB on the wire), which the global 1 MB limit 413'd even though
+// the UI explicitly allows 2 MB. 5 MB leaves headroom for the avatar +
+// the other profile fields; everything else stays at the 1 MB global.
 const JSON_UPLOAD_LIMIT = '25mb';
+const PRODUCT_JSON_LIMIT = '35mb';
 app.post('/api/auth/register', express.json({ limit: JSON_UPLOAD_LIMIT }));
-app.post('/api/products', express.json({ limit: JSON_UPLOAD_LIMIT }));
-app.patch('/api/products/:id', express.json({ limit: JSON_UPLOAD_LIMIT }));
+app.post('/api/products', express.json({ limit: PRODUCT_JSON_LIMIT }));
+app.patch('/api/products/:id', express.json({ limit: PRODUCT_JSON_LIMIT }));
 app.post('/api/orders/:id/delivery-proof', express.json({ limit: JSON_UPLOAD_LIMIT }));
+app.patch('/api/auth/me', express.json({ limit: '5mb' }));
 // Everything else: 1 MB is plenty — all other bodies are plain fields.
 app.use(express.json({ limit: '1mb' }));
 

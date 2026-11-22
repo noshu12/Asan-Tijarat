@@ -93,6 +93,15 @@ const disputeSchema = new mongoose.Schema(
 
 disputeSchema.index({ status: 1, createdAt: -1 });
 
+// Batch 22 (Round-5 audit h-M5) — the Batch 19 { raisedBy: 1,
+// createdAt: -1 } index is gone with listMyDisputes: it was the only
+// query filtering on raisedBy. The raisedBy FIELD stays (openDispute
+// writes it, getDispute reads it for the isParty check, and the admin
+// list still selects + displays it) — only the index went.
+// NOTE: removing the definition does not drop an index Mongo already
+// built — if the live DB has it, drop it once by hand:
+//   db.disputes.dropIndex({ raisedBy: 1, createdAt: -1 })
+
 module.exports = mongoose.model('Dispute', disputeSchema);
 module.exports.DISPUTE_REASONS = DISPUTE_REASONS;
 module.exports.SHOPKEEPER_REASONS = SHOPKEEPER_REASONS;

@@ -144,7 +144,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             )}
             <div className="truncate">
               <p className="text-xs font-bold text-asan-dark truncate">{displayName}</p>
-              <p className="text-[11px] text-asan-text-light truncate capitalize">
+              <p className="text-xs text-asan-text-light truncate capitalize">
                 {displayRole === 'admin' ? 'Administrator' : displayRole === 'supplier' ? 'Supplier' : displayRole === 'subadmin' ? 'Sub Admin' : 'Shopkeeper'}
               </p>
             </div>

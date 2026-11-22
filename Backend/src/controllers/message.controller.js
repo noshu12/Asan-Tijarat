@@ -8,7 +8,17 @@ const { notifyUser } = require('../utils/notify');
  *
  * Buyer (shopkeeper) and supplier talk here — step 1 of the dispute flow,
  * before any claim reaches the admin. The admin can read the thread too:
- * it is dispute evidence. Text only, oldest first.
+ * it is dispute evidence. Text only.
+ *
+ * Batch 19 (Round-5 audit M2) — the thread used to page OLDEST-first
+ * (sort createdAt: 1, limit 100): once a thread passed 100 messages the
+ * NEWEST messages were unreachable — only the oldest 100 ever came back.
+ * It now pages NEWEST-first (sort createdAt: -1, _id: -1) with an
+ * optional `before` cursor (ISO timestamp — older than this message),
+ * and the response is reversed back to chat order before it leaves the
+ * API client (Frontend/lib/api.ts messages.list), so every caller still
+ * receives oldest-first display order. `hasMore` says whether older
+ * messages exist beyond this page.
  */
 
 /** Loads an order the caller may read: a party to it, or admin/sub-admin. */
@@ -29,19 +39,42 @@ async function loadReadableOrder(req, res, orderId) {
 }
 
 /**
- * GET /api/orders/:id/messages?limit=  (party to the order, or admin)
- * Oldest first (chat order). Default 100, max 200.
+ * GET /api/orders/:id/messages?limit=&before=  (party to the order, or admin)
+ * Newest page first. Default 100, max 200. `before` is an ISO
+ * timestamp: only messages created before it are returned, so the
+ * client can page backwards through a long thread. `hasMore` is true
+ * when the page is full, i.e. older messages may still exist beyond
+ * it. The API client (Frontend/lib/api.ts messages.list) reverses the
+ * page back to chat (oldest-first) order, so every caller still
+ * receives display order and nobody changes.
+ *
+ * Same-millisecond edge: two messages stamped in the same millisecond
+ * share a createdAt, so a `before` cursor set exactly on that stamp
+ * could skip the twin. In practice messages are created sequentially
+ * (one POST at a time), so this is negligible — the _id tie-break in
+ * the sort keeps the order stable within a page.
  */
 async function listMessages(req, res, next) {
   try {
     const found = await loadReadableOrder(req, res, req.params.id);
     if (!found) return;
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
-    const messages = await Message.find({ orderId: found.order._id })
-      .sort({ createdAt: 1 })
+    const query = { orderId: found.order._id };
+    if (req.query.before) {
+      const before = new Date(String(req.query.before));
+      if (!Number.isNaN(before.getTime())) query.createdAt = { $lt: before };
+    }
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
       .lean();
-    res.json({ messages: toClient(messages), count: messages.length });
+    // Newest-first on the wire — the API client reverses this page
+    // back to chat order (see Frontend/lib/api.ts messages.list).
+    res.json({
+      messages: toClient(messages),
+      count: messages.length,
+      hasMore: messages.length === limit,
+    });
   } catch (err) {
     next(err);
   }

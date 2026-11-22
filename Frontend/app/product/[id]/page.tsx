@@ -62,6 +62,20 @@ function backendOrigin(): string {
     process.env.BACKEND_INTERNAL_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     'http://localhost:5000';
+  // Batch 19 (Round-5 audit L5) — loud in production when neither var
+  // is set: the localhost fallback would make JSON-LD / OG images point
+  // at localhost:5000 on the live site. Dev keeps the quiet localhost
+  // fallback. This logs (never throws): a hard build failure would
+  // break local `npm run build` checks, which run with NODE_ENV =
+  // production but no backend URL — and the live site already proves
+  // the var IS set there (the live sitemap serves 350 product URLs).
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !process.env.BACKEND_INTERNAL_URL &&
+    !process.env.NEXT_PUBLIC_API_URL
+  ) {
+    console.error('[product-page] NEXT_PUBLIC_API_URL / BACKEND_INTERNAL_URL is not set in production — JSON-LD and OG images fall back to http://localhost:5000.');
+  }
   try {
     return new URL(raw).origin;
   } catch {
@@ -247,7 +261,13 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
             ? result.product.description.trim().slice(0, 160)
             : `${result.product.name} — wholesale ${result.product.category} from ${result.product.supplierName}, ${result.product.supplierCity}. ${formatPKR(result.product.price)} per pack, minimum order ${result.product.moq}.`,
           category: result.product.category,
-          brand: { '@type': 'Brand', name: result.product.supplierName },
+          // Batch 19 (Round-5 audit L5) — `brand` is DROPPED, deliberately:
+          // the old value was the SELLER (supplierName), not the
+          // manufacturer brand — schema-valid but semantically wrong, it
+          // told Google the supplier made the goods. A Product without a
+          // brand is valid schema; the seller is already named in the
+          // description. Re-add brand only if a real manufacturer-brand
+          // field ever lands on the Product model.
           offers: {
             '@type': 'Offer',
             url: `${SITE_URL}/product/${params.id}`,

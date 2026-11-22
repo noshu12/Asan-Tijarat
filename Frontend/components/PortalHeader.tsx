@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import type { NotificationItem } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
-import { ALL_REALTIME_EVENT_TYPES, useRealtimeEvent } from '@/hooks/useRealtime';
+import { ALL_REALTIME_EVENT_TYPES, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
 
 interface PortalHeaderProps {
   title: string;
@@ -31,7 +31,9 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
 
   // Batch 05 — real notifications. The bell used to show a hardcoded badge
   // "2" and was disabled as a placeholder; now it reads the unread count +
-  // list from /api/notifications and marks items read on open.
+  // list from /api/notifications. Opening the bell reloads the list (it
+  // does NOT mark anything read); an item is marked read when clicked,
+  // or all at once via "Mark all read" below.
   const [bellOpen, setBellOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -80,6 +82,24 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
     void loadNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Batch 20 (audit (c)-2) — the badge went stale after a reconnect or
+  // a hidden tab: RealtimeProvider closes the stream while the tab is
+  // hidden and bumps `syncKey` when it comes back, but the bell never
+  // subscribed to it — notifications that arrived in between only
+  // showed up when the bell was opened. Same mount-guard pattern as
+  // useLiveRefreshKey: the mount load above is already fresh, so a
+  // syncKey that is already non-zero at mount must NOT trigger a
+  // second load.
+  const { syncKey } = useRealtime();
+  const lastSyncKeyRef = useRef(syncKey);
+  useEffect(() => {
+    if (!user) return;
+    if (lastSyncKeyRef.current === syncKey) return;
+    lastSyncKeyRef.current = syncKey;
+    void loadNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey, user?.id]);
 
   const openNotification = async (n: NotificationItem) => {
     setBellOpen(false);
@@ -166,7 +186,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
                 <button
                   type="button"
                   onClick={markAllRead}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-asan-accent dark:text-asan-accent-light hover:underline"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   Mark all read
@@ -185,7 +205,7 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
                       >
                         <p className="text-xs font-bold text-slate-900 dark:text-white">{n.title}</p>
                         {n.message && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
                         )}
                         <p className="text-xs text-slate-400 mt-1">{formatDate(n.createdAt)}</p>
                       </button>
