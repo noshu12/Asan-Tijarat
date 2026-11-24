@@ -37,7 +37,8 @@ const EMPTY_EDIT_FORM: EditProductFormState = {
  * Copied from ProductCard so this table always matches the marketplace:
  * - Weight = the first number + kg/g/litre found in the unit, if any.
  * - Pack noun = a pack word found in the unit (bag/carton/tin/box/drum/
- *   pack/sack), else "bag" when a weight exists, else the unit itself.
+ *   pack/sack/bottle/jar/can/dozen), else "bag" when a weight exists, else
+ *   the unit itself.
  * - Nothing is invented: no weight shown unless one was parsed.
  */
 function parsePack(unit: string): { pack: string; weight: string | null } {
@@ -46,7 +47,7 @@ function parsePack(unit: string): { pack: string; weight: string | null } {
   const weight = weightMatch
     ? `${weightMatch[1]} ${weightMatch[2].toLowerCase().startsWith('lit') ? 'litre' : weightMatch[2].toLowerCase()}`
     : null;
-  const nounMatch = text.match(/\b(bag|carton|tin|box|drum|pack|packet|sack|crate|bottle|jar)\b/i);
+  const nounMatch = text.match(/\b(bag|carton|tin|box|drum|pack|packet|sack|crate|bottle|jar|can|dozen)\b/i);
   if (nounMatch) return { pack: nounMatch[1].toLowerCase(), weight };
   if (weight) return { pack: 'bag', weight };
   return { pack: text || 'unit', weight: null };

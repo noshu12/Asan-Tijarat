@@ -34,10 +34,11 @@ import type { ToastItem } from './RealtimeToasts';
  *   whatever they missed;
  * - bumps `syncKey` after any reconnect, for the same reason;
  * - STOPS retrying after 5 consecutive failed connects (Batch 20,
- *   audit (c)-7) and shows a "close another tab" banner instead of
- *   looping forever: the 6th tab gets a 429 the EventSource can never
- *   see, so without this the tab retried with backoff indefinitely
- *   and only ever showed `reconnecting`;
+ *   audit (c)-7) and stays quiet instead of looping forever: the 6th
+ *   tab gets a 429 the EventSource can never see, so without this the
+ *   tab retried with backoff indefinitely and only ever showed
+ *   `reconnecting`. Nothing is shown for the paused state — the lists
+ *   below just stop updating live until the connection revives;
  * - fans every parsed event out to subscribed components and shows one
  *   toast per event id (deduped — a replayed event never toasts twice).
  *
@@ -55,8 +56,8 @@ const TOAST_MS = 3000;
 const MAX_TOASTS = 3;
 // Batch 20 (audit (c)-7) — give up after this many consecutive failed
 // connects with no successful open in between. Five failures at the
-// 1s → 2s → 4s → 8s → 16s backoff is ~31 s of trying before the banner
-// appears — long enough that a brief network blip recovers on its own,
+// 1s → 2s → 4s → 8s → 16s backoff is ~31 s of trying before giving
+// up — long enough that a brief network blip recovers on its own,
 // short enough that a 6th tab is not left retrying forever.
 //
 // Why a failure COUNT, not a probe fetch: EventSource never exposes the
@@ -66,8 +67,8 @@ const MAX_TOASTS = 3;
 // before the tab-cap check), so each probe would itself consume one of
 // those 10 and could trip TOO_MANY_STREAMS on its own; a 200 probe
 // would also briefly hold one of the 5 connection slots. The count
-// cannot tell a 429 apart from a dead network, so the banner says both
-// ("too many tabs open, or reconnected too often") and offers Retry.
+// cannot tell a 429 apart from a dead network — either way the tab
+// gives up quietly after 5 failures and waits for an 'online' event.
 const MAX_CONSECUTIVE_FAILURES = 5;
 
 function streamUrl(): string {
@@ -167,9 +168,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     // Batch 20 (audit (c)-7) — give up instead of retrying forever.
     // A 6th tab's EventSource errors immediately on every attempt (the
     // 429 is invisible to it), so without this the tab loops with
-    // backoff for as long as it stays open. After the give-up only an
-    // explicit Retry (banner button) or a fresh 'online' event starts
-    // connecting again — merely showing a hidden tab does not.
+    // backoff for as long as it stays open. After the give-up only a
+    // fresh 'online' event starts connecting again — merely showing a
+    // hidden tab does not. (No banner is shown for the paused state:
+    // the lists below just stop updating live until then.)
     consecutiveFailuresRef.current += 1;
     if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
       gaveUpRef.current = true;
@@ -186,9 +188,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     }, delay);
   }, [clearTimer]);
 
-  // Batch 20 (audit (c)-7) — the give-up banner's Retry button (and the
-  // 'online' handler below): a deliberate fresh attempt, so the failure
-  // count and the gave-up flag both reset first.
+  // Batch 20 (audit (c)-7) — the 'online' handler below calls this for
+  // a deliberate fresh attempt after a give-up, so the failure count
+  // and the gave-up flag both reset first.
   const retryConnection = useCallback(() => {
     if (!userIdRef.current) return;
     gaveUpRef.current = false;
@@ -290,8 +292,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       } else if (userIdRef.current) {
         // Batch 20 (audit (c)-7) — do NOT revive a gave-up connection
         // just because the tab was shown again: that would restart the
-        // retry loop the give-up stopped. The user retries from the
-        // banner (or by coming back online).
+        // retry loop the give-up stopped. It revives only by coming
+        // back online.
         if (gaveUpRef.current) return;
         connectRef.current();
       }
@@ -324,31 +326,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     <RealtimeContext.Provider value={value}>
       {children}
       <RealtimeToasts toasts={toasts} onDismiss={dismissToast} />
-      {/* Batch 20 (audit (c)-7) — give-up state. Shown only after 5
-          consecutive failed connects: live updates are paused in this
-          tab, and the banner says why + what to do. Bottom-LEFT so it
-          never covers the bottom-right toast stack. The lists below
-          still work — they just stop updating live until Retry. */}
-      {status === 'too_many_tabs' && (
-        <div
-          className="fixed bottom-4 left-4 z-[100] w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-amber-200 bg-amber-50 shadow-xl p-4"
-          role="status"
-          aria-live="polite"
-        >
-          <p className="text-xs font-bold text-amber-900">Live updates paused</p>
-          <p className="text-xs text-amber-800 mt-1">
-            This account already has 5 live tabs open, or the connection was retried too many times.
-            Close another Asan Tijarat tab, then tap Retry — your orders and notifications below are still up to date as of the last load.
-          </p>
-          <button
-            type="button"
-            onClick={retryConnection}
-            className="mt-3 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition"
-          >
-            Retry connection
-          </button>
-        </div>
-      )}
     </RealtimeContext.Provider>
   );
 }
