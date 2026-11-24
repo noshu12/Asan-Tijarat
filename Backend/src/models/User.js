@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { CATEGORIES } = require('../constants/categories');
-const { encrypt, decrypt } = require('../utils/encryption');
+const { encrypt, decrypt, isEncrypted } = require('../utils/encryption');
 
 /**
  * Shop types for the shopkeeper form — a shopkeeper NEVER picks a product
@@ -119,7 +119,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       validate: {
-        validator: (v) => !v || /^\d{13}$/.test(v),
+        // FIX (CNIC login bug, 2026-11-25) — the model's own pre('save') hook
+        // stores CNIC encrypted at rest ("enc:<iv>:<tag>:<ciphertext>").
+        // login() calls user.save(), and validation runs on the STORED value,
+        // so the old /^\d{13}$/ check rejected every account that HAS a CNIC
+        // and login died with "CNIC must be exactly 13 digits." before any
+        // session was issued. Accept the encrypted form too; fresh plaintext
+        // must still be exactly 13 digits.
+        validator: (v) => !v || isEncrypted(v) || /^\d{13}$/.test(v),
         message: 'CNIC must be exactly 13 digits.',
       },
     },
