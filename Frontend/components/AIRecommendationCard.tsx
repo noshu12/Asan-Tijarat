@@ -65,8 +65,8 @@ export function AIRecommendationCard({ product }: { product: Product }) {
               title="Add to Cart"
               aria-label={`Add ${product.name} to cart`}
               className={added
-                ? 'p-1.5 rounded-lg bg-asan-accent text-white transition shrink-0'
-                : 'p-1.5 rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white transition shrink-0'}
+                ? 'p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-asan-accent text-white transition shrink-0'
+                : 'p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-asan-accent hover:bg-asan-accent-hover text-white transition shrink-0'}
             >
               {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </button>

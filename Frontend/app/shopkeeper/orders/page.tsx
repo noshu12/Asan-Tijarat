@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Loader } from '@/components/ui/loader';
 import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
+import { capitalize } from '@/lib/utils';
 
 export default function ShopkeeperOrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -172,7 +173,7 @@ export default function ShopkeeperOrdersPage() {
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            {tab === 'All' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'All' ? 'All' : capitalize(tab)}
           </button>
         ))}
       </div>

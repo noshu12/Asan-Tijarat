@@ -815,6 +815,12 @@ export const api = {
     confirmPayment: (orderId: string) =>
       request<{ order: Order }>(`/api/admin/orders/${orderId}/confirm-payment`, { method: 'POST' }),
 
+    /* ── Batch 18 — admin cancels a stuck order (escrow held, supplier
+       unresponsive). Body is optional ({ reason? }) — the UI sends none,
+       so this is a bare POST like confirmPayment above. ── */
+    cancelOrder: (orderId: string) =>
+      request<{ order: Order }>(`/api/admin/orders/${orderId}/cancel`, { method: 'POST' }),
+
     /* ── Batch 05 — admin dispute queue + decisions ─────────────────── */
     disputes: (query: { status?: string; limit?: number; page?: number } = {}) => {
       const params = new URLSearchParams();

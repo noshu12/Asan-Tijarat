@@ -32,8 +32,6 @@ const {
 } = require('./cloudinary');
 
 const FOLDER = 'kyc';
-/** Public URL prefix stored in MongoDB (frontend prepends the API origin). */
-const PUBLIC_PREFIX = `/uploads/${FOLDER}`;
 
 /** Mirrors the "max 5MB" copy shown in the registration wizard. */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -188,8 +186,9 @@ module.exports = {
   deleteStoredUploads,
   KycUploadError,
   DOCUMENT_FIELDS,
-  // Batch 22 (Round-5 audit h-L5) — MAX_FILE_BYTES and PUBLIC_PREFIX
-  // are NOT exported any more: no caller ever imported them; both
-  // constants stay defined above and are still used inside this file.
+  // Batch 22 (Round-5 audit h-L5) — MAX_FILE_BYTES is NOT exported any
+  // more: no caller ever imported it; the constant stays defined above
+  // and is still used inside this file (size check). PUBLIC_PREFIX was
+  // removed by the Batch 25 lint pass: nothing in this file used it.
   UPLOAD_ROOT,
 };

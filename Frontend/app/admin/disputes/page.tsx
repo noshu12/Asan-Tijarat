@@ -6,7 +6,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { useAuth } from '@/context/AuthProvider';
 import type { ChatMessage, Dispute, DisputeDecision, DisputeStatus, Order } from '@/lib/types';
 import { PAYMENT_METHOD_LABEL } from '@/lib/types';
-import { formatPKR, formatDate } from '@/lib/utils';
+import { capitalize, formatPKR, formatDate } from '@/lib/utils';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useLiveRefreshKey, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
@@ -212,7 +212,7 @@ export default function AdminDisputesPage() {
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            {tab === 'all' ? 'All' : tab === 'in_review' ? 'In Review' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'all' ? 'All' : tab === 'in_review' ? 'In Review' : capitalize(tab)}
           </button>
         ))}
       </div>

@@ -624,7 +624,7 @@ function MarketplaceContent() {
                   aria-label="Previous page"
                   disabled={page <= 1}
                   onClick={() => goToPage(page - 1)}
-                  className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -634,7 +634,7 @@ function MarketplaceContent() {
                     key={p}
                     onClick={() => goToPage(p)}
                     aria-current={p === page ? 'page' : undefined}
-                    className={`min-w-[2.5rem] px-3 py-2 rounded-xl text-xs font-bold transition ${
+                    className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold transition ${
                       p === page
                         ? 'bg-asan-dark text-white shadow-md'
                         : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -648,7 +648,7 @@ function MarketplaceContent() {
                   aria-label="Next page"
                   disabled={page >= totalPages}
                   onClick={() => goToPage(page + 1)}
-                  className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>

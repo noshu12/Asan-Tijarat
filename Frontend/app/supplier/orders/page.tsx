@@ -9,7 +9,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Truck, CheckCircle, Navigation } from 'lucide-react';
-import { formatDate, orderGoogleMapsUrl } from '@/lib/utils';
+import { capitalize, formatDate, orderGoogleMapsUrl } from '@/lib/utils';
 import { ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey } from '@/hooks/useRealtime';
 
 export default function SupplierOrdersPage() {
@@ -158,7 +158,7 @@ export default function SupplierOrdersPage() {
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            {tab === 'All' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'All' ? 'All' : capitalize(tab)}
           </button>
         ))}
       </div>

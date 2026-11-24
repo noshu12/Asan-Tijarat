@@ -4,16 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { StatsCard } from '@/components/StatsCard';
 import { PortalHeader } from '@/components/PortalHeader';
 import { DollarSign, ShoppingCart, Clock, TrendingUp, Package } from 'lucide-react';
-import { formatPKR } from '@/lib/utils';
+import { capitalize, formatPKR } from '@/lib/utils';
 import { api, SupplierAnalytics } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Loader } from '@/components/ui/loader';
 
 const STATUS_ORDER = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
-
-function prettyStatus(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
 export default function SupplierAnalyticsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -97,7 +93,7 @@ export default function SupplierAnalyticsPage() {
                   <p className="text-2xl font-bold text-slate-900 dark:text-white">
                     {data.ordersByStatus[s] ?? 0}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">{prettyStatus(s)}</p>
+                  <p className="text-xs text-slate-500 mt-1">{capitalize(s)}</p>
                 </div>
               ))}
             </div>

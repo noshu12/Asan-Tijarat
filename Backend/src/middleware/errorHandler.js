@@ -14,6 +14,7 @@ function notFound(req, res) {
  * Central error handler — normalizes every failure into the same
  * { error: { code, message } } envelope the frontend expects.
  */
+// eslint-disable-next-line no-unused-vars -- Express recognises error middleware by its 4-arg signature; `next` must stay even though this handler never calls it.
 function errorHandler(err, req, res, next) {
   // Bad ObjectId (e.g. /api/products/not-an-id)
   if (err.name === 'CastError') {
