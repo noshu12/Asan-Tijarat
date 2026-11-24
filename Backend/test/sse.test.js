@@ -32,7 +32,7 @@ const openStreams = [];
 afterEach(() => {
   while (openStreams.length > 0) {
     const s = openStreams.pop();
-    try { s.req.emit('close'); } catch {}
+    try { s.req.emit('close'); } catch { /* stream already closed — nothing to clean up */ }
   }
 });
 

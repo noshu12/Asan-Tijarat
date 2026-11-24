@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, fileUrl } from '@/lib/api';
 import type { ChatMessage, Dispute, DisputeReason, Order, PaymentChannel, Rating } from '@/lib/types';
 import { PAYMENT_METHOD_LABEL } from '@/lib/types';
-import { formatPKR, formatDate, orderGoogleMapsUrl } from '@/lib/utils';
+import { capitalize, formatPKR, formatDate, orderGoogleMapsUrl } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -291,7 +291,7 @@ export function OrderDetail({ orderId, role }: { orderId: string; role: 'shopkee
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={order.status === 'delivered' ? 'delivered' : order.status === 'cancelled' ? 'outline' : 'confirmed'}>
-              {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+              {capitalize(order.status)}
             </Badge>
             {/* Batch 06 — same cancel the orders list offers (buyer only,
                 pending only; the backend enforces both). */}

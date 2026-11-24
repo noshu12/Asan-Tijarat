@@ -705,7 +705,7 @@ export default function AdminUsersPage() {
                               onClick={() => {
                                 if (window.confirm(`Delete ${u.name}'s account and all their listings?`)) void removeUser(u);
                               }}
-                              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition"
+                              className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

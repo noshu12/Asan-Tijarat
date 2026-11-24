@@ -19,6 +19,22 @@ const TABS: ('All' | OrderStatus)[] = ['All', 'pending', 'confirmed', 'processin
 // guard stays here.
 const statusLabel = (s: string) => (s === 'All' ? 'All' : capitalize(s));
 
+// Batch 25 (Item 4) — the orders the admin cancel endpoint accepts
+// (Backend/src/utils/orderCancel.js: ADMIN_CANCELLABLE_STATUSES).
+// 'delivered' is NOT here (goods arrived — refund goes through a
+// dispute) and 'cancelled' is terminal. The payment guards mirror the
+// endpoint's own refusals: released money cannot be clawed back,
+// refunded is already settled, frozen_dispute means a dispute is open.
+// The backend is still the final authority (e.g. a resolved dispute
+// leaves disputeId set — the endpoint decides, and its message is
+// shown on error).
+const ADMIN_CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'processing', 'shipped'];
+const canAdminCancel = (o: Order) =>
+  ADMIN_CANCELLABLE_STATUSES.includes(o.status) &&
+  o.paymentStatus !== 'released' &&
+  o.paymentStatus !== 'refunded' &&
+  o.paymentStatus !== 'frozen_dispute';
+
 export default function AdminOrdersPage() {
   const { user, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -274,6 +290,49 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // Cancel a stuck order (POST /api/admin/orders/:id/cancel, Batch 18).
+  // Same shape as confirmOrderPayment above: window.confirm first, the
+  // shared busyId disables the row actions while the request is in
+  // flight, refreshKey refetches the list on success, and the backend's
+  // own error message is shown on failure. The button only renders for
+  // canAdminCancel() orders (see above). No body is sent — the endpoint's
+  // { reason? } is optional and the UI collects none. The settlement is
+  // the endpoint's, not the UI's: escrowed / paid money refunds in full,
+  // a merely-submitted reference goes back to unpaid, unpaid refunds
+  // nothing — the confirm text below says which one applies.
+  const cancelOrderByAdmin = async (o: Order) => {
+    const refundNote =
+      o.paymentStatus === 'held_in_escrow' || o.paymentStatus === 'paid'
+        ? 'Any escrowed or paid money will be refunded in full to the shopkeeper.'
+        : o.paymentStatus === 'payment_submitted'
+          ? 'The submitted payment was never confirmed, so the order goes back to unpaid.'
+          : 'No payment was made, so there is nothing to refund.';
+    const ok = window.confirm(
+      `Cancel ${o.orderNumber}?\n\nStatus: ${statusLabel(o.status)}\nTotal: ${formatPKR(o.totalAmount)}\n\n${refundNote}\n\nThis cannot be undone — the stock is returned and both parties are notified.`
+    );
+    if (!ok) return;
+    setError(null);
+    setNotice(null);
+    setBusyId(o.id);
+    try {
+      const res = await api.admin.cancelOrder(o.id);
+      const updated = res.order;
+      setNotice(
+        updated.paymentStatus === 'refunded'
+          ? `Order ${updated.orderNumber} cancelled — ${formatPKR(updated.refundAmount ?? 0)} refunded to the shopkeeper.`
+          : `Order ${updated.orderNumber} cancelled.`
+      );
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      // ApiError carries the server's own message (e.g. the delivered /
+      // released / dispute-open refusal) — show it as-is instead of a
+      // generic alert.
+      setError(err instanceof Error ? err.message : 'Failed to cancel order.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -397,18 +456,33 @@ export default function AdminOrdersPage() {
                     {formatDate(o.createdAt)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {o.paymentStatus === 'payment_submitted' ? (
-                      <Button
-                        size="sm"
-                        isLoading={busyId === o.id}
-                        disabled={busyId !== null}
-                        onClick={() => confirmOrderPayment(o)}
-                      >
-                        Confirm Payment
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
+                    <div className="flex flex-col items-start gap-2">
+                      {o.paymentStatus === 'payment_submitted' && (
+                        <Button
+                          size="sm"
+                          isLoading={busyId === o.id}
+                          disabled={busyId !== null}
+                          onClick={() => confirmOrderPayment(o)}
+                        >
+                          Confirm Payment
+                        </Button>
+                      )}
+                      {canAdminCancel(o) && (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          className="min-h-[44px]"
+                          isLoading={busyId === o.id}
+                          disabled={busyId !== null}
+                          onClick={() => cancelOrderByAdmin(o)}
+                        >
+                          Cancel Order
+                        </Button>
+                      )}
+                      {o.paymentStatus !== 'payment_submitted' && !canAdminCancel(o) && (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -145,7 +145,7 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
               type="button"
               title={`Replace ${label}`}
               onClick={() => inputRef.current?.click()}
-              className="p-1.5 rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 transition"
+              className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 transition"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -153,7 +153,7 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
               type="button"
               title={`Remove ${label}`}
               onClick={clear}
-              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+              className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
             >
               <X className="w-4 h-4" />
             </button>

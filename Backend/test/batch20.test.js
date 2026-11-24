@@ -38,7 +38,6 @@ const Notification = require('../src/models/Notification');
 
 // --- Users ---------------------------------------------------------------
 const buyer = { _id: 'buyer1', name: 'Shopkeeper', email: 'shop@example.com', role: 'shopkeeper' };
-const supplier = { _id: 'supplier1', name: 'Supplier', email: 'sup@example.com', role: 'supplier' };
 const admin = { _id: 'admin1', name: 'Admin', email: 'admin@example.com', role: 'admin' };
 
 // --- Fake docs + stores (mirrors Batch 18) -------------------------------
