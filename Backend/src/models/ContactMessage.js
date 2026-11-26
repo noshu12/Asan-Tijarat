@@ -12,6 +12,10 @@ const contactMessageSchema = new mongoose.Schema(
     email: { type: String, required: true, lowercase: true, trim: true },
     subject: { type: String, trim: true, default: '' },
     message: { type: String, required: true, trim: true },
+    // Optional pictures attached from the Contact page — stored URL paths
+    // (/uploads/contact/...) written by public.controller.js from base64
+    // data URLs; see utils/uploadStorage.js (no multer in this codebase).
+    images: { type: [String], default: [] },
     status: {
       type: String,
       enum: ['new', 'read', 'replied'],

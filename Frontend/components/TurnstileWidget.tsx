@@ -48,7 +48,10 @@ export default function TurnstileWidget({ onVerify, onExpire }: Props) {
       }
       widgetId.current = w.render(container, {
         sitekey: SITE_KEY,
-        size: 'compact',
+        // 'normal' = 300x65 rectangle. 'compact' is 150x140 per the
+        // Cloudflare docs — almost square — which is why the box looked
+        // square on every page. The Contact brief asked for a rectangle.
+        size: 'normal',
         callback: (token: string) => cbRef.current.onVerify(token),
         'expired-callback': () => {
           widgetId.current = null;

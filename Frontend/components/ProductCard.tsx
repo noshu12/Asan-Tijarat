@@ -72,7 +72,7 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
       // FIX (New audit #19) — the old motion.div only did whileHover y:-4
       // (0.2s). Same lift via CSS: hover:-translate-y-1 + duration-200.
       <div
-        className="group rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-1 flex flex-col justify-between"
+        className="group rounded-2xl border border-slate-200/80 bg-white p-2.5 shadow-sm hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-1 flex flex-col justify-between"
       >
         <div>
           <Link
@@ -102,7 +102,7 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
 
           <div className="mt-3 space-y-1">
             <Link href={`/product/${product.id}`} className="block text-left">
-              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-2 leading-snug hover:text-asan-accent transition">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2 leading-snug hover:text-asan-accent transition">
                 {product.name}
               </h3>
             </Link>
@@ -120,7 +120,7 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
 
         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
           <div>
-            <div className="text-base sm:text-lg font-extrabold text-asan-dark dark:text-asan-accent-light leading-none">
+            <div className="text-base font-extrabold text-asan-dark dark:text-asan-accent-light leading-none">
               {formatPKR(product.price)} / {pack}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">

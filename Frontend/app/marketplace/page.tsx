@@ -4,7 +4,8 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
 import { Footer } from '@/components/Footer';
-import { Search, X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dropdown } from '@/components/ui/dropdown';
+import { Search, X, ChevronLeft, ChevronRight, Tag, MapPin, ArrowUpNarrowWide, ArrowDownWideNarrow } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Product } from '@/lib/types';
 import { trackFilterUsed, trackSearch } from '@/lib/analytics';
@@ -93,7 +94,6 @@ function MarketplaceContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [cities, setCities] = useState<string[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
   // Batch 13 — live marketplace. Before Batch 24 no product event
   // type existed in the agreed SSE list, so new listings arrived via a
   // reconnect / tab-visible sync: the sync refetch MERGES instead of
@@ -123,32 +123,9 @@ function MarketplaceContent() {
     setRefreshKey((k) => k + 1);
   }, [syncKey]);
 
-  // Category dropdown (custom, not a native <select>): the button sits in
-  // the search row next to the Price sort; the list opens right under the
-  // button as an overlay (absolute, z-50) over the filters/products
-  // below, and closes on any tap/click outside or Escape.
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const categoryMenuRef = useRef<HTMLDivElement>(null);
-  // Close on outside click / Escape.
-  useEffect(() => {
-    if (!isCategoryOpen) return;
-    const onDown = (e: MouseEvent | TouchEvent) => {
-      if (categoryMenuRef.current && !categoryMenuRef.current.contains(e.target as Node)) {
-        setIsCategoryOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsCategoryOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('touchstart', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('touchstart', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [isCategoryOpen]);
+  // Category / Price / City filters use the shared <Dropdown>
+  // (components/ui/dropdown.tsx) — it handles its own open/close,
+  // outside click and Escape, so no dropdown state lives here.
 
   // Debounced search so we don't hit the API on every keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
@@ -317,7 +294,6 @@ function MarketplaceContent() {
   // Fetch the current page from the server whenever filters change.
   useEffect(() => {
     let cancelled = false;
-    setIsFetching(true);
     // Backend expects the exact category name; unknown slugs fall back to 'all'.
     const categoryName =
       selectedCategory === 'all' ? 'all' : (CATEGORY_PRODUCT_MATCHES[selectedCategory]?.[0] ?? 'all');
@@ -382,7 +358,6 @@ function MarketplaceContent() {
       })
       .finally(() => {
         if (cancelled) return;
-        setIsFetching(false);
         setIsInitialLoading(false);
       });
     return () => { cancelled = true; };
@@ -419,39 +394,23 @@ function MarketplaceContent() {
   }, [page, totalPages]);
 
   const inputCls =
-    'px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:border-asan-accent';
+    'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:border-asan-accent';
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
 
       {/* Header */}
-      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-8">
+      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Heading row: title on the left; search bar, Category and
+              Price dropdowns in the same row on the right. */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
+              <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
                 Public Marketplace
               </h1>
             </div>
-
-            {/* Quick Stats Badges */}
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                {isFetching && !isInitialLoading && (
-                  <span className="h-3 w-3 rounded-full border-2 border-slate-300 border-t-asan-accent animate-spin" />
-                )}
-                {total} Lots Available
-              </span>
-            </div>
-          </div>
-
-          {/* Search Bar + Sort + Category dropdown (CATEGORY DROPDOWN,
-              Batch 10 follow-up #5 — search this marker to confirm the
-              new file is the one applied). The Category button sits next
-              to the Price sort; its list opens right under the button as
-              an overlay, and closes on any tap outside. */}
-          <div>
-            <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-center gap-3 flex-1 w-full md:w-auto">
               <div className="relative flex-1 w-full">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -460,7 +419,7 @@ function MarketplaceContent() {
                   placeholder="Search products, suppliers, cities (e.g. Basmati Rice, Faisalabad Cotton, Multan)..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-                  className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"
+                  className="w-full pl-10 pr-12 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"
                 />
                 {searchQuery && (
                   <button
@@ -475,59 +434,34 @@ function MarketplaceContent() {
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                {/* Category dropdown — button + overlay list anchored
-                    right under it (absolute, z-50, over the content
-                    below — not pushing it down). */}
-                <div ref={categoryMenuRef} className="relative">
-                  <button
-                    type="button"
-                    aria-haspopup="listbox"
-                    aria-expanded={isCategoryOpen}
-                    onClick={() => setIsCategoryOpen((o) => !o)}
-                    className={`${inputCls} flex items-center gap-2 whitespace-nowrap`}
-                  >
-                    <span className="truncate max-w-36 sm:max-w-52">
-                      Category: {MARKETPLACE_CATEGORIES.find((c) => c.id === selectedCategory)?.name ?? 'All'}
-                    </span>
-                    <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${isCategoryOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {isCategoryOpen && (
-                    <div
-                      role="listbox"
-                      aria-label="Categories"
-                      className="absolute left-0 sm:left-auto sm:right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-[190px] overflow-y-auto py-1"
-                    >
-                      {MARKETPLACE_CATEGORIES.map((cat) => {
-                        const isSelected = selectedCategory === cat.id;
-                        return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            role="option"
-                            aria-selected={isSelected}
-                            onClick={() => { setSelectedCategory(cat.id); setPage(1); setIsCategoryOpen(false); trackFilterUsed('category', cat.name); }}
-                            className={`w-full text-left px-3 py-2.5 text-xs transition ${
-                              isSelected
-                                ? 'bg-asan-dark text-white font-bold'
-                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold'
-                            }`}
-                          >
-                            {cat.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                {/* Sort By Dropdown */}
-                <select
+                <Dropdown
+                  options={MARKETPLACE_CATEGORIES.map((cat) => ({
+                    value: cat.id,
+                    label: cat.name,
+                    icon: <Tag className="w-4 h-4 shrink-0 text-slate-400" />,
+                  }))}
+                  value={selectedCategory}
+                  onChange={(v) => {
+                    setSelectedCategory(v);
+                    setPage(1);
+                    trackFilterUsed('category', MARKETPLACE_CATEGORIES.find((c) => c.id === v)?.name ?? v);
+                  }}
+                  prefix="Category"
+                  ariaLabel="Categories"
+                  buttonClassName={`${inputCls} flex items-center gap-2 whitespace-nowrap`}
+                />
+                <Dropdown
+                  options={[
+                    { value: 'price-asc', label: 'Low to High', icon: <ArrowUpNarrowWide className="w-4 h-4 shrink-0 text-slate-400" /> },
+                    { value: 'price-desc', label: 'High to Low', icon: <ArrowDownWideNarrow className="w-4 h-4 shrink-0 text-slate-400" /> },
+                  ]}
                   value={sortBy}
-                  onChange={(e) => { setSortBy(e.target.value as SortOption); setPage(1); trackFilterUsed('sort', e.target.value); }}
-                  className={inputCls}
-                >
-                  <option value="price-asc">Price: Low to High</option>
-                  <option value="price-desc">Price: High to Low</option>
-                </select>
+                  onChange={(v) => { setSortBy(v as SortOption); setPage(1); trackFilterUsed('sort', v); }}
+                  prefix="Price"
+                  ariaLabel="Sort by price"
+                  search={false}
+                  buttonClassName={`${inputCls} flex items-center gap-2 whitespace-nowrap`}
+                />
               </div>
             </div>
 
@@ -535,17 +469,22 @@ function MarketplaceContent() {
 
           {/* Extra filters: city, price range, in-stock */}
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <select
-              aria-label="Filter by supplier city"
+            <Dropdown
+              options={[
+                { value: '', label: 'All Cities', icon: <MapPin className="w-4 h-4 shrink-0 text-slate-400" /> },
+                ...cities.map((c) => ({
+                  value: c,
+                  label: c,
+                  icon: <MapPin className="w-4 h-4 shrink-0 text-slate-400" />,
+                })),
+              ]}
               value={city}
-              onChange={(e) => { setCity(e.target.value); setPage(1); trackFilterUsed('city', e.target.value || 'all'); }}
-              className={inputCls}
-            >
-              <option value="">All Cities</option>
-              {cities.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+              onChange={(v) => { setCity(v); setPage(1); trackFilterUsed('city', v || 'all'); }}
+              ariaLabel="Filter by supplier city"
+              search={false}
+              align="left"
+              buttonClassName={`${inputCls} flex items-center gap-2 whitespace-nowrap`}
+            />
             <input
               aria-label="Minimum price"
               type="number"
@@ -610,7 +549,7 @@ function MarketplaceContent() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {products.map((product) => (
                 <ProductCard key={product.id} product={product} isNew={newIds.has(product.id)} />
               ))}

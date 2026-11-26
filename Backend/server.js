@@ -159,6 +159,7 @@ app.use(
 //   • POST /api/auth/register — KYC docs (3 × 5 MB, see kycStorage.js)
 //   • POST /api/products + PATCH /api/products/:id — photos (5 × 5 MB)
 //   • POST /api/orders/:id/delivery-proof — one 5 MB photo
+//   • POST /api/public/contact — pictures (3 × 5 MB, see public.controller.js)
 // The upload parser runs FIRST for those routes: body-parser marks the
 // request parsed (req._body), so the global 1 MB parser below skips it.
 // A body over the route limit is rejected with 413 before any controller,
@@ -186,6 +187,7 @@ app.post('/api/auth/register', express.json({ limit: JSON_UPLOAD_LIMIT }));
 app.post('/api/products', express.json({ limit: PRODUCT_JSON_LIMIT }));
 app.patch('/api/products/:id', express.json({ limit: PRODUCT_JSON_LIMIT }));
 app.post('/api/orders/:id/delivery-proof', express.json({ limit: JSON_UPLOAD_LIMIT }));
+app.post('/api/public/contact', express.json({ limit: JSON_UPLOAD_LIMIT }));
 app.patch('/api/auth/me', express.json({ limit: '5mb' }));
 // Everything else: 1 MB is plenty — all other bodies are plain fields.
 app.use(express.json({ limit: '1mb' }));
