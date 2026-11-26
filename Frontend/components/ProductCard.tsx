@@ -72,7 +72,7 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
       // FIX (New audit #19) — the old motion.div only did whileHover y:-4
       // (0.2s). Same lift via CSS: hover:-translate-y-1 + duration-200.
       <div
-        className="group rounded-2xl border border-slate-200/80 bg-white p-2.5 shadow-sm hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-1 flex flex-col justify-between"
+        className="group rounded-2xl border border-slate-200/80 bg-white p-2.5 shadow-sm hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-1 flex flex-col justify-between h-full"
       >
         <div>
           <Link
@@ -118,9 +118,18 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          <div>
-            <div className="text-base font-extrabold text-asan-dark dark:text-asan-accent-light leading-none">
+        {/* CORRECTION (2026-11-27): the first fix only stacked below sm
+            and kept price + Add side-by-side from sm up — but the grid
+            keeps cards ~170-200px wide at EVERY breakpoint (2/3/4/6
+            columns), so the row never fits: the button overlapped the
+            price and cut it off ("Rs 850 / pac…"). The bottom is now
+            stacked at ALL sizes: price block gets the full card width,
+            so normal prices stay on one line, and Add is full-width
+            below it. No nowrap anywhere: an extremely long price wraps
+            inside the card instead of spilling out of it. */}
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+          <div className="min-w-0">
+            <div className="text-sm sm:text-base font-extrabold text-asan-dark dark:text-asan-accent-light leading-none">
               {formatPKR(product.price)} / {pack}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -140,7 +149,7 @@ export function ProductCard({ product, isNew }: { product: Product; isNew?: bool
               aria-label={`Add ${product.name} to cart`}
               // Batch 13 (B3 top-up) — Add button was min-h-[40px]; the audit
               // expects a 44px tap target.
-              className={`flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
+              className={`flex items-center justify-center gap-1.5 min-h-[44px] w-full px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-asan-accent-hover/20 active:scale-95 transition ${
                 added
                   ? 'bg-asan-accent text-white'
                   : 'bg-asan-accent hover:bg-asan-accent-hover text-white'

@@ -109,3 +109,72 @@ export function clearCart(): void {
 export function cartCount(): number {
   return getCart().reduce((total, entry) => total + entry.quantity, 0);
 }
+
+// --- Buy Now (2026-11-27) -------------------------------------------------
+// A Buy Now draft is ONE product + quantity, kept under its own key so the
+// main cart is NEVER touched: no merging with an old cart quantity, no
+// other cart items sneaking into the order. The cart page reads it only
+// when the URL has ?buynow=1, checks out with just this item, then clears
+// the draft. Same validation rules as the cart (stock 0 = no draft).
+const BUYNOW_KEY = 'asan_buynow';
+
+export function setBuyNow(product: Product, quantity: number): void {
+  if (typeof window === 'undefined') return;
+  if (product.stock <= 0) return;
+  const qty = quantity && quantity > 0 ? Math.floor(quantity) : Math.max(product.moq, 1);
+  const entry: CartEntry = { product, quantity: Math.min(qty, Math.max(product.stock, 0)) };
+  try {
+    window.localStorage.setItem(BUYNOW_KEY, JSON.stringify(entry));
+  } catch {
+    /* storage unavailable — Buy Now just won't survive a reload */
+  }
+}
+
+export function getBuyNow(): CartEntry | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(BUYNOW_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const entry = parsed as CartEntry;
+    if (!entry.product || typeof entry.product.id !== 'string') return null;
+    if (typeof entry.quantity !== 'number' || entry.quantity <= 0) return null;
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+// Quantity stepper for the Buy Now draft (same rules as setQuantity:
+// below 1 removes the draft, never below MOQ, never above stock).
+export function setBuyNowQuantity(productId: string, quantity: number): void {
+  if (typeof window === 'undefined') return;
+  const current = getBuyNow();
+  if (!current || current.product.id !== productId) return;
+  if (quantity < 1 || !Number.isFinite(quantity)) {
+    clearBuyNow();
+    return;
+  }
+  if (current.product.stock <= 0) {
+    clearBuyNow();
+    return;
+  }
+  const floor = Math.max(current.product.moq, 1);
+  const ceil = Math.max(current.product.stock, floor);
+  current.quantity = Math.min(Math.max(Math.floor(quantity), floor), ceil);
+  try {
+    window.localStorage.setItem(BUYNOW_KEY, JSON.stringify(current));
+  } catch {
+    /* storage unavailable — quantity just won't persist */
+  }
+}
+
+export function clearBuyNow(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(BUYNOW_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
