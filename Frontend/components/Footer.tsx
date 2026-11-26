@@ -37,13 +37,17 @@ export function Footer() {
   // Categories that have no listings yet simply open an empty filtered
   // marketplace view, same as the marketplace filter row itself.
   const categories = Object.keys(CATEGORY_SLUG);
+  // Top Categories shows the first 4 only. "See more" is a link to the
+  // marketplace (all categories live in the Category filter there) — it
+  // does NOT expand the list inline, so the footer stays compact.
+  const visibleCategories = categories.slice(0, 4);
 
   return (
-    <footer className="bg-asan-accent-light text-asan-dark pt-16 pb-12 border-t border-asan-border select-none">
+    <footer className="bg-asan-accent-light text-asan-dark pt-6 pb-5 border-t border-asan-border select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
-          
-          <div className="space-y-4 md:col-span-1">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+
+          <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
               <Image
                 src="/logo.png"
@@ -59,7 +63,7 @@ export function Footer() {
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Quick Links</h4>
             {/* FIX (Round-4 Batch 11, M6) — footer links were ~17px tall
                 (text-xs, no padding). Each link is now a 36px tap target
@@ -76,10 +80,10 @@ export function Footer() {
             </ul>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Top Categories</h4>
             <ul className="space-y-1 text-sm text-asan-text-light">
-              {categories.map((category) => {
+              {visibleCategories.map((category) => {
                 const slug = CATEGORY_SLUG[category];
                 const href = slug ? `/marketplace?cat=${slug}` : '/marketplace';
                 return (
@@ -91,14 +95,20 @@ export function Footer() {
                 );
               })}
             </ul>
+            <Link
+              href="/marketplace"
+              className="inline-flex items-center min-h-[36px] text-sm font-semibold text-asan-text-light hover:text-asan-accent transition"
+            >
+              See more
+            </Link>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Headquarters</h4>
             <div className="space-y-2 text-xs text-asan-text-light">
               <p className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-asan-accent shrink-0" />
-                <span>FUUAST Campus, Gulshan-e-Iqbal, Karachi, Pakistan</span>
+                <span>Gulshan-e-Iqbal, Karachi, Pakistan</span>
               </p>
               <p>
                 <Link href="/contact" className="inline-flex items-center min-h-[36px] text-sm hover:text-asan-accent transition">
@@ -109,8 +119,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-asan-border flex flex-col sm:flex-row items-center justify-between text-xs text-asan-text-light gap-4">
-          <p>© 2026 Asan Tijarat. Final Year Project — Federal Urdu University (FUUAST).</p>
+        <div className="mt-6 pt-4 border-t border-asan-border flex flex-col sm:flex-row items-center justify-between text-xs text-asan-text-light gap-3">
+          <p>© 2026 Asan Tijarat. All rights reserved.</p>
           <div className="flex items-center gap-5">
             <Link href="/terms" className="inline-flex items-center min-h-[44px] hover:text-asan-accent transition">Terms &amp; Conditions</Link>
             <Link href="/privacy" className="inline-flex items-center min-h-[44px] hover:text-asan-accent transition">Privacy Policy</Link>

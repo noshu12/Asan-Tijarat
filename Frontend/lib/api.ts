@@ -318,6 +318,24 @@ export interface ProductWritePayload {
   images?: Array<UploadPayload | string>;
 }
 
+/**
+ * Group 1 — public supplier profile (GET /api/public/suppliers/:id).
+ * Powers the /suppliers/[id] page and the supplier Rating / Reviews
+ * sections on the product page. Ratings live per-supplier on delivered
+ * orders — there are no product-level ratings in this codebase.
+ */
+export interface PublicSupplierProfile {
+  id: string;
+  businessName: string;
+  city: string;
+  categories: string[];
+  joinedAt: string; // ISO date string
+  rating: { average: number; count: number };
+  productsSold: number;
+  products: Product[];
+  reviews: { stars: number; comment: string; shopkeeperName: string; createdAt: string }[];
+}
+
 /* ── Admin payload types (mirror Backend /api/admin/*) ─────────────── */
 
 export interface AdminStats {
@@ -618,6 +636,13 @@ export const api = {
 
   product: (id: string) =>
     request<{ product: Product }>(`/api/products/${id}`, { auth: false }),
+
+  /**
+   * Group 1 — one supplier's public profile (business, categories,
+   * rating + reviews from delivered orders, products). Public: no auth.
+   */
+  publicSupplier: (id: string) =>
+    request<{ supplier: PublicSupplierProfile }>(`/api/public/suppliers/${id}`, { auth: false }),
 
   createProduct: (payload: ProductWritePayload) =>
     request<{ product: Product }>('/api/products', { method: 'POST', body: payload }),
