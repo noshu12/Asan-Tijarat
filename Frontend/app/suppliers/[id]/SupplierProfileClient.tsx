@@ -114,11 +114,11 @@ export default function SupplierProfileClient({ id }: { id: string }) {
           Back to Marketplace
         </Link>
 
-        {/* Header: company name, city, join date, category pills */}
-        <div className="mt-4 flex items-start gap-4">
-          <div className="w-14 h-14 shrink-0 rounded-full bg-asan-accent-light grid place-items-center text-2xl font-extrabold text-asan-accent">
-            {supplier.businessName.trim().charAt(0).toUpperCase()}
-          </div>
+        {/* Profile card: company name, city, join date, category pills,
+            then the stats row — one proper public-profile card. No
+            monogram badge — the business name itself is the heading.
+            Only real data from the endpoint is shown. */}
+        <div className="mt-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-5 sm:p-6">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
               {supplier.businessName}
@@ -148,52 +148,58 @@ export default function SupplierProfileClient({ id }: { id: string }) {
               </div>
             )}
           </div>
-        </div>
 
-        {/* One stats row: rating + products sold */}
-        <div className="mt-6 grid grid-cols-2 gap-2 max-w-md">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-center">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Rating</p>
-            {hasRating ? (
-              <p className="mt-1 flex items-center justify-center gap-1.5 whitespace-nowrap">
-                <span aria-label={`Rated ${supplier.rating.average} out of 5`} className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <span
-                      key={n}
-                      className={n <= Math.round(supplier.rating.average) ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'}
-                    >
-                      ★
-                    </span>
-                  ))}
-                </span>
-                <span className="text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white">
-                  {supplier.rating.average}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  ({supplier.rating.count} review{supplier.rating.count === 1 ? '' : 's'})
-                </span>
+          {/* Stats row: rating + products sold + products listed */}
+          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2">
+            <div className="text-center">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Rating</p>
+              {hasRating ? (
+                <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+                  <span aria-label={`Rated ${supplier.rating.average} out of 5`} className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span
+                        key={n}
+                        className={n <= Math.round(supplier.rating.average) ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </span>
+                  <span className="text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white">
+                    {supplier.rating.average}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    ({supplier.rating.count} review{supplier.rating.count === 1 ? '' : 's'})
+                  </span>
+                </p>
+              ) : (
+                <p className="mt-1 text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white">
+                  -
+                </p>
+              )}
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Products sold</p>
+              <p className="text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white mt-1">
+                {supplier.productsSold}
               </p>
-            ) : (
-              <p className="mt-1 text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
-                -
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Products</p>
+              <p className="text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white mt-1">
+                {supplier.products.length}
               </p>
-            )}
-          </div>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-center">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Products sold</p>
-            <p className="text-[clamp(11px,0.9vw+4px,15px)] font-extrabold text-slate-900 dark:text-white mt-1 whitespace-nowrap">
-              {supplier.productsSold}
-            </p>
+            </div>
           </div>
         </div>
 
         {/* Their products */}
         <section className="mt-10">
-          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Products</h2>
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Products ({supplier.products.length})</h2>
           {supplier.products.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No products listed yet.</p>
           ) : (
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {supplier.products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

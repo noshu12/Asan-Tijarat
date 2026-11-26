@@ -330,7 +330,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
 
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         <Link
           href="/marketplace"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-asan-accent transition"
@@ -339,18 +339,15 @@ export default function ProductDetailClient({ id }: { id: string }) {
           Back to Marketplace
         </Link>
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Gallery — Group 1: constrained so the full image fits in one
-              screen at 125% zoom. The monogram badge is the shrunken
-              company-logo picture, a button to the supplier profile. */}
+              screen at 125% zoom. No monogram badge — the supplier NAME
+              below is the link to the supplier profile. Image is max-w-md
+              (448px): at 125% zoom the image + thumbnails below fit in
+              one screen without scrolling. Do NOT shrink it further —
+              the auto-column try collapsed the image, so the plain
+              two-column grid stays. */}
           <div className="max-w-md w-full">
-            <Link
-              href={`/suppliers/${product.supplierId}`}
-              aria-label={`View ${product.supplierName} profile`}
-              className="mb-3 inline-flex w-10 h-10 items-center justify-center rounded-full bg-asan-accent-light text-lg font-extrabold text-asan-accent hover:bg-asan-accent hover:text-white transition"
-            >
-              {product.supplierName.trim().charAt(0).toUpperCase()}
-            </Link>
             <div className="relative w-full overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
               <ProductImage
                 src={images[selectedImage] ?? product.image}
@@ -391,7 +388,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
           </div>
 
           {/* Details */}
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <p className="text-xs font-semibold text-asan-accent uppercase tracking-wider">{product.category}</p>
               <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
@@ -562,7 +559,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
         {/* Related Products — same category, first 6 excluding this one.
             Hidden while loading or when empty: never fake products. */}
         {relatedProducts.length > 0 && (
-          <section className="mt-10">
+          <section className="mt-8">
             <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Related Products</h2>
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {relatedProducts.map((related) => (
@@ -580,7 +577,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
             if the profile fetch failed — never a guessed rating. */}
         {supplierProfile && (
           <>
-            <section className="mt-10">
+            <section className="mt-8">
               <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Rating</h2>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                 {supplierProfile.rating.count === 0 ? (
@@ -610,7 +607,7 @@ export default function ProductDetailClient({ id }: { id: string }) {
               </div>
             </section>
 
-            <section className="mt-10">
+            <section className="mt-8">
               <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Reviews</h2>
               {supplierProfile.reviews.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No reviews yet.</p>
