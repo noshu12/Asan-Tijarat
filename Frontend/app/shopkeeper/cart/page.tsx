@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { Order, PaymentChannel, PaymentMethod, PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { formatPKR } from '@/lib/utils';
-import { getCart, setQuantity, removeFromCart, clearCart } from '@/lib/cart';
+import { getCart, setQuantity, removeFromCart, clearCart, getBuyNow, setBuyNowQuantity, clearBuyNow, type CartEntry } from '@/lib/cart';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,24 @@ import { trackCheckoutStart, trackOrderPlaced } from '@/lib/analytics';
 export default function ShopkeeperCartPage() {
   const { user, loading: authLoading } = useAuth();
   const [items, setItems] = useState(() => getCart());
+  // Buy Now mode (2026-11-27): when the product page sends the shopkeeper
+  // here with ?buynow=1, ONLY the Buy Now draft is ordered — the main cart
+  // is never touched and never shown. The query is read from
+  // window.location on mount (not useSearchParams) so no Suspense
+  // boundary is needed. Without a draft, this stays null and the page is
+  // the normal cart.
+  const [buyNow, setBuyNowState] = useState<CartEntry | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('buynow') === '1') {
+      const draft = getBuyNow();
+      if (draft) setBuyNowState(draft);
+    }
+  }, []);
+  // Everything below (list, totals, stock check, checkout) runs on the
+  // checkout items: the single Buy Now draft in Buy Now mode, else the cart.
+  const checkoutItems = buyNow ? [buyNow] : items;
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [shippingAddress, setShippingAddress] = useState('');
@@ -54,7 +72,7 @@ export default function ShopkeeperCartPage() {
   // runs on sync, not on a live event.
   const [stockWarnings, setStockWarnings] = useState<{ productId: string; name: string; stock: number; quantity: number }[]>([]);
   const checkStock = useCallback(async () => {
-    const current = getCart();
+    const current = buyNow ? [buyNow] : getCart();
     if (current.length === 0) {
       setStockWarnings([]);
       return;
@@ -72,7 +90,7 @@ export default function ShopkeeperCartPage() {
       }),
     );
     setStockWarnings(results.filter((w): w is NonNullable<typeof w> => w !== null));
-  }, []);
+  }, [buyNow]);
   useEffect(() => {
     void checkStock();
   }, [checkStock]);
@@ -84,31 +102,44 @@ export default function ShopkeeperCartPage() {
     void checkStock();
   }, [syncKey, checkStock]);
 
-  const refresh = () => setItems(getCart());
+  const refresh = () => {
+    if (buyNow) {
+      setBuyNowState(getBuyNow());
+    } else {
+      setItems(getCart());
+    }
+  };
 
-  const subtotal = items.reduce((sum, entry) => sum + entry.product.price * entry.quantity, 0);
+  const subtotal = checkoutItems.reduce((sum, entry) => sum + entry.product.price * entry.quantity, 0);
   const total = subtotal;
 
   const handleCheckout = async () => {
-    if (!user || items.length === 0) return;
+    if (!user || checkoutItems.length === 0) return;
     if (!shippingAddress.trim()) { setError('Shipping address is required.'); return; }
     setError(null);
     setCheckoutLoading(true);
     try {
       const location = coords ?? user?.currentLocation ?? undefined;
       const res = await api.createOrder({
-        items: items.map((entry) => ({ productId: entry.product.id, quantity: entry.quantity })),
+        items: checkoutItems.map((entry) => ({ productId: entry.product.id, quantity: entry.quantity })),
         shippingAddress: shippingAddress.trim(),
         currentLocation: location ? { lat: location.lat, lng: location.lng } : undefined,
         paymentMethod,
         paymentChannel,
       });
-      clearCart();
+      // Buy Now mode: only the draft is cleared — the main cart stays
+      // exactly as it was. Normal mode: the cart is cleared as before.
+      if (buyNow) {
+        clearBuyNow();
+        setBuyNowState(null);
+      } else {
+        clearCart();
+        setItems([]);
+      }
       setCreatedOrders(res.orders);
       // Batch 16 — B8 GA4: one order per supplier, so one event per
       // order — order id + total amount only, no PII.
       res.orders.forEach((o) => trackOrderPlaced(o.id, o.totalAmount));
-      setItems([]);
       setCheckoutOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
@@ -155,9 +186,15 @@ export default function ShopkeeperCartPage() {
   return (
     <div className="space-y-8">
       <PortalHeader
-        title="Shopping Cart"
-        subtitle="Shopkeeper Portal • cart is saved on this device until checkout"
+        title={buyNow ? 'Buy Now' : 'Shopping Cart'}
+        subtitle={buyNow ? 'Only this item will be ordered — your cart stays as it is' : 'Shopkeeper Portal • cart is saved on this device until checkout'}
       />
+      {buyNow && (
+        <div className="rounded-2xl border border-asan-border bg-asan-accent-light dark:bg-asan-dark/30 p-4 text-sm text-asan-dark dark:text-asan-accent-light">
+          <span className="font-bold">Buy Now — </span>
+          only this item will be ordered. Your cart is untouched.
+        </div>
+      )}
       {error && (
         <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4 text-sm text-red-700 dark:text-red-300">
           ⚠️ {error}
@@ -212,7 +249,7 @@ export default function ShopkeeperCartPage() {
           </div>
         </div>
       )}
-      {items.length === 0 && !createdOrders && (
+      {checkoutItems.length === 0 && !createdOrders && (
         <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
           <div className="w-16 h-16 rounded-full bg-asan-accent-light dark:bg-asan-dark flex items-center justify-center mx-auto text-asan-accent mb-4">
             <Store className="w-8 h-8" />
@@ -230,14 +267,14 @@ export default function ShopkeeperCartPage() {
           </Link>
         </div>
       )}
-      {items.length > 0 && (
+      {checkoutItems.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
             <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">
-              Cart Items ({items.length})
+              {buyNow ? 'Your Item' : `Cart Items (${checkoutItems.length})`}
             </h3>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {items.map((entry) => (
+              {checkoutItems.map((entry) => (
                 <div key={entry.product.id} className="flex items-center justify-between gap-4 py-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <ProductImage src={entry.product.image} alt={entry.product.name} className="w-14 h-14 rounded-lg object-cover shrink-0" width={56} height={56} />
@@ -252,7 +289,7 @@ export default function ShopkeeperCartPage() {
                     <button
                       type="button"
                       aria-label="Decrease quantity"
-                      onClick={() => { setQuantity(entry.product.id, entry.quantity - 1); refresh(); }}
+                      onClick={() => { if (buyNow) { setBuyNowQuantity(entry.product.id, entry.quantity - 1); } else { setQuantity(entry.product.id, entry.quantity - 1); } refresh(); }}
                       className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
                     >
                       <Minus className="w-3.5 h-3.5" />
@@ -261,7 +298,7 @@ export default function ShopkeeperCartPage() {
                     <button
                       type="button"
                       aria-label="Increase quantity"
-                      onClick={() => { setQuantity(entry.product.id, entry.quantity + 1); refresh(); }}
+                      onClick={() => { if (buyNow) { setBuyNowQuantity(entry.product.id, entry.quantity + 1); } else { setQuantity(entry.product.id, entry.quantity + 1); } refresh(); }}
                       className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -269,7 +306,7 @@ export default function ShopkeeperCartPage() {
                     <button
                       type="button"
                       aria-label="Remove item"
-                      onClick={() => { removeFromCart(entry.product.id); refresh(); }}
+                      onClick={() => { if (buyNow) { clearBuyNow(); } else { removeFromCart(entry.product.id); } refresh(); }}
                       className="ml-2 p-2 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -414,7 +451,7 @@ export default function ShopkeeperCartPage() {
           </div>
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 text-xs space-y-1">
             <div className="flex justify-between text-slate-500">
-              <span>{items.length} item(s)</span>
+              <span>{checkoutItems.length} item(s)</span>
               <span className="font-bold text-slate-900 dark:text-white">{formatPKR(total)}</span>
             </div>
           </div>

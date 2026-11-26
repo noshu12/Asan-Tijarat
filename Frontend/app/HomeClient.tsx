@@ -1,14 +1,21 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { ProductImage } from '@/components/ProductImage';
 import { Footer } from '@/components/Footer';
 import {
   ArrowRight,
+  BadgeCheck,
   CheckCircle2,
+  Package,
+  Scale,
+  ShieldCheck,
   Store,
+  Tag,
+  Truck,
   Building2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -211,28 +218,39 @@ export default function HomeClient() {
   return (
     <div className="flex flex-col min-h-screen">
       
-      {/* 1. HERO SECTION */}
-      <section className="relative bg-[linear-gradient(135deg,#EAF7EE_0%,#FFFFFF_60%)] text-asan-dark pt-20 pb-24 overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full overflow-hidden pointer-events-none opacity-20">
-          <div className="absolute -top-24 left-1/4 w-96 h-96 bg-asan-accent rounded-full blur-3xl" />
-          <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-asan-accent-light rounded-full blur-3xl" />
-        </div>
+      {/* 1. HERO SECTION — same as the laptop screen in the promo video:
+          photo background (Frontend/public/hero-bg.jpg) with a dark
+          overlay, white heading left-aligned, Supplier green filled +
+          Shopkeeper outline buttons. If hero-bg.jpg is missing the
+          section falls back to a dark background — put the photo in
+          Frontend/public/hero-bg.jpg. */}
+      <section className="relative bg-slate-900 text-white pt-20 pb-24 overflow-hidden">
+        <Image
+          src="/hero-bg.jpg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover pointer-events-none"
+        />
+        <div className="absolute inset-0 bg-slate-900/55 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/60 via-slate-900/20 to-transparent pointer-events-none" />
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-left">
 
             {/* Headline */}
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-4xl mx-auto leading-[1.1]">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-2xl leading-[1.1]">
               Wholesale Trade, <br />
-              <span className="text-asan-accent">Made Simple</span>
+              Made Simple
             </h1>
 
             {/* Subtext — true claims only */}
-            <p className="mt-6 text-base sm:text-xl text-asan-text-light max-w-2xl mx-auto leading-relaxed">
+            <p className="mt-6 text-base sm:text-xl text-white/85 max-w-2xl leading-relaxed">
               Connect suppliers and shopkeepers across Pakistan. Separate portals, bulk orders with minimum order quantity, and price per pack, clearly shown — all in one place.
             </p>
 
             {/* CTAs */}
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <Link
                 href="/signin"
                 className="group inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-asan-accent hover:bg-asan-accent-hover text-white text-sm font-bold shadow-lg shadow-asan-accent/30 transition"
@@ -244,7 +262,7 @@ export default function HomeClient() {
 
               <Link
                 href="/marketplace"
-                className="group inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-asan-dark hover:bg-asan-mid text-white text-sm font-bold shadow-lg transition"
+                className="group inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-white/70 bg-white/10 hover:bg-white/20 text-white text-sm font-bold shadow-lg transition"
               >
                 <Store className="w-4 h-4" />
                 <span>I&apos;m a Shopkeeper</span>
@@ -384,12 +402,76 @@ export default function HomeClient() {
         </div>
       </section>
 
-      {/* 5. APP DETAILING — placeholder shell (content to be provided by Noushad) */}
+      {/* 5. FEATURES — what the platform offers (all true, already live) */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-asan-dark">
+              Why Asan Tijarat?
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-asan-text-light">
+              Everything a supplier and a shopkeeper need — in one place.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              {
+                icon: Package,
+                title: 'Bulk Orders with MOQ',
+                desc: 'Order in bulk with a minimum order quantity set by the supplier.',
+              },
+              {
+                icon: ShieldCheck,
+                title: 'Escrow Payments',
+                desc: 'Your payment stays safe in escrow until the delivery is confirmed.',
+              },
+              {
+                icon: Tag,
+                title: 'Clear Price Per Pack',
+                desc: 'The price per pack is shown upfront — no hidden rates.',
+              },
+              {
+                icon: BadgeCheck,
+                title: 'Verified Suppliers',
+                desc: 'Suppliers are verified before they can sell on the marketplace.',
+              },
+              {
+                icon: Truck,
+                title: 'Order Tracking',
+                desc: 'Track every order from confirmation to delivery, in My Orders.',
+              },
+              {
+                icon: Scale,
+                title: 'Dispute Support',
+                desc: '15 clear dispute reasons, with the admin deciding fairly.',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-slate-200/80 bg-slate-50 p-5"
+              >
+                <div className="w-11 h-11 rounded-xl bg-asan-accent-light flex items-center justify-center text-asan-accent">
+                  <item.icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-asan-dark mt-4">
+                  {item.title}
+                </h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 6. APP DETAILING — placeholder shell (content to be provided by Noushad) */}
       <section>
         {/* TODO (Noushad): App detailing section — content to be provided by Noushad. Our Story was removed per the 2026-11-24 brief. */}
       </section>
 
-      {/* 6. HOW IT WORKS */}
+      {/* 7. HOW IT WORKS */}
       <section className="py-12 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-8">
@@ -461,7 +543,7 @@ export default function HomeClient() {
         </div>
       </section>
 
-      {/* 7. DUAL PORTAL CARDS */}
+      {/* 8. DUAL PORTAL CARDS */}
       <section className="py-20 bg-white dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-2 gap-8">
           
