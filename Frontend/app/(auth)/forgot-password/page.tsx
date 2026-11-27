@@ -1,3 +1,4 @@
+// GROUP2-AUTH-FIX 2026-11-27
 "use client";
 
 import React, { useState } from 'react';
@@ -43,8 +44,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
+    <>
         <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Forgot Password</h3>
         <p className="text-xs text-slate-500 mt-1">
           Enter your account email. If an account exists, you will receive reset instructions.
@@ -97,7 +97,6 @@ export default function ForgotPasswordPage() {
             Back to Sign In
           </Link>
         </p>
-      </div>
-    </div>
+    </>
   );
 }

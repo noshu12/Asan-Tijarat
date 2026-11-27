@@ -1,3 +1,4 @@
+// GROUP2-AUTH-FIX 2026-11-27
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -79,8 +80,7 @@ export default function ResetPasswordPage() {
     "w-full h-11 px-4 pr-14 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:border-asan-accent focus:outline-none focus:ring-2 focus:ring-asan-accent/20 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-asan-accent disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
+    <>
         <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Reset Password</h3>
         <p className="text-xs text-slate-500 mt-1">
           Set a new password (at least 8 characters).
@@ -195,7 +195,6 @@ export default function ResetPasswordPage() {
             Request a new reset link
           </Link>
         </p>
-      </div>
-    </div>
+    </>
   );
 }

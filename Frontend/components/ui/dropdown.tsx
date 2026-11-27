@@ -1,3 +1,4 @@
+// GROUP2-AUTH-FIX 2026-11-27
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
@@ -19,11 +20,17 @@ interface DropdownProps {
   // use 'left': a right-aligned panel under it slides off the left edge
   // of the screen on sm+ screens.
   buttonClassName?: string;
+  panelClassName?: string; // panel width — default 'w-72' (filters). A full-width
+  // button (e.g. Get Started City / Shop Type) passes 'w-full' so the panel
+  // lines up exactly with the field and can never be cut off sideways.
+  listMaxH?: number; // list max height in px — default 190. City (8 options)
+  // needs ~300, Shop Type (10) ~370, so all options show without scrolling.
 }
 
-export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, align = 'right', buttonClassName }: DropdownProps) {
+export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, align = 'right', buttonClassName, panelClassName = 'w-72', listMaxH = 190 }: DropdownProps) {
   const showSearch = search ?? options.length > 4;
   const [isOpen, setIsOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,8 +44,28 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
 
   const close = () => {
     setIsOpen(false);
+    setOpenUp(false);
     setQuery('');
     setHighlighted(-1);
+  };
+
+  // Open upward when there is not enough room below the button for the
+  // panel (e.g. City near the bottom of a tall form at 125% zoom) — the
+  // panel would otherwise be cut off at the viewport edge.
+  const toggle = () => {
+    if (isOpen) {
+      close();
+      return;
+    }
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const estPanelH = (showSearch ? 52 : 8) + Math.min(options.length * 36, listMaxH) + 16;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // Open up only when below does not fit AND above has more room.
+      setOpenUp(spaceBelow < estPanelH && spaceAbove > spaceBelow);
+    }
+    setIsOpen(true);
   };
 
   const select = (optionValue: string) => {
@@ -106,7 +133,7 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
         aria-expanded={isOpen}
         aria-label={ariaLabel}
         tabIndex={0}
-        onClick={() => (isOpen ? close() : setIsOpen(true))}
+        onClick={toggle}
         // No search box means the button itself is the keyboard target:
         // ArrowDown/ArrowUp move the highlight, Enter selects it.
         onKeyDown={showSearch ? undefined : handleListKeyDown}
@@ -122,7 +149,7 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
         <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen && (
-        <div className={`absolute top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1 ${align === 'left' ? 'left-0' : 'left-0 sm:left-auto sm:right-0'}`}>
+        <div className={`absolute z-50 ${openUp ? 'bottom-full mb-2' : 'top-full mt-2'} ${panelClassName} max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1 ${align === 'left' ? 'left-0' : 'left-0 sm:left-auto sm:right-0'}`}>
           {showSearch && (
             <div className="relative mx-2 mt-1 mb-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -141,7 +168,8 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
           <div
             role="listbox"
             aria-label={ariaLabel}
-            className="max-h-[190px] overflow-y-auto py-1"
+            className="overflow-y-auto py-1"
+            style={{ maxHeight: listMaxH }}
           >
             {filtered.map((option, index) => {
               const isSelected = option.value === value;

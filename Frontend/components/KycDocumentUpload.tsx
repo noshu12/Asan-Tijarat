@@ -1,8 +1,9 @@
+// GROUP2-AUTH-FIX 2026-11-27
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { AlertCircle, FileText, RefreshCw, UploadCloud, X } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, Upload, UploadCloud, X } from 'lucide-react';
 import { cn, formatFileSize } from '@/lib/utils';
 import { UPLOAD_ACCEPT, isImageFile, validateUploadFile } from '@/lib/uploads';
 
@@ -27,6 +28,12 @@ export interface KycDocumentUploadProps {
   value: KycFileDraft | null;
   onChange: (draft: KycFileDraft | null) => void;
   className?: string;
+  /** 'large' (default) = the full box with title + hint + file spec.
+   * 'compact' = the preview's small box (short label + 'Tap to upload'
+   * only), used for CNIC Front/Back (side-by-side) and NTN on Get Started. */
+  variant?: 'compact' | 'large';
+  /** Short label shown inside a compact box, e.g. 'CNIC FRONT'. */
+  compactLabel?: string;
 }
 
 function createDraft(file: File): KycFileDraft {
@@ -45,7 +52,7 @@ function createDraft(file: File): KycFileDraft {
  * Step-3 upload box: click (or drop a file) to attach a real document, see a
  * live preview of the image, and remove/replace it before submitting.
  */
-export function KycDocumentUpload({ label, hint, value, onChange, className }: KycDocumentUploadProps) {
+export function KycDocumentUpload({ label, hint, value, onChange, className, variant = 'large', compactLabel }: KycDocumentUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -82,7 +89,9 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+      {variant !== 'compact' && (
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+      )}
 
       <input
         ref={inputRef}
@@ -105,19 +114,37 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
             accept(e.dataTransfer.files?.[0]);
           }}
           className={cn(
-            'w-full p-4 rounded-2xl border-2 border-dashed text-center transition',
+            'w-full rounded-2xl border-dashed text-center transition',
+            variant === 'compact'
+              ? 'px-2.5 py-3 border-[1.5px] border-[#b9d6c2] bg-asan-accent-light/60 dark:bg-asan-dark/20'
+              : 'p-4 border-2',
             dragging
               ? 'border-asan-accent bg-asan-accent-light/70 dark:bg-asan-dark/30'
-              : 'border-slate-200 dark:border-slate-800 hover:border-asan-accent/50'
+              : variant === 'compact'
+                ? ''
+                : 'border-slate-200 dark:border-slate-800 hover:border-asan-accent/50'
           )}
         >
-          <UploadCloud className="w-6 h-6 text-slate-400 mx-auto mb-1" />
-          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Upload {label}</p>
-          <p className="text-xs text-slate-400">{hint}</p>
-          <p className="text-xs text-slate-400">PNG, JPG or PDF • max 5MB • click or drop a file</p>
+          {variant === 'compact' ? (
+            <>
+              <Upload className="w-5 h-5 text-asan-accent mx-auto mb-1" />
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{compactLabel ?? label.toUpperCase()}</p>
+              <p className="text-[11px] text-slate-500">Tap to upload</p>
+            </>
+          ) : (
+            <>
+              <UploadCloud className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Upload {label}</p>
+              <p className="text-xs text-slate-400">{hint}</p>
+              <p className="text-xs text-slate-400">PNG, JPG or PDF • max 5MB • click or drop a file</p>
+            </>
+          )}
         </button>
       ) : (
-        <div className="p-3 rounded-2xl border-2 border-asan-border dark:border-asan-mid bg-asan-accent-light/60 dark:bg-asan-dark/20 flex items-center gap-3">
+        <div className={cn(
+          'rounded-2xl border-2 border-asan-border dark:border-asan-mid bg-asan-accent-light/60 dark:bg-asan-dark/20 flex items-center',
+          variant === 'compact' ? 'p-2 gap-2' : 'p-3 gap-3'
+        )}>
           {value.isImage ? (
             <Image
               src={value.previewUrl}
@@ -125,10 +152,16 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
               width={56}
               height={56}
               unoptimized
-              className="w-14 h-14 rounded-xl object-cover border border-asan-border dark:border-asan-mid bg-white shrink-0"
+              className={cn(
+                'rounded-xl object-cover border border-asan-border dark:border-asan-mid bg-white shrink-0',
+                variant === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
+              )}
             />
           ) : (
-            <span className="w-14 h-14 rounded-xl grid place-items-center border border-asan-border dark:border-asan-mid bg-white shrink-0">
+            <span className={cn(
+              'rounded-xl grid place-items-center border border-asan-border dark:border-asan-mid bg-white shrink-0',
+              variant === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
+            )}>
               <FileText className="w-6 h-6 text-asan-accent" />
             </span>
           )}
@@ -145,7 +178,10 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
               type="button"
               title={`Replace ${label}`}
               onClick={() => inputRef.current?.click()}
-              className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 transition"
+              className={cn(
+                'p-1.5 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white dark:hover:bg-slate-800 transition',
+                variant === 'compact' ? 'min-h-[36px] min-w-[36px]' : 'min-h-[44px] min-w-[44px]'
+              )}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -153,7 +189,10 @@ export function KycDocumentUpload({ label, hint, value, onChange, className }: K
               type="button"
               title={`Remove ${label}`}
               onClick={clear}
-              className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+              className={cn(
+                'p-1.5 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition',
+                variant === 'compact' ? 'min-h-[36px] min-w-[36px]' : 'min-h-[44px] min-w-[44px]'
+              )}
             >
               <X className="w-4 h-4" />
             </button>

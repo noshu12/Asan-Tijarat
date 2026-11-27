@@ -1,3 +1,4 @@
+// GROUP2-AUTH-FIX 2026-11-27
 "use client";
 
 // Admin subdomain sign-in — /admin/login.
@@ -7,6 +8,7 @@
 // accounts — they must come here.
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff } from 'lucide-react';
@@ -108,8 +110,20 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
+    <div className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden p-6">
+      {/* Shop-photo background, same as the auth shell — card centred in the
+          middle only, no left content, no extra logo. Serves BOTH admin and
+          sub-admin login (one page, one design). */}
+      <Image
+        src="/hero-bg.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="pointer-events-none object-cover"
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-white/55" />
+      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
         <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Sign In</h3>
         <p className="text-xs text-slate-500 mt-1">
           {needs2FA
