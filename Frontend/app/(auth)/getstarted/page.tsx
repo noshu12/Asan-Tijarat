@@ -1,8 +1,8 @@
+// GROUP2-AUTH-FIX 2026-11-27
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,10 +11,7 @@ import TermsContent from '@/components/TermsContent';
 import { KycDocumentUpload, KycFileDraft } from '@/components/KycDocumentUpload';
 import { toKycPayload } from '@/lib/uploads';
 import {
-  Store,
   ShieldCheck,
-  Building2,
-  Lock,
   Check,
   ArrowRight,
   AlertCircle,
@@ -28,6 +25,7 @@ import confetti from 'canvas-confetti';
 import { api, ApiError, RegisterPayload, KycDocumentPayload } from '@/lib/api';
 import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import { useDeviceLocation } from '@/lib/useDeviceLocation';
+import { Dropdown } from '@/components/ui/dropdown';
 
 /**
  * Shown after a successful submission — mirrors the server's
@@ -55,6 +53,20 @@ const CATEGORIES = [
   'Mother & Baby Care',
   'Paper Products, Wraps & Utilities',
   'Over-the-Counter Healthcare',
+];
+
+/** City / Mandi Hub options — same values + labels as the old native
+ * select (the value sent to the backend is the plain city name). */
+const CITY_OPTIONS = [
+  { value: '', label: 'Select city' },
+  { value: 'Karachi', label: 'Karachi (Sindh)' },
+  { value: 'Lahore', label: 'Lahore (Punjab)' },
+  { value: 'Faisalabad', label: 'Faisalabad (Textile Hub)' },
+  { value: 'Multan', label: 'Multan (Spice & Cotton Hub)' },
+  { value: 'Rawalpindi', label: 'Rawalpindi / Islamabad' },
+  { value: 'Hyderabad', label: 'Hyderabad' },
+  { value: 'Peshawar', label: 'Peshawar (KPK)' },
+  { value: 'Quetta', label: 'Quetta (Balochistan)' },
 ];
 
 /** Shop types for the shopkeeper form — a shopkeeper NEVER picks a product category. */
@@ -326,8 +338,27 @@ export default function GetStartedPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // The native select required guards are gone (the Group 1 Dropdown
+  // has no required prop) — validate here instead, so Step 2 still cannot
+  // advance with an empty shop type / city / category choice. City was
+  // never re-checked at submit, so this guard matters: without it an
+  // account could register with city ''.
   const handleStep2 = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
+    if (role === 'shopkeeper') {
+      if (!shopType) {
+        setErrorMessage('Please select your shop type.');
+        return;
+      }
+    } else if (selectedCategories.length === 0) {
+      setErrorMessage('Please select at least one business category.');
+      return;
+    }
+    if (!city) {
+      setErrorMessage('Please select your city.');
+      return;
+    }
     setStep(3);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -517,61 +548,8 @@ export default function GetStartedPage() {
   ).length;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950">
-
-      {/* Left Brand Panel */}
-      <div className="w-full md:w-1/2 bg-asan-accent-light text-asan-dark p-8 sm:p-14 lg:p-20 flex flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-asan-accent/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div>
-          <Link href="/" className="inline-flex items-center gap-2.5">
-            <Image
-              src="/logo.png"
-              alt="Asan Tijarat logo"
-              width={40}
-              height={40}
-              className="w-10 h-10 rounded-xl object-contain"
-            />
-            <span className="font-bold text-2xl tracking-tight">Asan Tijarat</span>
-          </Link>
-
-          <div className="mt-16 sm:mt-24">
-            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
-              Pakistan&apos;s leading <br />
-              <span className="text-asan-accent">B2B trade platform</span>
-            </h2>
-
-            <div className="mt-10 space-y-4 text-sm sm:text-base text-asan-text-light">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Accounts verified before trading</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Store className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Separate shopkeeper and supplier portals</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Bulk orders with minimum order quantity</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Price per pack, clearly shown</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-12 text-xs text-asan-text-light">
-          © 2026 Asan Tijarat. Final Year Project — FUUAST. All rights reserved.
-        </div>
-      </div>
-
-      {/* Right Form Wizard */}
-      <div className="w-full md:w-1/2 p-6 sm:p-12 lg:p-16 flex items-center justify-center">
-        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
-
-          {submitted ? (
+    <>
+      {submitted ? (
             /* ── Confirmation: account created, OTP verified, awaiting admin verification ── */
             <div className="text-center py-2">
               <div className="w-16 h-16 rounded-full bg-asan-accent-light dark:bg-asan-dark flex items-center justify-center mx-auto mb-4">
@@ -613,7 +591,7 @@ export default function GetStartedPage() {
           ) : otpStep ? (
             /* ── Post-registration OTP step: email OTP only, terminal for now, email later ── */
             <div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Verify Your Email</h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Your account has been created. Enter the 6-digit OTP sent to {registeredEmail} to verify your email.
@@ -625,7 +603,7 @@ export default function GetStartedPage() {
                   Send OTP
                 </Button>
               ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <form onSubmit={handleVerifyOtp} className="space-y-3">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                       OTP Code
@@ -679,7 +657,7 @@ export default function GetStartedPage() {
                 </p>
               )}
 
-              <p className="text-center text-xs text-slate-500 mt-6">
+              <p className="text-center text-xs text-slate-500 mt-4">
                 Already have an account?{' '}
                 <Link href="/signin" className="font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                   Sign In
@@ -688,43 +666,11 @@ export default function GetStartedPage() {
             </div>
           ) : (
             <>
-              {/* Multi-Step Progress Indicator (Matching sl1, sl2, sl3) */}
-              <div className="flex items-center justify-between mb-8 px-4">
-            <div className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                step > 1 ? 'bg-asan-accent text-white' : step === 1 ? 'bg-asan-accent text-white ring-4 ring-asan-accent-light dark:ring-asan-dark' : 'bg-slate-200 text-slate-600'
-              }`}>
-                {step > 1 ? <Check className="w-4 h-4" /> : '1'}
-              </div>
-            </div>
-
-            <div className={`flex-1 h-1 mx-2 rounded ${step >= 2 ? 'bg-asan-accent' : 'bg-slate-200 dark:bg-slate-800'}`} />
-
-            <div className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                step > 2 ? 'bg-asan-accent text-white' : step === 2 ? 'bg-asan-accent text-white ring-4 ring-asan-accent-light dark:ring-asan-dark' : 'bg-slate-200 text-slate-600'
-              }`}>
-                {step > 2 ? <Check className="w-4 h-4" /> : '2'}
-              </div>
-            </div>
-
-            <div className={`flex-1 h-1 mx-2 rounded ${step >= 3 ? 'bg-asan-accent' : 'bg-slate-200 dark:bg-slate-800'}`} />
-
-            <div className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                step === 3 ? 'bg-asan-accent text-white ring-4 ring-asan-accent-light dark:ring-asan-dark' : 'bg-slate-200 text-slate-600'
-              }`}>
-                3
-              </div>
-            </div>
-          </div>
-
           {/* STEP 1: CREATE ACCOUNT */}
           {step === 1 && (
             <div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Create Account</h3>
-                <p className="text-xs text-slate-500 mt-1">Register as a wholesale trader or supplier</p>
 
                 {/* Role Switcher */}
                 <div className="grid grid-cols-2 gap-2 mt-4">
@@ -753,7 +699,7 @@ export default function GetStartedPage() {
                 </div>
               </div>
 
-              <form onSubmit={handleStep1} className="space-y-3.5">
+              <form onSubmit={handleStep1} className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="First Name"
@@ -904,12 +850,12 @@ export default function GetStartedPage() {
           {/* STEP 2: BUSINESS DETAILS */}
           {step === 2 && (
             <div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Business Details</h3>
                 <p className="text-xs text-slate-500 mt-1">Tell us about your trading enterprise</p>
               </div>
 
-              <form onSubmit={handleStep2} className="space-y-4">
+              <form onSubmit={handleStep2} className="space-y-3">
                 <Input
                   label={isShopkeeper ? 'Shop Name' : 'Business / Enterprise Name'}
                   placeholder={isShopkeeper ? 'Ahmed Kiryana Store' : 'Khan Enterprises Ltd.'}
@@ -924,17 +870,17 @@ export default function GetStartedPage() {
                     <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       Shop Type
                     </label>
-                    <select
+                    <Dropdown
+                      options={[{ value: '', label: 'Select shop type' }, ...SHOP_TYPES.map((t) => ({ value: t, label: t }))]}
                       value={shopType}
-                      onChange={(e) => setShopType(e.target.value)}
-                      required
-                      className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
-                    >
-                      <option value="" disabled>Select shop type</option>
-                      {SHOP_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                      onChange={setShopType}
+                      ariaLabel="Shop Type"
+                      search={false}
+                      align="left"
+                      panelClassName="w-full"
+                      listMaxH={116}
+                      buttonClassName="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent flex items-center justify-between gap-2"
+                    />
                   </div>
                 ) : (
                   /* Supplier picks from the 14 master categories via a searchable dropdown. */
@@ -945,22 +891,17 @@ export default function GetStartedPage() {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     City / Mandi Hub
                   </label>
-                  <select
+                  <Dropdown
+                    options={CITY_OPTIONS}
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    required
-                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent"
-                  >
-                    <option value="" disabled>Select city</option>
-                    <option value="Karachi">Karachi (Sindh)</option>
-                    <option value="Lahore">Lahore (Punjab)</option>
-                    <option value="Faisalabad">Faisalabad (Textile Hub)</option>
-                    <option value="Multan">Multan (Spice & Cotton Hub)</option>
-                    <option value="Rawalpindi">Rawalpindi / Islamabad</option>
-                    <option value="Hyderabad">Hyderabad</option>
-                    <option value="Peshawar">Peshawar (KPK)</option>
-                    <option value="Quetta">Quetta (Balochistan)</option>
-                  </select>
+                    onChange={setCity}
+                    ariaLabel="City / Mandi Hub"
+                    search={false}
+                    align="left"
+                    panelClassName="w-full"
+                    listMaxH={116}
+                    buttonClassName="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent flex items-center justify-between gap-2"
+                  />
                 </div>
 
                 {/* NTN is supplier-only now — shopkeepers upload a utility bill instead. */}
@@ -973,6 +914,12 @@ export default function GetStartedPage() {
                     helperText="Required for supplier accounts"
                     required
                   />
+                )}
+
+                {errorMessage && (
+                  <p role="alert" className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5">
+                    {errorMessage}
+                  </p>
                 )}
 
                 <div className="flex gap-2 pt-2">
@@ -991,7 +938,7 @@ export default function GetStartedPage() {
           {/* STEP 3: DOCUMENTS ONLY */}
           {step === 3 && (
             <div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Verification</h3>
                 <p className="text-xs text-slate-500 mt-1">
                   {isShopkeeper
@@ -1000,7 +947,7 @@ export default function GetStartedPage() {
                 </p>
               </div>
 
-              <form onSubmit={handleCompleteRegistration} className="space-y-4">
+              <form onSubmit={handleCompleteRegistration} className="space-y-3">
                 {/* KYC documents — the real files attached to this account */}
                 <div className="space-y-3 pt-1">
                   <div className="flex items-center justify-between">
@@ -1012,19 +959,26 @@ export default function GetStartedPage() {
                     </span>
                   </div>
 
-                  <KycDocumentUpload
-                    label="CNIC Front Image"
-                    hint="Front side of your National Identity Card"
-                    value={cnicFrontDraft}
-                    onChange={setCnicFrontDraft}
-                  />
+                  {/* CNIC front/back — compact side-by-side boxes, like the preview. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <KycDocumentUpload
+                      label="CNIC Front Image"
+                      compactLabel="CNIC FRONT"
+                      variant="compact"
+                      hint="Front side of your National Identity Card"
+                      value={cnicFrontDraft}
+                      onChange={setCnicFrontDraft}
+                    />
 
-                  <KycDocumentUpload
-                    label="CNIC Back Image"
-                    hint="Back side of your National Identity Card"
-                    value={cnicBackDraft}
-                    onChange={setCnicBackDraft}
-                  />
+                    <KycDocumentUpload
+                      label="CNIC Back Image"
+                      compactLabel="CNIC BACK"
+                      variant="compact"
+                      hint="Back side of your National Identity Card"
+                      value={cnicBackDraft}
+                      onChange={setCnicBackDraft}
+                    />
+                  </div>
 
                   {isShopkeeper ? (
                     <KycDocumentUpload
@@ -1036,6 +990,8 @@ export default function GetStartedPage() {
                   ) : (
                     <KycDocumentUpload
                       label="NTN Certificate / Image"
+                      compactLabel="NTN CERTIFICATE"
+                      variant="compact"
                       hint="FBR National Tax Number certificate or scanned copy"
                       value={ntnDraft}
                       onChange={setNtnDraft}
@@ -1111,7 +1067,7 @@ export default function GetStartedPage() {
             </div>
           )}
 
-              <p className="text-center text-xs text-slate-500 mt-6">
+              <p className="text-center text-xs text-slate-500 mt-4">
                 Already have an account?{' '}
                 <Link href="/signin" className="font-bold text-asan-accent dark:text-asan-accent-light hover:underline">
                   Sign In
@@ -1119,10 +1075,6 @@ export default function GetStartedPage() {
               </p>
             </>
           )}
-
-        </div>
-      </div>
-
-    </div>
+    </>
   );
 }

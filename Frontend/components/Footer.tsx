@@ -43,9 +43,9 @@ export function Footer() {
   const visibleCategories = categories.slice(0, 4);
 
   return (
-    <footer className="bg-asan-accent-light text-asan-dark pt-6 pb-5 border-t border-asan-border select-none">
+    <footer className="bg-asan-accent-light text-asan-dark pt-4 pb-3 border-t border-asan-border select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-4">
 
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
@@ -66,17 +66,16 @@ export function Footer() {
           <div className="space-y-2">
             <h4 className="font-bold text-sm uppercase tracking-wider text-asan-accent">Quick Links</h4>
             {/* FIX (Round-4 Batch 11, M6) — footer links were ~17px tall
-                (text-xs, no padding). Each link is now a 36px tap target
-                (min-h-[36px]) at text-sm. Full 44px rows would make the
-                14-link category column 668px tall and the footer taller
-                than most page content, so 36px is the largest size that
-                keeps the footer layout intact (still above the WCAG 2.2
-                AA 24px minimum). Bottom-bar links below are full 44px. */}
+                (text-xs, no padding). They were 36px tap targets, then
+                28px from 2026-11-28 (user: footer still took half the
+                screen — now ~275px tall at 100% zoom). 28px stays above
+                the WCAG 2.2 AA 24px minimum. Bottom-bar links below are
+                32px. */}
             <ul className="space-y-1 text-sm text-asan-text-light">
-              <li><Link href="/" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">Home</Link></li>
-              <li><Link href="/marketplace" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">Browse Marketplace</Link></li>
-              <li><Link href="/about" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">About Our Mission</Link></li>
-              <li><Link href="/contact" className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">Contact & Support</Link></li>
+              <li><Link href="/" className="inline-flex items-center min-h-[28px] hover:text-asan-accent transition">Home</Link></li>
+              <li><Link href="/marketplace" className="inline-flex items-center min-h-[28px] hover:text-asan-accent transition">Browse Marketplace</Link></li>
+              <li><Link href="/about" className="inline-flex items-center min-h-[28px] hover:text-asan-accent transition">About Our Mission</Link></li>
+              <li><Link href="/contact" className="inline-flex items-center min-h-[28px] hover:text-asan-accent transition">Contact & Support</Link></li>
             </ul>
           </div>
 
@@ -88,7 +87,7 @@ export function Footer() {
                 const href = slug ? `/marketplace?cat=${slug}` : '/marketplace';
                 return (
                   <li key={category}>
-                    <Link href={href} className="inline-flex items-center min-h-[36px] hover:text-asan-accent transition">
+                    <Link href={href} className="inline-flex items-center min-h-[28px] hover:text-asan-accent transition">
                       {category}
                     </Link>
                   </li>
@@ -97,7 +96,7 @@ export function Footer() {
             </ul>
             <Link
               href="/marketplace"
-              className="inline-flex items-center min-h-[36px] text-sm font-semibold text-asan-text-light hover:text-asan-accent transition"
+              className="inline-flex items-center min-h-[28px] text-sm font-semibold text-asan-text-light hover:text-asan-accent transition"
             >
               See more
             </Link>
@@ -111,7 +110,7 @@ export function Footer() {
                 <span>Gulshan-e-Iqbal, Karachi, Pakistan</span>
               </p>
               <p>
-                <Link href="/contact" className="inline-flex items-center min-h-[36px] text-sm hover:text-asan-accent transition">
+                <Link href="/contact" className="inline-flex items-center min-h-[28px] text-sm hover:text-asan-accent transition">
                   Contact & Support →
                 </Link>
               </p>
@@ -119,11 +118,11 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-asan-border flex flex-col sm:flex-row items-center justify-between text-xs text-asan-text-light gap-3">
+        <div className="mt-4 pt-3 border-t border-asan-border flex flex-col sm:flex-row items-center justify-between text-xs text-asan-text-light gap-3">
           <p>© 2026 Asan Tijarat. All rights reserved.</p>
           <div className="flex items-center gap-5">
-            <Link href="/terms" className="inline-flex items-center min-h-[44px] hover:text-asan-accent transition">Terms &amp; Conditions</Link>
-            <Link href="/privacy" className="inline-flex items-center min-h-[44px] hover:text-asan-accent transition">Privacy Policy</Link>
+            <Link href="/terms" className="inline-flex items-center min-h-[32px] hover:text-asan-accent transition">Terms &amp; Conditions</Link>
+            <Link href="/privacy" className="inline-flex items-center min-h-[32px] hover:text-asan-accent transition">Privacy Policy</Link>
           </div>
           <p className="text-xs">Cutting Out The Middle, Scaling Up The Profit</p>
         </div>

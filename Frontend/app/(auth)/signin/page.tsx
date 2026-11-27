@@ -1,8 +1,8 @@
+// GROUP2-AUTH-FIX 2026-11-27
 "use client";
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/types';
 import { Input } from '@/components/ui/input';
@@ -12,9 +12,6 @@ import { useAuth } from '@/context/AuthProvider';
 import TurnstileWidget, { isTurnstileConfigured } from '@/components/TurnstileWidget';
 import {
   ShieldCheck,
-  Store,
-  Building2,
-  Lock,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -162,61 +159,8 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950">
-      
-      {/* Left Brand Panel (Light mint) */}
-      <div className="w-full md:w-1/2 bg-asan-accent-light text-asan-dark p-8 sm:p-14 lg:p-20 flex flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-asan-accent/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div>
-          <Link href="/" className="inline-flex items-center gap-2.5">
-            <Image
-              src="/logo.png"
-              alt="Asan Tijarat logo"
-              width={40}
-              height={40}
-              className="w-10 h-10 rounded-xl object-contain"
-            />
-            <span className="font-bold text-2xl tracking-tight">Asan Tijarat</span>
-          </Link>
-
-          <div className="mt-16 sm:mt-24">
-            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
-              Pakistan&apos;s leading <br />
-              <span className="text-asan-accent">B2B trade platform</span>
-            </h2>
-
-            <div className="mt-10 space-y-4 text-sm sm:text-base text-asan-text-light">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Accounts verified before trading</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Store className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Separate shopkeeper and supplier portals</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Bulk orders with minimum order quantity</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-asan-accent shrink-0" />
-                <span>Price per pack, clearly shown</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-12 text-xs text-asan-text-light">
-          © 2026 Asan Tijarat. Final Year Project — FUUAST. All rights reserved.
-        </div>
-      </div>
-
-      {/* Right Form Panel (Matching Figma sl4.png) */}
-      <div className="w-full md:w-1/2 p-6 sm:p-12 lg:p-16 flex items-center justify-center">
-        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
-          
-          <div className="mb-6">
+    <>
+      <div className="mb-5">
             <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
               {needs2FA ? 'Two-Factor Authentication' : 'Sign In'}
             </h3>
@@ -350,9 +294,6 @@ export default function SignInPage() {
               </Link>
             </p>
           )}
-        </div>
-      </div>
-
-    </div>
+    </>
   );
 }
