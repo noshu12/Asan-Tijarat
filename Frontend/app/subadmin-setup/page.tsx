@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,88 +74,95 @@ export default function SubadminSetupPage() {
     }
   };
 
-  if (phase === 'loading') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-        <Loader />
-        <p className="text-xs font-semibold text-slate-500">Preparing your secure setup…</p>
-      </div>
-    );
-  }
-
-  if (phase === 'no-token') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
-        <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">Setup session missing</p>
-        <p className="text-sm text-slate-500 max-w-sm">
-          {error || 'Please sign in with your admin account first — you will land here automatically.'}
-        </p>
-        <Link href="/signin" className="text-sm font-medium text-emerald-700 underline">
-          Go to sign-in
-        </Link>
-      </div>
-    );
-  }
-
-  if (phase === 'done') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
-        <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-          Two-factor authentication enabled ✓
-        </p>
-        <p className="text-sm text-slate-500 max-w-sm">
-          Your account is now secured. Sign in with your email + password, then enter the
-          6-digit code from your authenticator app.
-        </p>
-        <Link href="/signin">
-          <Button>Go to sign-in</Button>
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col items-center min-h-[60vh] gap-5 px-6 py-10">
-      <div className="text-center max-w-md">
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-          Secure your account
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Two-factor authentication is <strong>mandatory</strong> for admin accounts. Scan the QR
-          code with Google Authenticator (or any authenticator app), then enter the 6-digit code
-          below to finish setup.
-        </p>
+    <div className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden p-6">
+      {/* GROUP4-SETUP-FIX 2026-11-28 — shop-photo background, same as the
+          admin login page (fill + object-cover = normal size, poori
+          background cover). Is page par pehle koi background nahi tha;
+          ab har login/2FA page par wohi picture hai. */}
+      <Image
+        src="/hero-bg.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="pointer-events-none object-cover"
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-white/55" />
+      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl">
+        {phase === 'loading' ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-6">
+            <Loader />
+            <p className="text-xs font-semibold text-slate-500">Preparing your secure setup…</p>
+          </div>
+        ) : phase === 'no-token' ? (
+          <div className="flex flex-col items-center justify-center gap-3 text-center">
+            <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">Setup session missing</p>
+            <p className="text-sm text-slate-500 max-w-sm">
+              {error || 'Please sign in with your admin account first — you will land here automatically.'}
+            </p>
+            <Link href="/signin" className="text-sm font-medium text-emerald-700 underline">
+              Go to sign-in
+            </Link>
+          </div>
+        ) : phase === 'done' ? (
+          <div className="flex flex-col items-center justify-center gap-3 text-center">
+            <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+              Two-factor authentication enabled ✓
+            </p>
+            <p className="text-sm text-slate-500 max-w-sm">
+              Your account is now secured. Sign in with your email + password, then enter the
+              6-digit code from your authenticator app.
+            </p>
+            <Link href="/signin">
+              <Button>Go to sign-in</Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-5">
+            <div className="text-center max-w-md">
+              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+                Secure your account
+              </h1>
+              <p className="mt-2 text-sm text-slate-500">
+                Two-factor authentication is <strong>mandatory</strong> for admin accounts. Scan the QR
+                code with Google Authenticator (or any authenticator app), then enter the 6-digit code
+                below to finish setup.
+              </p>
+            </div>
+
+            {qrDataUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qrDataUrl} alt="2FA QR code" className="h-52 w-52 rounded-xl border border-slate-200 bg-white p-2" />
+            )}
+            {otpauthUrl && (
+              <p className="text-xs text-slate-400 max-w-md break-all text-center">
+                Can&apos;t scan? Add this key manually in your authenticator app.
+              </p>
+            )}
+
+            {error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 max-w-md w-full">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleVerify} className="flex flex-col gap-3 w-full max-w-xs">
+              <Input
+                placeholder="6-digit code"
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                className="text-center text-lg tracking-[0.3em]"
+              />
+              <Button type="submit" isLoading={busy} disabled={busy || code.trim().length !== 6}>
+                Enable 2FA
+              </Button>
+            </form>
+          </div>
+        )}
       </div>
-
-      {qrDataUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={qrDataUrl} alt="2FA QR code" className="h-52 w-52 rounded-xl border border-slate-200 bg-white p-2" />
-      )}
-      {otpauthUrl && (
-        <p className="text-xs text-slate-400 max-w-md break-all text-center">
-          Can&apos;t scan? Add this key manually in your authenticator app.
-        </p>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 max-w-md w-full">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleVerify} className="flex flex-col gap-3 w-full max-w-xs">
-        <Input
-          placeholder="6-digit code"
-          inputMode="numeric"
-          maxLength={6}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-          className="text-center text-lg tracking-[0.3em]"
-        />
-        <Button type="submit" isLoading={busy} disabled={busy || code.trim().length !== 6}>
-          Enable 2FA
-        </Button>
-      </form>
     </div>
   );
 }

@@ -76,8 +76,10 @@ export default function AdminLoginPage() {
         resetTs();
         return;
       }
-      // Signed in — the host-only admin cookie is set. Go to the dashboard.
-      window.location.assign('/admin/users');
+      // Signed in — the host-only admin cookie is set. Main admin goes to
+      // the dashboard; sub-admins can't open it (AdminGate), so they land
+      // on Users & KYC — same as the general sign-in (ROLE_HOME).
+      window.location.assign(result.user.role === 'subadmin' ? '/admin/users' : '/admin/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -95,8 +97,10 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      await api.adminVerifyTwoFactorLogin(tempToken, twoFactorCode.trim(), twoFaTsToken || undefined);
-      window.location.assign('/admin/users');
+      const { user } = await api.adminVerifyTwoFactorLogin(tempToken, twoFactorCode.trim(), twoFaTsToken || undefined);
+      // Main admin → dashboard; sub-admin → Users & KYC (dashboard is
+      // main-admin-only, AdminGate).
+      window.location.assign(user.role === 'subadmin' ? '/admin/users' : '/admin/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
