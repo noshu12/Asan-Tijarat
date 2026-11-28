@@ -5,29 +5,42 @@ import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './Sidebar';
 
-// FIX (New audit #19) — the slide-in drawer + backdrop fade were
+// FIX (New audit #19) — the centered popup + backdrop fade were
 // framer-motion (AnimatePresence + motion.div/aside). Same motion in plain
-// CSS now: the entrance is a keyframe (animate-asan-drawer-in /
+// CSS now: the entrance is a keyframe (animate-asan-pop-in /
 // animate-asan-fade-in, globals.css) and the exit is a `closing` state
-// that flips transition classes to the hidden state; the drawer stays
-// mounted for CLOSE_MS so the slide-out can play, exactly like
-// AnimatePresence's exit did. Timing kept: 250 ms slide, ease-out.
-// The drawer state is local to this component, so the exit lifecycle is
+// that flips transition classes to the hidden state; the popup stays
+// mounted for CLOSE_MS so the scale-out can play, exactly like
+// AnimatePresence's exit did. Timing kept: 250 ms, ease-out.
+// The popup state is local to this component, so the exit lifecycle is
 // fully contained here — nothing else in the app depends on it.
+// GROUP3-ADMIN-FIX 2026-11-28 — floating button ab LEFT drawer nahi,
+// CENTERED popup kholta hai (Navbar mobile menu jaisa): screen ke
+// centre me ~320px, rounded corners + shadow + dimmed backdrop.
 const CLOSE_MS = 250;
 
 /**
- * 📱 MOBILE SIDEBAR — slide-in navigation drawer for portal pages (< md).
+ * 📱 MOBILE SIDEBAR — centered popup navigation for portal pages (< md).
  *
  * The static <Sidebar /> is hidden below the md breakpoint, which would leave
  * dashboard users with no navigation at all on phones. This renders a
- * floating trigger button (bottom-left) that opens a light slide-in drawer
- * containing the same <Sidebar />. The drawer closes on: overlay tap,
- * navigating to a link, or pressing Escape. Hidden entirely on md+ where
- * the static sidebar is visible.
+ * floating trigger button (bottom-right) that opens a CENTERED popup
+ * containing the same <Sidebar /> (max ~320px, rounded corners, shadow,
+ * dimmed/blurred backdrop). The popup closes on: backdrop tap, tapping a
+ * nav item, or pressing Escape. Hidden entirely on md+ where the static
+ * sidebar is visible. Desktop sidebar is untouched (fixed, no scroll).
+ *
+ * Mobile fix 2026-11-28 — the button used to sit bottom-LEFT, so every
+ * left-aligned heading/label ("Suppliers", "Latest Listings") scrolled
+ * underneath it while scrolling. It now sits bottom-RIGHT (the standard
+ * FAB corner, away from the left-aligned headings) and is smaller
+ * (w-12/h-12), and the admin content wrapper carries extra bottom
+ * padding (AdminClient pb-28) so the end of the page clears it too.
+ * A fixed button always floats over *something* mid-scroll — the point
+ * is that nothing important (headings, labels) sits under it.
  */
 export function MobileSidebar() {
-  // `rendered` keeps the drawer mounted while the slide-out transition
+  // `rendered` keeps the popup mounted while the scale-out transition
   // plays; `closing` flips the transition classes to the hidden state.
   const [rendered, setRendered] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -59,8 +72,8 @@ export function MobileSidebar() {
     };
   }, []);
 
-  // Close on Escape + lock background scroll while the drawer is open
-  // (including the slide-out, so the page never scrolls under it).
+  // Close on Escape + lock background scroll while the popup is open
+  // (including the scale-out, so the page never scrolls under it).
   useEffect(() => {
     if (!rendered) return;
 
@@ -88,13 +101,13 @@ export function MobileSidebar() {
         type="button"
         aria-label="Open navigation menu"
         onClick={openDrawer}
-        className="fixed bottom-5 left-5 z-[900] md:hidden w-14 h-14 rounded-full bg-asan-accent text-white shadow-xl shadow-asan-dark/40 flex items-center justify-center active:scale-95 transition"
+        className="fixed bottom-4 right-4 z-[900] md:hidden w-12 h-12 rounded-full bg-asan-accent text-white shadow-xl shadow-asan-dark/40 flex items-center justify-center active:scale-95 transition"
       >
         <Menu className="w-6 h-6" />
       </button>
 
       {rendered && (
-        <div className="fixed inset-0 z-[1000] md:hidden">
+        <div className="fixed inset-0 z-[1000] md:hidden flex items-center justify-center p-4">
           {/* Dimmed backdrop — tap to dismiss */}
           <div
             onClick={closeDrawer}
@@ -104,15 +117,19 @@ export function MobileSidebar() {
             )}
           />
 
-          {/* Slide-in panel (starts below the sticky navbar) */}
-          <aside
+          {/* Centered popup panel — same styling as the Navbar mobile menu:
+              ~320px, rounded corners, shadow, pop-in/scale exit */}
+          <div
             className={cn(
-              'absolute top-16 bottom-0 left-0 w-72 max-w-[82vw] shadow-2xl transition-transform duration-[250ms] ease-out animate-asan-drawer-in',
-              closing ? '-translate-x-full' : 'translate-x-0'
+              'relative w-full max-w-[320px] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white shadow-2xl transition-all duration-[250ms] ease-out animate-asan-pop-in',
+              closing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
             )}
           >
-            <Sidebar onNavigate={closeDrawer} />
-          </aside>
+            <Sidebar
+              onNavigate={closeDrawer}
+              className="w-full h-auto static shadow-none border-0 rounded-2xl"
+            />
+          </div>
         </div>
       )}
     </>

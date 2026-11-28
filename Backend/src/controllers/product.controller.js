@@ -240,7 +240,8 @@ async function getProducts(req, res, next) {
     const search = (queryString(req.query.search) || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
-      query.$or = [{ name: rx }, { description: rx }, { category: rx }, { supplierName: rx }, { supplierCity: rx }];
+      // SEARCH-NAME-ONLY 2026-11-28 — product search sirf NAME se; description, category, supplier ya city se nahi.
+      query.name = rx;
     }
 
     const category = (queryString(req.query.category) || '').trim();

@@ -254,10 +254,8 @@ function MarketplaceContent() {
             if (!names || !names.includes(p.category)) return;
           }
           const q = debouncedSearch.trim().toLowerCase();
-          if (q) {
-            const hay = `${p.name} ${p.category} ${p.supplierName} ${p.supplierCity}`.toLowerCase();
-            if (!hay.includes(q)) return;
-          }
+          // SEARCH-NAME-ONLY 2026-11-28 — search sirf product NAME se.
+          if (q && !p.name.toLowerCase().includes(q)) return;
           if (city && p.supplierCity !== city) return;
           const min = debouncedMin.trim() === '' ? undefined : Number(debouncedMin);
           const max = debouncedMax.trim() === '' ? undefined : Number(debouncedMax);
@@ -416,7 +414,7 @@ function MarketplaceContent() {
                 <input
                   aria-label="Search marketplace products"
                   type="text"
-                  placeholder="Search products, suppliers, cities (e.g. Basmati Rice, Faisalabad Cotton, Multan)..."
+                  placeholder="Search product name (e.g. Basmati Rice)..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
                   className="w-full pl-10 pr-12 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:border-asan-accent transition"

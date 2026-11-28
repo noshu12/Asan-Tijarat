@@ -29,6 +29,8 @@ router.use(protectAdmin);
 
 // Batch 17 (H1) — main-admin-only: dashboard stats.
 router.get('/stats', requireRole('admin'), admin.getStats);
+// GROUP3-ADMIN-FIX 2026-11-28 — main-admin-only: daily Trade Volume series.
+router.get('/trade-volume', requireRole('admin'), admin.getTradeVolume);
 
 router.get('/users', requireRole('admin', 'subadmin'), admin.listUsers);
 router.get('/users/:id/identity', requireRole('admin', 'subadmin'), admin.getDecryptedIdentity);

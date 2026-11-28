@@ -9,6 +9,8 @@ import { PAYMENT_METHOD_LABEL } from '@/lib/types';
 import { capitalize, formatPKR, formatDate } from '@/lib/utils';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
+import { Dropdown } from '@/components/ui/dropdown';
+import { ChevronRight, X } from 'lucide-react';
 import { useLiveRefreshKey, useRealtime, useRealtimeEvent } from '@/hooks/useRealtime';
 
 /**
@@ -34,6 +36,8 @@ const DECISION_OPTIONS: { value: DisputeDecision; label: string }[] = [
   { value: 'refund_partial', label: 'Partial refund (enter amount)' },
   { value: 'return_goods', label: 'Return goods + full refund' },
 ];
+
+// GROUP3-ADMIN-FIX 2026-11-28
 
 export default function AdminDisputesPage() {
   const { loading: authLoading } = useAuth();
@@ -67,6 +71,17 @@ export default function AdminDisputesPage() {
   const [refundById, setRefundById] = useState<Record<string, string>>({});
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  // GROUP3 — no decision is pre-selected: the admin must pick one
+  // explicitly (see decide() guard below). decisionError is shown under
+  // the dropdown; decisionPrompt re-opens it as a reminder.
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionPrompt, setDecisionPrompt] = useState(0);
+  // GROUP3 — right slide-over drawer for one dispute (list rows open it).
+  const [drawerDispute, setDrawerDispute] = useState<Dispute | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const drawerTimerRef = useRef<number | null>(null);
+  // GROUP3 — full-size delivery-photo viewer, opened from the drawer thumbnail.
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // Batch 06 — evidence for the selected claim (Finding 3): order, chat
   // thread and delivery photo, so the admin decides on evidence.
   const [evidenceId, setEvidenceId] = useState<string | null>(null);
@@ -114,6 +129,27 @@ export default function AdminDisputesPage() {
     void reloadEvidenceMessages(orderId);
   }, [syncKey, reloadEvidenceMessages]);
 
+  // GROUP3 — clear any pending drawer open/close timer on unmount.
+  useEffect(() => () => {
+    if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current);
+  }, []);
+
+  // GROUP3 — Escape closes the lightbox first if open, else the drawer.
+  useEffect(() => {
+    if (!drawerDispute && !lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (lightboxSrc) {
+        setLightboxSrc(null);
+        return;
+      }
+      closeDrawer();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerDispute, lightboxSrc]);
+
   useEffect(() => {
     if (authLoading) return;
     // Batch 13 — silent on a live refreshKey bump (see above).
@@ -144,13 +180,24 @@ export default function AdminDisputesPage() {
   }, [authLoading, activeTab, page, refreshKey]);
 
   const decide = async (d: Dispute) => {
-    const decision = decisionById[d.id] ?? 'release';
+    // GROUP3 — no auto-select: nothing is decided until the admin picks
+    // a decision. The openSignal bump re-opens the dropdown as a reminder.
+    const decision = decisionById[d.id];
+    if (!decision) {
+      setDecisionError('Please select a decision first.');
+      setDecisionPrompt((p) => p + 1);
+      return;
+    }
     const refundAmount = decision === 'refund_partial' ? Number(refundById[d.id] || 0) : undefined;
     const note = (noteById[d.id] || '').trim();
     setError(null);
     setBusyId(d.id);
     try {
-      await api.admin.decideDispute(d.id, { decision, refundAmount, note: note || undefined });
+      // The API returns the updated dispute — use it for the drawer
+      // snapshot so the drawer shows the resolved decision box right away.
+      const res = await api.admin.decideDispute(d.id, { decision, refundAmount, note: note || undefined });
+      setDecisionError(null);
+      setDrawerDispute((prev) => (prev && prev.id === d.id ? res.dispute : prev));
       setRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to decide dispute.');
@@ -160,15 +207,6 @@ export default function AdminDisputesPage() {
   };
 
   const loadEvidence = async (d: Dispute) => {
-    // Toggle closed.
-    if (evidenceId === d.id) {
-      setEvidenceId(null);
-      setEvidenceOrder(null);
-      setEvidenceMessages([]);
-      setEvidenceError(null);
-      evidenceOrderIdRef.current = null;
-      return;
-    }
     setEvidenceId(d.id);
     setEvidenceLoading(true);
     setEvidenceError(null);
@@ -195,11 +233,35 @@ export default function AdminDisputesPage() {
     }
   };
 
+  // GROUP3 — drawer open/close. Opening a row loads its evidence (which
+  // marks the claim In Review on the backend, as before). Closing waits
+  // for the slide-out animation, then clears the drawer + evidence state.
+  const openDispute = (d: Dispute) => {
+    if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current);
+    setDecisionError(null);
+    setDrawerDispute(d);
+    drawerTimerRef.current = window.setTimeout(() => setDrawerVisible(true), 20);
+    void loadEvidence(d);
+  };
+
+  const closeDrawer = useCallback(() => {
+    setDrawerVisible(false);
+    if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current);
+    drawerTimerRef.current = window.setTimeout(() => {
+      setDrawerDispute(null);
+      setEvidenceId(null);
+      setEvidenceOrder(null);
+      setEvidenceMessages([]);
+      setEvidenceError(null);
+      evidenceOrderIdRef.current = null;
+    }, 550);
+  }, []);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Batch 06 — bell (Finding 5): the disputes page renders PortalHeader
           like every other admin page instead of its own heading. */}
-      <PortalHeader title="Disputes" subtitle="Admin Portal" />
+      <PortalHeader title="Disputes" subtitle="Admin Portal" hideSearch />
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
         {(['all', 'open', 'in_review', 'resolved'] as const).map((tab) => (
@@ -242,40 +304,121 @@ export default function AdminDisputesPage() {
         </div>
       )}
 
-      <div className="space-y-4">
-        {disputes.map((d) => (
-          <div key={d.id} className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-bold text-slate-900 dark:text-white">
-                  {d.orderNumber} • {d.reasonLabel}
+      {/* GROUP3 — compact list in one fixed-height box (6-8 rows visible);
+          a row opens the drawer, which holds the evidence + decision. */}
+      {!loading && disputes.length > 0 && (
+        <div className="max-h-[510px] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {disputes.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => openDispute(d)}
+                className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-slate-900 dark:text-white truncate">
+                    {d.orderNumber} • {d.reasonLabel}
+                  </span>
+                  <span className="block text-xs text-slate-400 mt-0.5">
+                    Opened by {d.raisedByName || d.raisedByRole} ({d.raisedByRole}) • {formatDate(d.createdAt)}
+                  </span>
+                  <span className="block text-xs text-slate-600 dark:text-slate-300 break-words line-clamp-2 mt-1">
+                    {d.description}
+                  </span>
+                </span>
+                <span className="shrink-0 flex items-center gap-2">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                      d.status === 'resolved'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                    }`}
+                  >
+                    {d.status === 'resolved' ? 'Resolved' : d.status === 'in_review' ? 'In Review' : 'Open'}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Batch 19 (audit L4) — page through the queue instead of only
+          ever seeing the first 50 disputes. */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-500">
+            Page {page} of {totalPages} • {total} dispute{total === 1 ? '' : 's'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Previous
+            </Button>
+            <Button type="button" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* GROUP3 — right slide-over drawer: claim + evidence + decision for
+          one dispute. Rendered only while a dispute is open. */}
+      {drawerDispute !== null && (
+        <>
+          <div
+            className={`fixed inset-0 z-[60] bg-black/40 transition-opacity duration-500 motion-reduce:transition-none ${drawerVisible ? 'opacity-100' : 'opacity-0'}`}
+            onClick={closeDrawer}
+            aria-hidden="true"
+          />
+          <aside
+            role="dialog"
+            aria-label={`Dispute ${drawerDispute.orderNumber}`}
+            className={`fixed inset-y-0 right-0 z-[70] w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl flex flex-col transition-transform duration-[550ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${drawerVisible ? 'translate-x-0' : 'translate-x-full'}`}
+          >
+            <div className="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                  {drawerDispute.orderNumber} • {drawerDispute.reasonLabel}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Opened by {d.raisedByName || d.raisedByRole} ({d.raisedByRole}) • {formatDate(d.createdAt)}
+                  Opened by {drawerDispute.raisedByName || drawerDispute.raisedByRole} ({drawerDispute.raisedByRole}) • {formatDate(drawerDispute.createdAt)}
                 </p>
               </div>
-              <span
-                className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  d.status === 'resolved'
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                }`}
-              >
-                {d.status === 'resolved' ? 'Resolved' : d.status === 'in_review' ? 'In Review' : 'Open'}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    drawerDispute.status === 'resolved'
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                  }`}
+                >
+                  {drawerDispute.status === 'resolved' ? 'Resolved' : drawerDispute.status === 'in_review' ? 'In Review' : 'Open'}
+                </span>
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  aria-label="Close dispute"
+                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <p className="text-xs text-slate-600 dark:text-slate-300 break-words">{d.description}</p>
+            <div className="flex-1 overflow-y-auto space-y-4 p-4 sm:p-5">
+              {/* Claim */}
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white mb-1">Claim</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 break-words">{drawerDispute.description}</p>
+              </div>
 
-            {/* Batch 06 — evidence (Finding 3): order, chat thread and
-                delivery photo for this claim, so the decision is made on
-                evidence, not on the claim text alone. */}
-            <Button type="button" variant="outline" onClick={() => void loadEvidence(d)}>
-              {evidenceId === d.id ? 'Hide evidence' : 'View evidence'}
-            </Button>
-            {evidenceId === d.id && (
+              {/* Batch 06 — evidence (Finding 3): order, chat thread and
+                  delivery photo for this claim, so the decision is made on
+                  evidence, not on the claim text alone. */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3">
-                {evidenceLoading && (
+                {evidenceId === drawerDispute.id && evidenceLoading && (
                   <div className="flex items-center justify-center py-6">
                     <Loader />
                   </div>
@@ -311,8 +454,15 @@ export default function AdminDisputesPage() {
                       <p className="text-xs font-bold text-slate-900 dark:text-white mb-1">Delivery photo</p>
                       {evidenceOrder.deliveryProof?.url ? (
                         <div>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={fileUrl(evidenceOrder.deliveryProof.url)} alt="Delivery proof" className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setLightboxSrc(fileUrl(evidenceOrder.deliveryProof!.url))}
+                            title="View the delivery photo full size"
+                            className="block rounded-lg"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={fileUrl(evidenceOrder.deliveryProof.url)} alt="Delivery proof" className="w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-800 object-cover" />
+                          </button>
                           <p className="text-xs text-slate-400 mt-1">
                             Uploaded {evidenceOrder.deliveryProof.uploadedAt ? formatDate(evidenceOrder.deliveryProof.uploadedAt) : ''}
                           </p>
@@ -341,84 +491,99 @@ export default function AdminDisputesPage() {
                   </>
                 )}
               </div>
-            )}
 
-            {d.status === 'resolved' && d.resolution?.decision ? (
-              <div className="p-3 rounded-xl bg-asan-accent-light dark:bg-asan-dark/40 border border-asan-border dark:border-asan-mid text-xs space-y-1">
-                <p className="font-bold text-asan-dark dark:text-asan-accent-light">
-                  Decision: {DECISION_LABEL[d.resolution.decision]}
-                </p>
-                {d.resolution.refundAmount > 0 && (
-                  <p className="text-slate-600 dark:text-slate-300">Refund: {formatPKR(d.resolution.refundAmount)}</p>
-                )}
-                {d.resolution.note && <p className="text-slate-600 dark:text-slate-300 break-words">Note: {d.resolution.note}</p>}
-                <p className="text-xs text-slate-400">
-                  Decided by {d.resolution.decidedByName || 'admin'}
-                  {d.resolution.decidedAt ? ` • ${formatDate(d.resolution.decidedAt)}` : ''}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <label className="block text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Decision</span>
-                  <select
-                    value={decisionById[d.id] ?? 'release'}
-                    onChange={(e) => setDecisionById((prev) => ({ ...prev, [d.id]: e.target.value as DisputeDecision }))}
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
-                  >
-                    {DECISION_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </label>
-                {(decisionById[d.id] ?? 'release') === 'refund_partial' && (
+              {drawerDispute.status === 'resolved' && drawerDispute.resolution?.decision ? (
+                <div className="p-3 rounded-xl bg-asan-accent-light dark:bg-asan-dark/40 border border-asan-border dark:border-asan-mid text-xs space-y-1">
+                  <p className="font-bold text-asan-dark dark:text-asan-accent-light">
+                    Decision: {DECISION_LABEL[drawerDispute.resolution.decision]}
+                  </p>
+                  {drawerDispute.resolution.refundAmount > 0 && (
+                    <p className="text-slate-600 dark:text-slate-300">Refund: {formatPKR(drawerDispute.resolution.refundAmount)}</p>
+                  )}
+                  {drawerDispute.resolution.note && <p className="text-slate-600 dark:text-slate-300 break-words">Note: {drawerDispute.resolution.note}</p>}
+                  <p className="text-xs text-slate-400">
+                    Decided by {drawerDispute.resolution.decidedByName || 'admin'}
+                    {drawerDispute.resolution.decidedAt ? ` • ${formatDate(drawerDispute.resolution.decidedAt)}` : ''}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <label className="block text-xs">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Refund amount (Rs, more than 0 and less than the order total)</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={refundById[d.id] ?? ''}
-                      onChange={(e) => setRefundById((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                      placeholder="e.g. 5000"
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Decision</span>
+                    <span className="block mt-1">
+                      <Dropdown
+                        options={DECISION_OPTIONS}
+                        value={decisionById[drawerDispute.id] ?? ''}
+                        placeholder="Select a decision"
+                        openSignal={decisionPrompt}
+                        ariaLabel="Decision"
+                        onChange={(v) => {
+                          setDecisionById((prev) => ({ ...prev, [drawerDispute.id]: v as DisputeDecision }));
+                          setDecisionError(null);
+                        }}
+                      />
+                    </span>
+                  </label>
+                  {decisionError && (
+                    <p className="text-xs text-red-600 dark:text-red-300">{decisionError}</p>
+                  )}
+                  {decisionById[drawerDispute.id] === 'refund_partial' && (
+                    <label className="block text-xs">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Refund amount (Rs, more than 0 and less than the order total)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={refundById[drawerDispute.id] ?? ''}
+                        onChange={(e) => setRefundById((prev) => ({ ...prev, [drawerDispute.id]: e.target.value }))}
+                        placeholder="e.g. 5000"
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
+                      />
+                    </label>
+                  )}
+                  <label className="block text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Note for both parties (optional)</span>
+                    <textarea
+                      value={noteById[drawerDispute.id] ?? ''}
+                      onChange={(e) => setNoteById((prev) => ({ ...prev, [drawerDispute.id]: e.target.value }))}
+                      placeholder="Why this decision — evidence seen, chat read, delivery photo checked…"
+                      maxLength={2000}
+                      rows={2}
                       className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
                     />
                   </label>
-                )}
-                <label className="block text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Note for both parties (optional)</span>
-                  <textarea
-                    value={noteById[d.id] ?? ''}
-                    onChange={(e) => setNoteById((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                    placeholder="Why this decision — evidence seen, chat read, delivery photo checked…"
-                    maxLength={2000}
-                    rows={2}
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:outline-none"
-                  />
-                </label>
-                <Button type="button" disabled={busyId === d.id} onClick={() => void decide(d)}>
-                  {busyId === d.id ? 'Deciding…' : 'Decide Dispute'}
-                </Button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+                  <Button type="button" disabled={busyId === drawerDispute.id} onClick={() => void decide(drawerDispute)}>
+                    {busyId === drawerDispute.id ? 'Deciding…' : 'Decide Dispute'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
 
-      {/* Batch 19 (audit L4) — page through the queue instead of only
-          ever seeing the first 50 disputes. */}
-      {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <p className="text-xs text-slate-500">
-            Page {page} of {totalPages} • {total} dispute{total === 1 ? '' : 's'}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-              Previous
-            </Button>
-            <Button type="button" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-              Next
-            </Button>
-          </div>
+      {/* GROUP3 — full-size delivery-photo viewer (from the drawer thumbnail). */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/85 flex items-center justify-center p-4"
+          onClick={() => setLightboxSrc(null)}
+          role="dialog"
+          aria-label="Delivery photo"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt="Delivery proof"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setLightboxSrc(null)}
+            aria-label="Close photo"
+            className="absolute top-4 right-4 p-2 rounded-lg bg-black/50 text-white hover:bg-black/70 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       )}
     </div>

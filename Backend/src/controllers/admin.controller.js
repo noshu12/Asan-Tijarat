@@ -75,24 +75,68 @@ const KYC_FIELDS = ['cnicFront', 'cnicBack', 'ntn', 'utilityBill'];
  */
 async function getStats(req, res, next) {
   try {
-    const [userCount, supplierCount, shopkeeperCount, pendingVerifications, productCount, orderCount] =
-      await Promise.all([
+    // Group 3 (2026-11-28) — month-over-month change data for the
+    // dashboard stat cards. UTC calendar months, consistent with the
+    // UTC handling in analytics.controller.js and getTradeVolume
+    // above: this month = [1st of the current UTC month, 1st of next),
+    // last month = [1st of the previous UTC month, 1st of this month).
+    // Date.UTC handles the January wrap (month - 1 = December).
+    // The frontend computes % change itself and shows a count change
+    // ("+N this month") when the previous-period count is 0 — the
+    // backend only supplies the real counts, never a computed %.
+    const now = new Date();
+    const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const lastMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const thisMonth = { $gte: thisMonthStart, $lt: nextMonthStart };
+    const lastMonth = { $gte: lastMonthStart, $lt: thisMonthStart };
+
+    const [
+      userCount, supplierCount, shopkeeperCount, pendingVerifications, productCount, orderCount,
+      adminCount, subadminCount,
+      joinedUsersThisMonth, joinedSuppliersThisMonth, joinedShopkeepersThisMonth,
+      joinedUsersLastMonth, joinedSuppliersLastMonth, joinedShopkeepersLastMonth,
+      ordersThisMonth, ordersLastMonth,
+      productsThisMonth, productsLastMonth,
+      pendingNewThisMonth,
+    ] = await Promise.all([
         User.countDocuments({}),
         User.countDocuments({ role: 'supplier' }),
         User.countDocuments({ role: 'shopkeeper' }),
         User.countDocuments({ verified: false, role: { $ne: 'admin' } }),
         Product.countDocuments({}),
         Order.countDocuments({}),
+        User.countDocuments({ role: 'admin' }),
+        User.countDocuments({ role: 'subadmin' }),
+        User.countDocuments({ createdAt: thisMonth }),
+        User.countDocuments({ role: 'supplier', createdAt: thisMonth }),
+        User.countDocuments({ role: 'shopkeeper', createdAt: thisMonth }),
+        User.countDocuments({ createdAt: lastMonth }),
+        User.countDocuments({ role: 'supplier', createdAt: lastMonth }),
+        User.countDocuments({ role: 'shopkeeper', createdAt: lastMonth }),
+        // ALL orders created in the month, any status — this is the
+        // count change, not a sales total (cancelled orders count too).
+        Order.countDocuments({ createdAt: thisMonth }),
+        Order.countDocuments({ createdAt: lastMonth }),
+        Product.countDocuments({ createdAt: thisMonth }),
+        Product.countDocuments({ createdAt: lastMonth }),
+        // Same definition as pendingVerifications above (admins
+        // excluded — admin accounts are created verified), windowed
+        // on this month: the Pending Verification change line.
+        User.countDocuments({ verified: false, role: { $ne: 'admin' }, createdAt: thisMonth }),
       ]);
 
     // Batch 04 — "Trade Volume" counts NON-CANCELLED orders only, the same
     // definition as the supplier/shopkeeper analytics and dashboards. A
     // cancelled order is not a sale, so it must never inflate the volume.
+    // Group 3 earnings (2026-11-28): the same aggregate also sums the
+    // stored $platformFee — the exact fee, never 2% of revenue, since
+    // dispute decisions can reduce the stored fee.
     const revenueAgg = await Order.aggregate([
       { $match: { status: { $ne: 'cancelled' } } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' }, feeTotal: { $sum: '$platformFee' } } },
     ]);
-    const revenue = revenueAgg[0] || { total: 0 };
+    const revenue = revenueAgg[0] || { total: 0, feeTotal: 0 };
 
     const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5).lean();
 
@@ -101,13 +145,115 @@ async function getStats(req, res, next) {
         users: userCount,
         suppliers: supplierCount,
         shopkeepers: shopkeeperCount,
+        admins: adminCount,
+        subadmins: subadminCount,
         pendingVerifications,
         products: productCount,
         orders: orderCount,
         revenue: revenue.total,
+        feeTotal: revenue.feeTotal || 0,
+        joinedThisMonth: {
+          users: joinedUsersThisMonth,
+          suppliers: joinedSuppliersThisMonth,
+          shopkeepers: joinedShopkeepersThisMonth,
+        },
+        joinedLastMonth: {
+          users: joinedUsersLastMonth,
+          suppliers: joinedSuppliersLastMonth,
+          shopkeepers: joinedShopkeepersLastMonth,
+        },
+        ordersThisMonth,
+        ordersLastMonth,
+        productsThisMonth,
+        productsLastMonth,
+        pendingNewThisMonth,
       },
       recentOrders: toClient(recentOrders),
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/admin/trade-volume?range=7|30|90
+ * Daily revenue + order counts for the admin dashboard Trade Volume
+ * graph, plus the previous-period total for the vs-previous-period
+ * comparison. Same revenue definition as getStats: NON-CANCELLED
+ * orders only (a cancelled order is not a sale), summed $totalAmount
+ * per UTC calendar day. Earnings (Group 3, 2026-11-28): each point
+ * also carries `fee`, the EXACT sum of the stored $platformFee for
+ * that day — never 2% of revenue, since dispute decisions can reduce
+ * the stored fee — and `prevFeeTotal` is the same stored-fee sum over
+ * the previous equal-length period. Aggregated in Mongo, then
+ * zero-filled in JS so every day in the window appears (a day with no
+ * orders → revenue 0, fee 0, orders 0), oldest first. Main-admin-only
+ * — the route enforces requireRole('admin'), like /stats (Batch 17 H1).
+ */
+// GROUP3-ADMIN-FIX 2026-11-28
+async function getTradeVolume(req, res, next) {
+  try {
+    // Batch 17 (L1) — raw req.query values never reach Mongoose:
+    // queryString() rejects operator objects (?range[$ne]=7) with null.
+    const rangeRaw = queryString(req.query.range);
+    const range = rangeRaw === undefined ? 7 : Number(rangeRaw);
+    if (rangeRaw === null || !Number.isInteger(range) || ![7, 30, 90].includes(range)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_RANGE', message: 'range must be 7, 30 or 90.' },
+      });
+    }
+
+    // UTC-midnight window start, (range - 1) days ago — mirrors the
+    // windowStart()/dayBuckets() pattern in analytics.controller.js.
+    // The previous equal-length period runs the `range` days before
+    // that: [start - range days, start).
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const utcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const start = new Date(utcMidnight - (range - 1) * DAY_MS);
+    const prevStart = new Date(utcMidnight - (2 * range - 1) * DAY_MS);
+
+    const [rows, prevAgg] = await Promise.all([
+      Order.aggregate([
+        { $match: { status: { $ne: 'cancelled' }, createdAt: { $gte: start } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$totalAmount' },
+            fee: { $sum: '$platformFee' },
+            orders: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      // Previous-period total revenue + fee — same non-cancelled
+      // definition, no day grouping needed.
+      Order.aggregate([
+        { $match: { status: { $ne: 'cancelled' }, createdAt: { $gte: prevStart, $lt: start } } },
+        { $group: { _id: null, total: { $sum: '$totalAmount' }, feeTotal: { $sum: '$platformFee' } } },
+      ]),
+    ]);
+    const prevTotal = (prevAgg[0] && prevAgg[0].total) || 0;
+    const prevFeeTotal = (prevAgg[0] && prevAgg[0].feeTotal) || 0;
+
+    // Zero-fill: a day with no orders has no aggregate row, so every
+    // day in the window is seeded first (oldest first), then filled
+    // from the rows — same fillDaily() idea as analytics.controller.js.
+    const points = [];
+    for (let i = range - 1; i >= 0; i--) {
+      const d = new Date(utcMidnight - i * DAY_MS);
+      points.push({ date: d.toISOString().slice(0, 10), revenue: 0, fee: 0, orders: 0 });
+    }
+    const index = new Map(points.map((p, i) => [p.date, i]));
+    for (const row of rows || []) {
+      const i = index.get(row._id);
+      if (i === undefined) continue;
+      points[i].revenue += row.revenue || 0;
+      points[i].fee += row.fee || 0;
+      points[i].orders += row.orders || 0;
+    }
+
+    res.json({ range, prevTotal, prevFeeTotal, points });
   } catch (err) {
     next(err);
   }
@@ -548,7 +694,8 @@ async function listProducts(req, res, next) {
     const search = (queryString(req.query.search) || '').trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), 'i');
-      query.$or = [{ name: rx }, { description: rx }, { category: rx }, { supplierName: rx }];
+      // SEARCH-NAME-ONLY 2026-11-28 — product search sirf NAME se; description, category ya supplier se nahi.
+      query.name = rx;
     }
 
     const total = await Product.countDocuments(query);
@@ -993,6 +1140,7 @@ async function deleteSubadmin(req, res, next) {
 
 module.exports = {
   getStats,
+  getTradeVolume,
   listUsers,
   verifyUser,
   suspendUser,

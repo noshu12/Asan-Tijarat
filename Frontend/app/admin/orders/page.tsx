@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { formatPKR, formatDate, capitalize } from '@/lib/utils';
 import { idFromEventLink, ORDER_EVENT_TYPES, PAYMENT_EVENT_TYPES, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
 
+// GROUP3-ADMIN-FIX 2026-11-28
+
 const TABS: ('All' | OrderStatus)[] = ['All', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 
 // Batch 22 (Round-5 audit h-L3) — the old local statusLabel one-liner
@@ -352,10 +354,11 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PortalHeader
         title="All Orders"
         subtitle="Monitor every buyer↔supplier order on the platform"
+        hideSearch
       />
 
       {error && (
@@ -420,9 +423,18 @@ export default function AdminOrdersPage() {
           <p className="text-sm text-slate-500">No orders match the selected filter.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="min-w-[880px] w-full text-left text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-h-[500px] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <table className="table-fixed w-full text-left text-sm">
+            <colgroup>
+              <col style={{ width: 96 }} />
+              <col />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 120 }} />
+            </colgroup>
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-4 py-3">Order #</th>
                 <th className="px-4 py-3">Parties</th>
@@ -439,16 +451,16 @@ export default function AdminOrdersPage() {
                   <td className="px-4 py-3 font-mono font-bold text-xs text-asan-accent dark:text-asan-accent-light whitespace-nowrap">
                     {o.orderNumber}
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white">{o.items[0]?.productName || '—'}</p>
-                    <p className="text-xs text-slate-400">
+                  <td className="px-4 py-3 min-w-0">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{o.items[0]?.productName || '—'}</p>
+                    <p className="text-xs text-slate-400 truncate">
                       Buyer: {o.buyerName} → Supplier: {o.supplierName}
                     </p>
                   </td>
                   <td className="px-4 py-3 text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
                     {formatPKR(o.totalAmount)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <Badge variant={getVariant(o.status)}>{statusLabel(o.status)}</Badge>
                   </td>
                   <td className="px-4 py-3">{paymentCell(o)}</td>

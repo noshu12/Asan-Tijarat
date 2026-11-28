@@ -12,9 +12,12 @@ import { ALL_REALTIME_EVENT_TYPES, useRealtime, useRealtimeEvent } from '@/hooks
 interface PortalHeaderProps {
   title: string;
   subtitle?: string;
+  // GROUP3-ADMIN-FIX 2026-11-28 — hideSearch: admin pages pe header wali
+  // "Search products..." search nahi dikhani (ek page pe ek hi search).
+  hideSearch?: boolean;
 }
 
-export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
+export function PortalHeader({ title, subtitle, hideSearch = false }: PortalHeaderProps) {
   const router = useRouter();
   const { user } = useAuth();
   // FIX (Batch 03) — search box pehle decorative tha: na state thi, na
@@ -40,6 +43,26 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
   // Batch 13 — ids already in the list, so a live event that replays (or
   // arrives twice) upserts instead of double-counting the badge.
   const knownIdsRef = useRef<Set<string> | null>(null);
+
+  // Notification box bahar click karne pe band ho — bell button + panel
+  // dono isi ref ke andar hain, is liye bell pe click toggle karta hai
+  // aur bahar kahin bhi click band karta hai. Escape se bhi band hota hai.
+  const bellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!bellOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBellOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [bellOpen]);
 
   const loadNotifications = async () => {
     try {
@@ -125,45 +148,43 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
     }
   };
 
-  const today = new Date().toLocaleDateString('en-PK', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
-
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-200/80 dark:border-slate-800">
-      {/* FIX (Batch 03 #16) — tablet (~768px) the header row is a no-wrap
-          flex row: title + fixed 256px search + bell ≈ 470px, but the
-          portal content is only ≈448px wide (256px sidebar + px-8). The
-          bell was clipped by the layout's overflow-x-hidden. min-w-0 on
-          both children + a shrinking search form let the search narrow
-          instead of clipping. Desktop unchanged: the form still caps at
-          256px (sm:max-w-64) and the input is w-full inside it. */}
-      <div className="min-w-0">
+    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-3 gap-y-3 pb-3 mb-3 border-b border-slate-200/80 dark:border-slate-800">
+      {/* MOBILE HEADER FIX 2026-11-28 — bell kabhi heading ke neeche nahi
+          aani chahiye. Mobile pe ye flex-wrap row hai: title (order-1,
+          flex-1) + bell (order-2, shrink-0) hamesha pehli line pe rehte
+          hain; search (order-3, basis-full) apni line pe neeche aa jata
+          hai. sm+ pe flex-nowrap wapas — title + search + bell ek hi row
+          (Batch 03 tablet fix barkarar: dono children min-w-0, search
+          shrink hoti hai, bell clip nahi hoti). */}
+      <div className="order-1 min-w-0 flex-1">
         <h1 className="text-2xl sm:text-3xl font-bold text-asan-dark dark:text-white tracking-tight">
           {title}
         </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          {subtitle || today}
-        </p>
+        {/* Subtitle sirf tab dikhao jab diya gaya ho — warna (jaise Users /
+            Dashboard) koi line nahi aati; pehle yahan date ka fallback tha. */}
+        {subtitle ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {subtitle}
+          </p>
+        ) : null}
       </div>
 
-      <div className="flex min-w-0 items-center gap-3">
-        <form onSubmit={handleSearchSubmit} className="relative min-w-0 flex-1 sm:max-w-64">
+      {!hideSearch && (
+        <form onSubmit={handleSearchSubmit} className="relative order-3 sm:order-2 min-w-0 basis-full sm:basis-auto sm:flex-1 sm:max-w-64">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search products..."
+            placeholder="Search product name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search products"
-            className="pl-9 pr-4 py-2 w-48 sm:w-full rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
+            aria-label="Search product name"
+            className="pl-9 pr-4 py-2 w-full rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
           />
         </form>
+      )}
 
-        <div className="relative">
+      <div ref={bellRef} className="relative order-2 sm:order-3 shrink-0">
           <button
             type="button"
             onClick={() => { setBellOpen((o) => !o); if (!bellOpen) void loadNotifications(); }}
@@ -216,7 +237,6 @@ export function PortalHeader({ title, subtitle }: PortalHeaderProps) {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }

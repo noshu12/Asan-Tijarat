@@ -1,5 +1,9 @@
 "use client";
 
+// GROUP3-ADMIN-FIX 2026-11-28 — mobile bottom padding pb-20 → pb-28:
+// the floating MobileSidebar button (bottom-4 + h-12 = 64px zone) must
+// never cover the end of the page; 112px clears it with room. md:pb-8
+// (desktop) untouched.
 import React from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
@@ -91,7 +95,7 @@ export function AdminClient({
         <div className="hidden md:block shrink-0">
           <Sidebar />
         </div>
-        <div className="flex-1 px-4 pt-4 pb-20 sm:px-8 sm:pt-8 md:pb-8 max-w-7xl overflow-x-hidden">
+        <div className="flex-1 px-4 pt-4 pb-28 sm:px-8 sm:pt-8 md:pb-8 max-w-7xl overflow-x-hidden">
           <AdminGate>{children}</AdminGate>
         </div>
       </div>
