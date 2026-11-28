@@ -21,31 +21,16 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthProvider';
-import { SignOutButton } from './SignOutButton';
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+// GROUP3-ADMIN-FIX 2026-11-28 — top label pill + bottom user card / Sign Out
+// hata diye (logout + profile ab sirf navbar me hain); sidebar kabhi
+// scroll nahi karta (overflow-hidden).
+export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; className?: string }) {
   const pathname = usePathname();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
 
   const isAdmin = pathname.startsWith('/admin');
   const isSupplier = pathname.startsWith('/supplier');
-  // FIX (Batch 03) — demo naam hata diye: user load na ho to production
-  // UI me kisi aur ka naam dikhna galat tha. Ab: user hi nahi hai to
-  // "Guest", warna role ka label dikhega.
-  const fallbackName = !user
-    ? 'Guest'
-    : isAdmin
-      ? (user.role === 'subadmin' ? 'KYC Reviewer' : 'Platform Admin')
-      : isSupplier
-        ? 'Supplier'
-        : 'Shopkeeper';
-  const displayName = authLoading
-    ? 'Loading…'
-    : (user?.businessName || user?.name || fallbackName);
-  const displayRole = authLoading
-    ? '…'
-    : (user?.role || (isAdmin ? 'admin' : isSupplier ? 'supplier' : 'shopkeeper'));
-  const avatar = (user as { avatar?: string } | null)?.avatar || '';
 
   const shopkeeperNav = [
     { name: 'Dashboard', href: '/shopkeeper/dashboard', icon: LayoutDashboard },
@@ -92,17 +77,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const links = isSubadmin ? subadminNav : isAdmin ? adminNav : isSupplier ? supplierNav : shopkeeperNav;
 
   return (
-    <aside className="w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 bg-white text-asan-dark flex flex-col justify-between p-4 shadow-sm border-r border-asan-border select-none overflow-y-auto">
+    // className (optional) — sirf MobileSidebar ke centered popup se
+    // milta hai: wahan sidebar fixed/sticky nahi, full-width + auto
+    // height + rounded hoti hai. cn() twMerge hai, to override classes
+    // default wali jeet jati hain. Bina className ke desktop bilkul
+    // waisa hi hai jaisa tha (fixed, no scroll).
+    <aside className={cn("w-64 shrink-0 h-[calc(100vh-4rem)] sticky top-16 bg-white text-asan-dark flex flex-col justify-between p-4 shadow-sm border-r border-asan-border select-none overflow-hidden", className)}>
       <div>
-        <div className="px-3 py-2 mb-4 rounded-xl bg-asan-accent-light border border-asan-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-asan-accent animate-pulse" />
-            <span className="text-xs font-semibold tracking-wide uppercase text-asan-accent">
-              {isAdmin ? 'Admin Panel' : isSupplier ? 'Supplier Portal' : 'Shopkeeper Portal'}
-            </span>
-          </div>
-        </div>
-
         <nav className="space-y-1.5">
           {links.map((item) => {
             const Icon = item.icon;
@@ -125,38 +106,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             );
           })}
         </nav>
-      </div>
-
-      <div className="pt-4 mt-6 border-t border-asan-border shrink-0">
-        <div className="flex items-center px-2 py-2 rounded-xl bg-asan-accent-light">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {avatar ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={avatar}
-                alt={displayName}
-                className="w-9 h-9 rounded-full object-cover border border-asan-accent shrink-0"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-asan-accent border border-asan-accent flex items-center justify-center font-bold text-sm text-white shrink-0">
-                {displayName[0]}
-              </div>
-            )}
-            <div className="truncate">
-              <p className="text-xs font-bold text-asan-dark truncate">{displayName}</p>
-              <p className="text-xs text-asan-text-light truncate capitalize">
-                {displayRole === 'admin' ? 'Administrator' : displayRole === 'supplier' ? 'Supplier' : displayRole === 'subadmin' ? 'Sub Admin' : 'Shopkeeper'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Secure sign-out — available from every portal page (Admin, Supplier
-            and Shopkeeper dashboards) and inside the mobile drawer. */}
-        <SignOutButton
-          onSignOut={onNavigate}
-          className="w-full mt-3 px-3 py-2.5 bg-white hover:bg-red-50 border border-asan-border text-red-500 hover:text-red-600"
-        />
       </div>
     </aside>
   );

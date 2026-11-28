@@ -346,6 +346,30 @@ export interface AdminStats {
   products: number;
   orders: number;
   revenue: number;
+  /** All-time sum of order.platformFee (non-cancelled only). Optional:
+      older backends do not send it; the dashboard only uses it as a
+      loading fallback for the range fee line. */
+  feeTotal?: number;
+  /** Staff counts for the Total Users breakdown line. Optional: older
+      backends do not send them. */
+  admins?: number;
+  subadmins?: number;
+  /** Month-over-month counts for the count-card % lines. All optional:
+      a missing field hides that card's sub-line quietly, never NaN. */
+  joinedThisMonth?: JoinedCounts;
+  joinedLastMonth?: JoinedCounts;
+  ordersThisMonth?: number;
+  ordersLastMonth?: number;
+  productsThisMonth?: number;
+  productsLastMonth?: number;
+  pendingNewThisMonth?: number;
+}
+
+/** New joins in one calendar month, split by role. */
+export interface JoinedCounts {
+  users: number;
+  suppliers: number;
+  shopkeepers: number;
 }
 
 export interface AdminUser extends User {
@@ -761,6 +785,18 @@ export const api = {
   /* ── Admin API (requires an admin session) ────────────────────────── */
   admin: {
     stats: () => request<{ stats: AdminStats; recentOrders: Order[] }>('/api/admin/stats'),
+
+    // GROUP3-ADMIN-FIX 2026-11-28 — daily revenue for the Trade Volume
+    // hero chart; range clamps to 7 / 30 / 90 (default 7). prevTotal is
+    // the previous equal-length period's revenue, for the vs-previous
+    // change on the card. Points are zero-filled, oldest first.
+    // `fee` is the exact per-day sum of order.platformFee (never 2% of
+    // revenue) and prevFeeTotal the previous period's fee total, for
+    // the "Aapki kamai" line in the hero.
+    tradeVolume: (range: number) => {
+      const valid = [7, 30, 90].includes(range) ? range : 7;
+      return request<{ range: number; prevTotal: number; prevFeeTotal: number; points: { date: string; revenue: number; fee: number; orders: number }[] }>(`/api/admin/trade-volume?range=${valid}`);
+    },
 
     users: (query: { role?: string; verified?: string; search?: string; page?: number; limit?: number } = {}) => {
       const params = new URLSearchParams();

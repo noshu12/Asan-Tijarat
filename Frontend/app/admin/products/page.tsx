@@ -6,6 +6,7 @@ import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
+import { Dropdown } from '@/components/ui/dropdown';
 import { ProductImage } from '@/components/ProductImage';
 import { Images, Search, ShieldCheck, Trash2, Boxes, ZoomIn } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -13,6 +14,8 @@ import { useAuth } from '@/context/AuthProvider';
 import { Product } from '@/lib/types';
 import { formatDate, formatFileSize, formatPKR } from '@/lib/utils';
 import { idFromEventLink, PRODUCT_UPDATE_EVENT_TYPES, useLiveRefreshKey, useRealtimeEvent } from '@/hooks/useRealtime';
+
+// GROUP3-ADMIN-FIX 2026-11-28
 
 export default function AdminProductsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -80,10 +83,8 @@ export default function AdminProductsPage() {
           if (page !== 1) return;
           if (statusFilter !== 'all' && p.status !== statusFilter) return;
           const q = debouncedSearch.trim().toLowerCase();
-          if (q) {
-            const hay = `${p.name} ${p.category} ${p.supplierName}`.toLowerCase();
-            if (!hay.includes(q)) return;
-          }
+          // SEARCH-NAME-ONLY 2026-11-28 — search sirf product NAME se.
+          if (q && !p.name.toLowerCase().includes(q)) return;
           setProducts((prev) => [p, ...prev]);
         }).catch(() => {}).finally(() => {
           pendingProductPrependRef.current.delete(productId);
@@ -179,10 +180,11 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PortalHeader
         title="Products"
         subtitle="Moderate all marketplace listings — view or delete"
+        hideSearch
       />
 
       {message && (
@@ -205,7 +207,7 @@ export default function AdminProductsPage() {
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search product, category or supplier..."
+            placeholder="Search product name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
@@ -221,16 +223,18 @@ export default function AdminProductsPage() {
             className="pl-9 pr-4 py-2 w-full rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none focus:border-asan-accent transition"
           />
         </div>
-        <select
+        <Dropdown
+          options={[
+            { value: 'all', label: 'All Status' },
+            { value: 'Active', label: 'Active' },
+            { value: 'Low Stock', label: 'Low Stock' },
+            { value: 'Out of Stock', label: 'Out of Stock' },
+          ]}
           value={statusFilter}
-          onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
-          className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs dark:bg-slate-900 dark:border-slate-800 dark:text-white focus:outline-none"
-        >
-          <option value="all">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Low Stock">Low Stock</option>
-          <option value="Out of Stock">Out of Stock</option>
-        </select>
+          onChange={(v) => { setPage(1); setStatusFilter(v); }}
+          search={false}
+          ariaLabel="Filter by status"
+        />
         <Button type="button" variant="outline" onClick={() => { setPage(1); setStatusFilter('all'); setSearch(''); }}>
           Reset
         </Button>
@@ -244,9 +248,9 @@ export default function AdminProductsPage() {
           <p className="text-sm text-slate-500">No products match the selected filters.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="min-w-[720px] w-full text-left text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-h-[384px] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Supplier</th>
@@ -288,13 +292,13 @@ export default function AdminProductsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
-                    {p.supplierName}
+                    <p className="truncate max-w-[160px]">{p.supplierName}</p>
                     <p className="text-xs text-slate-400">{p.supplierCity}</p>
                   </td>
-                  <td className="px-4 py-3 text-xs font-bold text-slate-900 dark:text-white">
+                  <td className="px-4 py-3 text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
                     {formatPKR(p.price)} / {p.unit}
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
+                  <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
                     {p.stock} <span className="text-slate-400">({p.moq} MOQ)</span>
                   </td>
                   <td className="px-4 py-3 text-xs font-semibold text-slate-700 dark:text-slate-200">

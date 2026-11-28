@@ -5,7 +5,7 @@ import { PortalHeader } from '@/components/PortalHeader';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { api, AdminUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthProvider';
 import { formatDate } from '@/lib/utils';
@@ -22,6 +22,9 @@ import { formatDate } from '@/lib/utils';
  * admin layout already blocks sub-admins from this path (AdminGate).
  * Do NOT touch /subadmin-setup — that flow must keep working as-is.
  */
+
+// GROUP3-ADMIN-FIX 2026-11-28
+
 export default function AdminSubadminsPage() {
   const { user, loading: authLoading } = useAuth();
   const [subs, setSubs] = useState<AdminUser[]>([]);
@@ -38,6 +41,7 @@ export default function AdminSubadminsPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const loadSubadmins = async () => {
     setError(null);
@@ -150,10 +154,11 @@ export default function AdminSubadminsPage() {
   const limitReached = count >= max;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PortalHeader
         title="Sub-Admins"
         subtitle="Create reviewer accounts — they get full admin access after the mandatory 2FA setup"
+        hideSearch
       />
       {message && (
         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
@@ -180,9 +185,9 @@ export default function AdminSubadminsPage() {
             Maximum {max} sub-admin accounts reached. Delete one to create another.
           </p>
         ) : (
-          <form onSubmit={handleCreate} className="flex flex-col gap-3 max-w-md">
+          <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+              <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                 {formError}
               </div>
             )}
@@ -192,29 +197,36 @@ export default function AdminSubadminsPage() {
               onChange={(e) => setName(e.target.value)}
             />
             <Input
+              placeholder="Phone (optional)"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <Input
               type="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <Input
-              type="password"
-              placeholder="Password (min. 8 characters)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <Input
-              placeholder="Phone (optional)"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-            <Button type="submit" isLoading={busy} disabled={busy}>
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Password (min. 8 characters)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pr-11"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <Button type="submit" isLoading={busy} disabled={busy} className="sm:col-span-2 w-full">
               Create Sub-Admin
             </Button>
-            <p className="text-xs text-slate-500">
-              The new sub-admin signs in once with this email + password, then scans the 2FA QR
-              code on the setup page before the account can be used.
-            </p>
           </form>
         )}
       </div>

@@ -1,4 +1,5 @@
 // GROUP2-AUTH-FIX 2026-11-27
+// GROUP3-ADMIN-FIX 2026-11-28
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
@@ -25,9 +26,12 @@ interface DropdownProps {
   // lines up exactly with the field and can never be cut off sideways.
   listMaxH?: number; // list max height in px — default 190. City (8 options)
   // needs ~300, Shop Type (10) ~370, so all options show without scrolling.
+  placeholder?: string; // shown (grey) when value is '' / matches no option,
+  // instead of falling back to options[0].label.
+  openSignal?: number; // when this changes to a new value > 0, open the panel.
 }
 
-export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, align = 'right', buttonClassName, panelClassName = 'w-72', listMaxH = 190 }: DropdownProps) {
+export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, align = 'right', buttonClassName, panelClassName = 'w-72', listMaxH = 190, placeholder, openSignal }: DropdownProps) {
   const showSearch = search ?? options.length > 4;
   const [isOpen, setIsOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
@@ -35,8 +39,14 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
   const [highlighted, setHighlighted] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const prevOpenSignalRef = useRef(openSignal ?? 0);
 
-  const selected = options.find((o) => o.value === value) ?? options[0];
+  const selected = options.find((o) => o.value === value);
+  // No matching option: placeholder (grey) when given, else options[0]
+  // exactly as before. The tick still keys off `value`, so a placeholder
+  // state never ticks any row.
+  const showingPlaceholder = !selected && !!placeholder;
+  const buttonLabel = selected ? selected.label : (placeholder || options[0]?.label);
 
   const filtered = query.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
@@ -52,11 +62,7 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
   // Open upward when there is not enough room below the button for the
   // panel (e.g. City near the bottom of a tall form at 125% zoom) — the
   // panel would otherwise be cut off at the viewport edge.
-  const toggle = () => {
-    if (isOpen) {
-      close();
-      return;
-    }
+  const openPanel = () => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (rect) {
       const estPanelH = (showSearch ? 52 : 8) + Math.min(options.length * 36, listMaxH) + 16;
@@ -67,6 +73,28 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
     }
     setIsOpen(true);
   };
+
+  const toggle = () => {
+    if (isOpen) {
+      close();
+      return;
+    }
+    openPanel();
+  };
+
+  // openSignal: a new value > 0 opens the panel (e.g. an outside button
+  // asking this dropdown to open). The ref skips the mount render so the
+  // panel never opens on its own at first paint.
+  useEffect(() => {
+    const prev = prevOpenSignalRef.current;
+    prevOpenSignalRef.current = openSignal ?? 0;
+    if ((openSignal ?? 0) > 0 && openSignal !== prev) {
+      openPanel();
+    }
+    // openPanel only reads refs + stable setters, so depending on it
+    // would re-subscribe on every render for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
 
   const select = (optionValue: string) => {
     onChange(optionValue);
@@ -142,9 +170,9 @@ export function Dropdown({ options, value, onChange, prefix, ariaLabel, search, 
           'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:border-asan-accent flex items-center gap-2 whitespace-nowrap'
         }
       >
-        <span className="truncate max-w-36 sm:max-w-52">
+        <span className={`truncate max-w-36 sm:max-w-52 ${showingPlaceholder ? 'text-slate-400' : ''}`}>
           {prefix ? `${prefix}: ` : ''}
-          {selected?.label}
+          {buttonLabel}
         </span>
         <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>

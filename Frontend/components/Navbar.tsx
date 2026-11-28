@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { Search, Menu, X, LayoutDashboard, ShieldCheck, ShoppingCart, LogOut } from 'lucide-react';
+import { Search, Menu, X, LayoutDashboard, ChevronDown, ShoppingCart, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 // FIX (New audit #19) — the mobile menu + search modal were framer-motion
 // (AnimatePresence + motion.div/nav). Same motion in plain CSS now: the
@@ -19,7 +19,7 @@ import { cartCount, CART_UPDATED_EVENT } from '@/lib/cart';
 
 /**
  * Session-aware navigation — guests see Sign In / Get Started; logged-in users
- * see a role-appropriate dashboard link (admin → Admin Panel) plus Sign Out.
+ * see a profile dropdown (My Dashboard + Logout) in the navbar.
  */
 export function Navbar() {
   const pathname = usePathname();
@@ -82,6 +82,41 @@ export function Navbar() {
       if (searchCloseTimer.current) window.clearTimeout(searchCloseTimer.current);
     };
   }, []);
+
+  // GROUP3-ADMIN-FIX 2026-11-28 — profile dropdown (My Dashboard + Logout):
+  // "Admin" sirf yahin ek dafa role line me aata hai; alag dashboard link
+  // aur alag Logout button hata diye gaye hain.
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const profileRoleLabel =
+    user?.role === 'admin'
+      ? 'Administrator'
+      : user?.role === 'subadmin'
+        ? 'Sub Admin'
+        : user?.role === 'supplier'
+          ? 'Supplier'
+          : 'Shopkeeper';
+  const profileName = user?.businessName || user?.name || profileRoleLabel;
+  const profileAvatar = (user as { avatar?: string } | null)?.avatar || '';
+
+  // Close the profile dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!profileOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProfileOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [profileOpen]);
   const [searchQuery, setSearchQuery] = useState('');
   // FIX (Batch 03) — cart badge reactive nahi tha: cartCount() render ke
   // waqt localStorage parhta tha, is liye cart add karne pe badge tab tak
@@ -274,21 +309,58 @@ export function Navbar() {
                   </Link>
                 )}
 
-                <Link
-                  href={userHome}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark hover:bg-asan-accent-light dark:text-asan-accent-light dark:hover:bg-slate-800 transition"
-                >
-                  {user.role === 'admin' ? <ShieldCheck className="w-4 h-4" /> : <LayoutDashboard className="w-4 h-4" />}
-                  {user.role === 'admin' ? 'Admin' : user.role === 'supplier' ? 'Supplier Portal' : 'Dashboard'}
-                </Link>
+                <div ref={profileRef} className="hidden sm:block relative">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={profileOpen}
+                    onClick={() => setProfileOpen((o) => !o)}
+                    className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  >
+                    {profileAvatar ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={profileAvatar}
+                        alt={profileName}
+                        className="w-9 h-9 rounded-full object-cover border border-asan-accent shrink-0"
+                      />
+                    ) : (
+                      <span className="w-9 h-9 rounded-full bg-asan-accent flex items-center justify-center font-bold text-sm text-white shrink-0">
+                        {profileName[0]}
+                      </span>
+                    )}
+                    <span className="flex flex-col items-start leading-tight min-w-0">
+                      <span className="text-sm font-semibold text-asan-dark dark:text-white truncate max-w-32">
+                        {profileName}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {profileRoleLabel}
+                      </span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="hidden sm:inline-flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-                >
-                  <LogOut className="w-4 h-4 shrink-0" /> Logout
-                </button>
+                  {profileOpen && (
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1 z-50">
+                      <Link
+                        href={userHome}
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-asan-accent-light dark:hover:bg-slate-800 transition"
+                      >
+                        <LayoutDashboard className="w-4 h-4 shrink-0 text-asan-accent" />
+                        My Dashboard
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => { setProfileOpen(false); logout(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                      >
+                        <LogOut className="w-4 h-4 shrink-0" />
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -307,13 +379,18 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* Mobile navigation panel */}
+      {/* Mobile navigation — CENTERED POPUP (mobile fix 2026-11-28).
+          Pehle ye top se full-width sheet thi (inset-x-0 top-16); ab
+          screen ke centre me ~320px ka popup hai, rounded corners +
+          shadow + dimmed backdrop ke saath — search modal wali pattern.
+          Band hota hai: backdrop click, Escape (effect upar), ya kisi
+          link pe click. Links wahi hain jo pehle thay. */}
       {menuRendered && (
-        <>
+        <div className="fixed inset-0 z-[1050] lg:hidden flex items-center justify-center p-4">
           <div
             onClick={closeMenu}
             className={cn(
-              'fixed inset-0 z-[1040] lg:hidden bg-black/30 backdrop-blur-sm transition-opacity duration-[180ms] animate-asan-fade-in',
+              'absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-[180ms] animate-asan-fade-in',
               menuClosing ? 'opacity-0' : 'opacity-100'
             )}
           />
@@ -321,8 +398,8 @@ export function Navbar() {
             ref={mobileMenuRef}
             aria-label="Mobile navigation"
             className={cn(
-              'fixed inset-x-0 top-16 z-[1050] lg:hidden border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto transition-all duration-[180ms] animate-asan-menu-in',
-              menuClosing ? 'opacity-0 -translate-y-3' : 'opacity-100 translate-y-0'
+              'relative w-full max-w-[320px] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl transition-all duration-[180ms] animate-asan-pop-in',
+              menuClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
             )}
           >
               <div className="px-4 py-4 space-y-1">
@@ -381,7 +458,7 @@ export function Navbar() {
                         onClick={closeMenu}
                         className="block px-4 py-3 rounded-xl text-sm font-semibold text-asan-dark bg-asan-accent-light dark:bg-asan-dark/50 dark:text-asan-accent-light transition"
                       >
-                        {user.role === 'admin' ? 'Admin Panel' : user.role === 'supplier' ? 'Supplier Portal' : 'My Dashboard'}
+                        My Dashboard
                       </Link>
                       <button
                         type="button"
@@ -395,7 +472,7 @@ export function Navbar() {
                 </div>
               </div>
           </nav>
-        </>
+        </div>
       )}
 
       {/* Global Search Modal Overlay */}
@@ -417,11 +494,12 @@ export function Navbar() {
           >
               <form onSubmit={handleSearchSubmit} className="flex items-center gap-3">
                 <Search className="w-5 h-5 text-slate-400" />
+                {/* SEARCH-NAME-ONLY 2026-11-28 — search sirf product name se. */}
                 <input
                   type="text"
-                  aria-label="Search products, suppliers, or cities"
+                  aria-label="Search product name"
                   autoFocus
-                  placeholder="Search products, suppliers, cities (e.g. Basmati Rice, Faisalabad)..."
+                  placeholder="Search product name (e.g. Basmati Rice)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-transparent text-sm focus:outline-none text-slate-900 dark:text-white"

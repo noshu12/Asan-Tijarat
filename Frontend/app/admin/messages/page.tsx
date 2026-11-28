@@ -11,6 +11,8 @@ import { useAuth } from '@/context/AuthProvider';
 import { formatDate } from '@/lib/utils';
 import { useLiveRefreshKey } from '@/hooks/useRealtime';
 
+// GROUP3-ADMIN-FIX 2026-11-28
+
 export default function AdminMessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const [contacts, setContacts] = useState<ContactMessage[]>([]);
@@ -154,10 +156,11 @@ export default function AdminMessagesPage() {
     : contacts;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PortalHeader
         title="Messages"
         subtitle="Contact form messages from visitors — newest first"
+        hideSearch
       />
       {message && (
         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
@@ -194,9 +197,16 @@ export default function AdminMessagesPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="min-w-[720px] w-full text-left text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-h-[384px] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <table className="table-fixed w-full text-left text-sm">
+            <colgroup>
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '27%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '24%' }} />
+            </colgroup>
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-4 py-3">From</th>
                 <th className="px-4 py-3">Subject</th>
@@ -219,7 +229,7 @@ export default function AdminMessagesPage() {
                       <p className="text-xs text-slate-400 truncate max-w-[220px]">{c.email}</p>
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
+                  <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 truncate">
                     {c.subject || '—'}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 max-w-[320px]">
@@ -236,10 +246,11 @@ export default function AdminMessagesPage() {
                     {c.createdAt ? formatDate(c.createdAt) : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         onClick={() => setSelected(c)}
                       >
                         Read
@@ -247,6 +258,7 @@ export default function AdminMessagesPage() {
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         onClick={() => openReply(c)}
                         title={`Reply to ${c.email}`}
                       >
@@ -256,6 +268,7 @@ export default function AdminMessagesPage() {
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         disabled={busyId === c.id}
                         onClick={() => void removeContact(c)}
                         title="Delete this message"
